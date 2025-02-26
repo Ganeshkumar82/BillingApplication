@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const db = require("./db");
+const fs = require("fs");
 
 async function encrypt(text, secret) {
   const cipher = crypto.createCipheriv("aes-128-cbc", secret, secret);
@@ -39,7 +40,7 @@ async function getSuccessResponse(code, status, message, data, secret) {
 async function getErrorResponse(code, status, message, data, secret) {
   // if (typeof data !== "object") {
   //   try {
-  //     data = JSON.parse(data); // Attempt to parse data if it's a string
+  //     data = JSON.parse(data); // Attempt to parse  data if it's a string
   //   } catch (err) {
   //     // If it's not valid JSON, wrap it in an object or set a default
   //     data = { data };
@@ -111,6 +112,18 @@ async function phonenumber(phonener) {
   }
 }
 
+async function convertFileToBinary(filePath) {
+  return new Promise((resolve, reject) => {
+    fs.readFile(filePath, (err, data) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(data);
+      }
+    });
+  });
+}
+
 module.exports = {
   encrypt,
   decrypt,
@@ -119,4 +132,5 @@ module.exports = {
   checkAPIKey,
   getServerSetting,
   phonenumber,
+  convertFileToBinary,
 };

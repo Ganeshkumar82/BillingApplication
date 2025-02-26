@@ -1,6 +1,6 @@
 const config = {
   db: {
-    host: "192.168.0.155",
+    host: "192.168.0.159",
     port: 3306,
     user: "ssipl_serveradmin",
     password: "Sporada@2014",

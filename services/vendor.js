@@ -209,6 +209,7 @@ async function GetVendor(vendor) {
     if (!vendor.hasOwnProperty("STOKEN")) {
       return helper.getErrorResponse(
         false,
+        "error",
         "Login session token missing. Please provide the Login session token",
         "FETCH VENDOR",
         ""
@@ -219,6 +220,7 @@ async function GetVendor(vendor) {
     if (vendor.STOKEN.length > 50 || vendor.STOKEN.length < 30) {
       return helper.getErrorResponse(
         false,
+        "error",
         "Login session token size invalid. Please provide the valid Session token",
         "FETCH VENDOR",
         ""
@@ -236,6 +238,7 @@ async function GetVendor(vendor) {
     if (userid == null) {
       return helper.getErrorResponse(
         false,
+        "error",
         "Login session token Invalid. Please provide the valid session token",
         "FETCH VENDOR",
         ""
@@ -246,6 +249,7 @@ async function GetVendor(vendor) {
     if (!vendor.hasOwnProperty("querystring")) {
       return helper.getErrorResponse(
         false,
+        "error",
         "Querystring missing. Please provide the querystring",
         "FETCH VENDOR",
         ""
@@ -261,6 +265,7 @@ async function GetVendor(vendor) {
     } catch (ex) {
       return helper.getErrorResponse(
         false,
+        "error",
         "Querystring Invalid error. Please provide the valid querystring.",
         "FETCH VENDOR",
         secret
@@ -273,6 +278,7 @@ async function GetVendor(vendor) {
     } catch (ex) {
       return helper.getErrorResponse(
         false,
+        "error",
         "Querystring JSON error. Please provide valid JSON",
         "FETCH VENDOR",
         secret
@@ -280,33 +286,50 @@ async function GetVendor(vendor) {
     }
     try {
       let sql;
-      if (!querydata.hasOwnProperty("vendorid") || querydata.vendorid == "") {
+      if (querydata.vendorid == 0) {
         sql = await db.query(
-          `select vendor_name,vendor_mail,vendor_phoneno,vendor_gstno,vendor_address from vendormaster where status =1 and deleted_flag = 0`
+          `select vendor_name,vendor_mail,vendor_phoneno,vendor_gstno,vendor_address,Logo_path from vendormaster where status =1 and deleted_flag = 0`
         );
       } else {
         sql = await db.query(
-          `select vendor_name,vendor_mail,vendor_phoneno,vendor_gstno,vendor_address from vendormaster where vendor_id = ${querydata.vendorid}`
+          `select vendor_name,vendor_mail,vendor_phoneno,vendor_gstno,vendor_address,Logo_path from vendormaster where vendor_id = ${querydata.vendorid}`
         );
       }
-      if (sql) {
+      // Convert Logo_path to binary if available
+      for (let i = 0; i < sql.length; i++) {
+        if (sql[i].Logo_path) {
+          try {
+            const binaryData = await helper.convertFileToBinary(
+              sql[i].Logo_path
+            );
+            sql[i].Logo_path = binaryData;
+          } catch (error) {
+            console.error("Error reading file:", sql[i].Logo_path, error);
+            sql[i].Logo_path = null; // Set to null if file is not found
+          }
+        }
+      }
+      if (sql[0]) {
         return helper.getSuccessResponse(
           true,
+          "success",
           "Vendor Fethced Successfully",
           sql,
           secret
         );
       } else {
-        return helper.getErrorResponse(
-          false,
-          "Error while Fetching the vendor.",
-          "FETCH VENDOR",
+        return helper.getSuccessResponse(
+          true,
+          "success",
+          "Vendor Fethced Successfully",
+          sql,
           secret
         );
       }
     } catch (er) {
       return helper.getErrorResponse(
         false,
+        "error",
         "Internal error. Please contact Administration",
         er.message,
         secret
@@ -315,6 +338,7 @@ async function GetVendor(vendor) {
   } catch (er) {
     return helper.getErrorResponse(
       false,
+      "error",
       "Internal error. Please contact Administration",
       er.message,
       secret

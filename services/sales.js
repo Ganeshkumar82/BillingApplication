@@ -1220,9 +1220,8 @@ async function uploadMor(req, res) {
 //###############################################################################################################################################################################################
 
 async function addInvoice(req, res) {
+  let secret;
   try {
-    let secret;
-
     // Upload File Handling
     try {
       await uploadFile.uploadFileInvoice(req, res);
@@ -1323,7 +1322,7 @@ async function addInvoice(req, res) {
       { field: "product", message: "Product details missing." },
       { field: "notes", message: "Product notes missing." },
       { field: "invoicegenid", message: "Generated Invoice ID missing." },
-      { field: "invoice_date", message: "Invoice date missing." },
+      { field: "date", message: "Invoice date missing." },
       { field: "invoice_amount", message: "Invoice amount missing." },
       { field: "messagetype", message: "Message type missing." },
       { field: "feedback", message: "Feedback type missing." },
@@ -1340,8 +1339,8 @@ async function addInvoice(req, res) {
         );
       }
     }
-    let EmailSent = 0;
-    let WhatsappSent = 0;
+    var EmailSent;
+    var WhatsappSent;
     // Insert Invoice
     const [sql1] = await db.spcall(
       `CALL SP_ADD_INVOICE(?,?,?,?,?,?,?,?,?,?,?,@prolistid); SELECT @prolistid;`,
@@ -1351,7 +1350,7 @@ async function addInvoice(req, res) {
         userid,
         querydata.processid,
         querydata.invoicegenid,
-        3,
+        4,
         req.file.path,
         querydata.clientaddress,
         querydata.billingaddress,
@@ -1380,7 +1379,9 @@ async function addInvoice(req, res) {
         !product.productquantity ||
         !product.productgst ||
         !product.productprice ||
-        !product.producthsn
+        !product.producthsn ||
+        !product.productsno ||
+        !product.producttotal
       ) {
         return helper.getErrorResponse(
           false,
@@ -1392,7 +1393,7 @@ async function addInvoice(req, res) {
       }
 
       const [sql2] = await db.spcall(
-        `CALL SP_QUOTATION_ADD(?,?,?,?,?,?,?,?,?,@quoteid); SELECT @quoteid;`,
+        `CALL SP_INVOICE_ADD(?,?,?,?,?,?,?,?,?,?,?,@invid); SELECT @invid;`,
         [
           product.productname,
           product.productquantity,
@@ -1403,15 +1404,17 @@ async function addInvoice(req, res) {
           JSON.stringify(querydata.notes),
           req.file.path,
           invoiceid,
+          product.productsno,
+          product.producttotal,
         ]
       );
 
-      Quoteid = sql2[1][0]["@quoteid"];
+      Quoteid = sql2[1][0]["@invid"];
     }
 
     // Update Invoice Status
     await db.query(
-      `UPDATE generateinvoiceid SET status = 0 WHERE invoice_id = ?`,
+      `UPDATE generateinvoiceid SET status = 0 WHERE invoice_id in(?)`,
       [querydata.invoicegenid]
     );
 
@@ -1426,7 +1429,7 @@ async function addInvoice(req, res) {
         "INVOICE_PDF_SEND",
         req.file.path,
         querydata.invoicegenid,
-        querydata.invoice_date,
+        querydata.date,
         querydata.invoice_amount
       );
     } else if (querydata.messagetype == 2 || querydata.messagetype == 3) {
@@ -1460,7 +1463,7 @@ async function addInvoice(req, res) {
         "INVOICE_PDF_SEND",
         req.file.path,
         querydata.invoicegenid,
-        querydata.invoice_date,
+        querydata.date,
         querydata.invoice_amount
       );
     } else if (querydata.messagetype === 2) {
@@ -1495,7 +1498,7 @@ async function addInvoice(req, res) {
           "INVOICE_PDF_SEND",
           req.file.path,
           querydata.invoicegenid,
-          querydata.invoice_date,
+          querydata.date,
           querydata.invoice_amount
         )
       );
@@ -1525,10 +1528,10 @@ async function addInvoice(req, res) {
       [EmailSent] = await Promise.all(promises);
     }
     // Insert MOR Upload Entry
-    await db.query(
-      `INSERT INTO morupload (MOR_path, Created_by, Email_sent) VALUES (?, ?, ?)`,
-      [req.file.path, userid, WhatsappSent]
-    );
+    // await db.query(
+    //   `INSERT INTO morupload (MOR_path, Created_by, Email_sent) VALUES (?, ?, ?)`,
+    //   [req.file.path, userid, WhatsappSent]
+    // );
 
     return helper.getSuccessResponse(
       true,
@@ -1542,11 +1545,11 @@ async function addInvoice(req, res) {
       },
       secret
     );
-  } catch (err) {
+  } catch (er) {
     return helper.getErrorResponse(
       false,
       "error",
-      `Could not add the invoice. ${err.message}`,
+      `Could not add the invoice. ${er.message}`,
       er.message,
       secret
     );
@@ -1823,15 +1826,24 @@ async function getProcesslist(sales) {
         cr.customer_name,
         DATE_FORMAT(sp.Process_date, '%Y%m%d') AS Process_date,
         DATEDIFF(CURDATE(), sp.Process_date) AS age_in_days,
-        JSON_ARRAYAGG(
-            JSON_OBJECT(
-                'Eventid', s.cprocess_id,
-                'Eventname', psl.Processname,
-                'feedback', s.feedback,
-                'Allowed_process', psl.Allowed_process,
-                'pdfpath', s.salesprocess_path
-            )
-        ) AS TimelineEvents 
+        COUNT(sp.cprocess_id) OVER(PARTITION BY sp.customer_id) AS process_count, 
+        (
+          SELECT JSON_ARRAYAGG(t.TimelineEvent)
+          FROM (
+            SELECT JSON_OBJECT(
+                     'Eventid', s2.cprocess_id,
+                     'Eventname', psl2.Processname,
+                     'feedback', s2.feedback,
+                     'Allowed_process', psl2.Allowed_process,
+                     'pdfpath', s2.salesprocess_path
+                   ) AS TimelineEvent
+            FROM salesprocesslist s2
+            LEFT JOIN processshowlist psl2 
+              ON psl2.processshowlist_id = s2.process_type
+            WHERE s2.processid = sp.cprocess_id
+            ORDER BY s2.cprocess_id ASC
+          ) t
+        ) AS TimelineEvents  
     FROM salesprocessmaster sp 
     JOIN enquirycustomermaster cr ON sp.customer_id = cr.customer_id 
     LEFT JOIN salesprocesslist s ON s.processid = sp.cprocess_id 
@@ -1850,15 +1862,24 @@ async function getProcesslist(sales) {
       cr.customer_name,
       DATE_FORMAT(sp.Process_date, '%Y%m%d') AS Process_date,
       DATEDIFF(CURDATE(), sp.Process_date) AS age_in_days,
-      JSON_ARRAYAGG(
-          JSON_OBJECT(
-              'Eventid', s.cprocess_id,
-              'Eventname', psl.Processname,
-              'feedback', s.feedback,
-              'Allowed_process', psl.Allowed_process,
-              'pdfpath', s.salesprocess_path
-          )
-      ) AS TimelineEvents 
+      COUNT(sp.cprocess_id) OVER(PARTITION BY sp.customer_id) AS process_count, 
+      (
+        SELECT JSON_ARRAYAGG(t.TimelineEvent)
+        FROM (
+          SELECT JSON_OBJECT(
+                   'Eventid', s2.cprocess_id,
+                   'Eventname', psl2.Processname,
+                   'feedback', s2.feedback,
+                   'Allowed_process', psl2.Allowed_process,
+                   'pdfpath', s2.salesprocess_path
+                 ) AS TimelineEvent
+          FROM salesprocesslist s2
+          LEFT JOIN processshowlist psl2 
+            ON psl2.processshowlist_id = s2.process_type
+          WHERE s2.processid = sp.cprocess_id
+          ORDER BY s2.cprocess_id ASC
+        ) t
+      ) AS TimelineEvents  
   FROM salesprocessmaster sp 
   JOIN enquirycustomermaster cr ON sp.customer_id = cr.customer_id 
   LEFT JOIN salesprocesslist s ON s.processid = sp.cprocess_id 
@@ -1880,14 +1901,23 @@ async function getProcesslist(sales) {
         cr.customer_name,
         DATE_FORMAT(sp.Process_date, '%Y%m%d') AS Process_date,
         DATEDIFF(CURDATE(), sp.Process_date) AS age_in_days,
-        JSON_ARRAYAGG(
-            JSON_OBJECT(
-                'Eventid', s.cprocess_id,
-                'Eventname', psl.Processname,
-                'feedback', s.feedback,
-                'Allowed_process', psl.Allowed_process,
-                'pdfpath', s.salesprocess_path
-            )
+        COUNT(sp.cprocess_id) OVER(PARTITION BY sp.customer_id) AS process_count, 
+        (
+          SELECT JSON_ARRAYAGG(t.TimelineEvent)
+          FROM (
+            SELECT JSON_OBJECT(
+                     'Eventid', s2.cprocess_id,
+                     'Eventname', psl2.Processname,
+                     'feedback', s2.feedback,
+                     'Allowed_process', psl2.Allowed_process,
+                     'pdfpath', s2.salesprocess_path
+                   ) AS TimelineEvent
+            FROM salesprocesslist s2
+            LEFT JOIN processshowlist psl2 
+              ON psl2.processshowlist_id = s2.process_type
+            WHERE s2.processid = sp.cprocess_id
+            ORDER BY s2.cprocess_id ASC
+          ) t
         ) AS TimelineEvents 
     FROM salesprocessmaster sp 
     JOIN enquirycustomermaster cr ON sp.customer_id = cr.customer_id 
@@ -1907,14 +1937,23 @@ async function getProcesslist(sales) {
       cr.customer_name,
       DATE_FORMAT(sp.Process_date, '%Y%m%d') AS Process_date,
       DATEDIFF(CURDATE(), sp.Process_date) AS age_in_days,
-      JSON_ARRAYAGG(
-          JSON_OBJECT(
-              'Eventid', s.cprocess_id,
-              'Eventname', psl.Processname,
-              'feedback', s.feedback,
-              'Allowed_process', psl.Allowed_process,
-              'pdfpath', s.salesprocess_path
-          )
+      COUNT(sp.cprocess_id) OVER(PARTITION BY sp.customer_id) AS process_count, 
+      (
+        SELECT JSON_ARRAYAGG(t.TimelineEvent)
+        FROM (
+          SELECT JSON_OBJECT(
+                   'Eventid', s2.cprocess_id,
+                   'Eventname', psl2.Processname,
+                   'feedback', s2.feedback,
+                   'Allowed_process', psl2.Allowed_process,
+                   'pdfpath', s2.salesprocess_path
+                 ) AS TimelineEvent
+          FROM salesprocesslist s2
+          LEFT JOIN processshowlist psl2 
+            ON psl2.processshowlist_id = s2.process_type
+          WHERE s2.processid = sp.cprocess_id
+          ORDER BY s2.cprocess_id ASC
+        ) t
       ) AS TimelineEvents 
   FROM salesprocessmaster sp 
   JOIN enquirycustomermaster cr ON sp.customer_id = cr.customer_id 
@@ -1957,10 +1996,10 @@ async function getProcesslist(sales) {
   }
 }
 
-//###############################################################################################################################################################################################
-//###############################################################################################################################################################################################
-//###############################################################################################################################################################################################
-//###############################################################################################################################################################################################
+//########################################################################################################################################################################
+//########################################################################################################################################################################
+//########################################################################################################################################################################
+//########################################################################################################################################################################
 
 async function AddSalesProcess(sales) {
   try {
@@ -2145,10 +2184,10 @@ async function AddSalesProcess(sales) {
   }
 }
 
-//##################################################################################################################################################################################################
-//##################################################################################################################################################################################################
-//##################################################################################################################################################################################################
-//##################################################################################################################################################################################################
+//#####################################################################################################################################################################################
+//###############################################################################################################################################################################
+//######################################################################################################################################################################################
+//######################################################################################################################################################################################
 
 async function AddProcessList(sales) {
   try {
@@ -2906,7 +2945,7 @@ async function FetchIdforEvents(sales) {
     }
 
     const sql = await db.query(
-      `select customer_type,customer_id,exist_customerid,exist_branchid,customer_name,customer_phoneno,customer_mailid,customer_gstno,billing_address,address,BillingAdddress_name,Process_titile from enquirycustomermaster where customer_id IN(select customer_id from salesprocessmaster where cprocess_id In(select cprocess_id from salesprocesslist where cprocess_id in(?)))`,
+      `select customer_type,customer_id,exist_customerid,exist_branchid,customer_name,customer_phoneno,customer_mailid,customer_gstno,billing_address,address,BillingAdddress_name,Process_titile from enquirycustomermaster where customer_id IN(select customer_id from salesprocessmaster where cprocess_id In(select processid from salesprocesslist where cprocess_id in(?)))`,
       [querydata.eventid]
     );
     var eventnumber,
@@ -2959,12 +2998,28 @@ async function FetchIdforEvents(sales) {
           const objectValue = result1[1][0];
           eventnumber = objectValue["@p_quotation_id"];
         } else if (querydata.eventtype == "deliverychallan") {
+          var ccode;
+          const sql = await db.query(
+            `SELECT cprocess_gene_id  FROM salesprocesslist 
+             WHERE processid IN ( SELECT processid FROM salesprocesslist WHERE cprocess_id = ?) 
+             AND process_type = 5 ORDER BY Row_updated_date DESC LIMIT 1`,
+            [querydata.eventid]
+          );
+          if (sql[0]) {
+            ccode = sql[0].cprocess_gene_id;
+          } else {
+            ccode = "ssipl-dc/";
+          }
           const [result1] = await db.spcall(
-            `CALL GenerateDeliverychId(?,@p_deliverychallan_id); select @p_deliverychallan_id`,
-            [userid]
+            `CALL GenerateDeliverychId(?,?,@p_deliverychallan_id); select @p_deliverychallan_id`,
+            [userid, ccode]
           );
           const objectValue = result1[1][0];
           eventnumber = objectValue["@p_deliverychallan_id"];
+          product = await db.query(
+            `select inv_productid productid,product_name productname,product_quantity productquantity,product_hsn producthsn, product_price productprice,product_gst productgst,product_sno productsno, product_total producttotal from invoice_productmaster where process_id = ? and inv_productid not in (select dc_productid from dc_productmaster)`,
+            [querydata.eventid]
+          );
         } else if (querydata.eventtype == "requestforquotation") {
           const [result1] = await db.spcall(
             `CALL Generate_rfq(?,@p_rfq_id); select @p_rfq_id`,
@@ -3064,6 +3119,10 @@ async function FetchIdforEvents(sales) {
           );
           const objectValue = result1[1][0];
           eventnumber = objectValue["@p_deliverychallan_id"];
+          product = await db.query(
+            `select inv_productid productid,product_name productname,product_quantity productquantity,product_hsn producthsn, product_price productprice,product_gst productgst,product_sno productsno, product_total producttotal from invoice_productmaster where process_id = ? and inv_productid not in (select dc_productid from dc_productmaster)`,
+            [querydata.eventid]
+          );
         } else if (querydata.eventtype == "requestforquotation") {
           const [result1] = await db.spcall(
             `CALL Generate_rfq(?,@p_rfq_id); select @p_rfq_id`,
@@ -3242,6 +3301,7 @@ async function GetProcessShow(sales) {
         false,
         "error",
         "Querystring JSON error. Please provide valid JSON",
+
         "GET PROCESS SHOW LIST",
         secret
       );
@@ -3375,18 +3435,6 @@ async function GetProcessCustomer(sales) {
 //###############################################################################################################################################################################################
 //###############################################################################################################################################################################################
 //###############################################################################################################################################################################################
-
-async function convertFileToBinary(filePath) {
-  return new Promise((resolve, reject) => {
-    fs.readFile(filePath, (err, data) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(data);
-      }
-    });
-  });
-}
 
 //###############################################################################################################################################################################################
 //###############################################################################################################################################################################################
@@ -4150,7 +4198,7 @@ async function getCusReq(sales) {
       const pdfpath = sql[0].pdf_path;
       var pdfbinary;
       if (pdfpath != null) {
-        pdfbinary = await convertFileToBinary(pdfpath);
+        pdfbinary = await helper.convertFileToBinary(pdfpath);
       }
       try {
         if (secret != null && secret != "") {
@@ -4547,7 +4595,7 @@ async function addQuotation(req, res) {
           Quoteid = objectvalue3["@quoteid"];
         }
         const sql = await db.query(
-          `Update generatequotationid set status = 0 where quotation_id = '${querydata.quotationgenid}'`
+          `Update generatequotationid set status = 0 where quotation_id IN('${querydata.quotationgenid}')`
         );
         const promises = [];
         const phoneNumbers = querydata.phoneno
@@ -4935,10 +4983,32 @@ async function Dummy(sales) {
 //###############################################################################################################################################################################################
 //###############################################################################################################################################################################################
 
-async function addDeliveryChallan(sales) {
+async function addDeliveryChallan(req, res) {
   try {
+    var secret;
+    try {
+      await uploadFile.uploadDeliverychln(req, res);
+      if (!req.file) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Please upload a file!",
+          "ADD DELIVERY CHALLAN FOR PROCESS"
+        );
+      }
+    } catch (er) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        `Could not upload the file. ${er.message}`,
+        er.message,
+        ""
+      );
+    }
+
+    const sales = req.body;
     // Check if the session token exists
-    if (!sales.hasOwnProperty("STOKEN")) {
+    if (!sales.STOKEN) {
       return helper.getErrorResponse(
         false,
         "error",
@@ -4947,7 +5017,7 @@ async function addDeliveryChallan(sales) {
         ""
       );
     }
-    var secret = sales.STOKEN.substring(0, 16);
+    secret = sales.STOKEN.substring(0, 16);
     var querydata;
 
     // Validate session token length
@@ -4980,7 +5050,7 @@ async function addDeliveryChallan(sales) {
     }
 
     // Check if querystring is provided
-    if (!sales.hasOwnProperty("querystring")) {
+    if (!sales.querystring) {
       return helper.getErrorResponse(
         false,
         "error",
@@ -5023,6 +5093,15 @@ async function addDeliveryChallan(sales) {
         false,
         "error",
         "Title missing. Please provide the Title",
+        "ADD DELIVERY CHALLAN",
+        secret
+      );
+    }
+    if (!querydata.hasOwnProperty("processid") || querydata.processid == "") {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Process id missing. Please provide the Process id",
         "ADD DELIVERY CHALLAN",
         secret
       );
@@ -5086,11 +5165,11 @@ async function addDeliveryChallan(sales) {
         secret
       );
     }
-    if (!querydata.hasOwnProperty("pdfpath") || querydata.pdfpath == "") {
+    if (!querydata.hasOwnProperty("feedback")) {
       return helper.getErrorResponse(
         false,
         "error",
-        "Pdf path missing. Please provide the pdf path.",
+        "Feedback missing. Please provide the Feedback.",
         "ADD DELIVERY CHALLAN",
         secret
       );
@@ -5104,7 +5183,15 @@ async function addDeliveryChallan(sales) {
         secret
       );
     }
-
+    if (!querydata.hasOwnProperty("ccemail")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "CC Email id missing. Please provide the CC Email id",
+        "ADD DELIVERY CHALLAN",
+        secret
+      );
+    }
     if (!querydata.hasOwnProperty("notes") || querydata.notes == "") {
       return helper.getErrorResponse(
         false,
@@ -5114,67 +5201,221 @@ async function addDeliveryChallan(sales) {
         secret
       );
     }
+    if (!querydata.hasOwnProperty("emailid") || querydata.emailid == "") {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Email id missing. Please provide the Email id",
+        "ADD DELIVERY CHALLAN",
+        secret
+      );
+    }
+
+    if (!querydata.hasOwnProperty("phoneno")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Contact number missing. Please provide the contact number.",
+        "ADD DELIVERY CHALLAN",
+        secret
+      );
+    }
+    if (
+      !querydata.hasOwnProperty("messagetype") ||
+      querydata.messagetype == ""
+    ) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Message type missing. Please provide the message type.",
+        "ADD DELIVERY CHALLAN",
+        secret
+      );
+    }
+    if (!querydata.hasOwnProperty("gst_number")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "GST number missing. Please provide the GST number.",
+        "ADD DELIVERY CHALLAN",
+        secret
+      );
+    }
+    if (!querydata.hasOwnProperty("date") || querydata.date == "") {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Date missing. Please provide the Date.",
+        "ADD DELIVERY CHALLAN",
+        secret
+      );
+    }
+    if (!querydata.hasOwnProperty("productfeedback")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Product feedback missing. Please provide the Product feedback.",
+        "ADD DELIVERY CHALLAN",
+        secret
+      );
+    }
     const [sql1] = await db.spcall(
-      `CALL SP_ADD_INVOICE(?,?,?,?,?,?,?,?,?,@prolistid); select @prolistid;`,
+      `CALL SP_ADD_INVOICE(?,?,?,?,?,?,?,?,?,?,?,@invoiceid); select @invoiceid;`,
       [
-        querydata.gstno,
+        querydata.clientaddressname,
+        querydata.gst_number,
         userid,
         querydata.processid,
         querydata.dcgenid,
-        3,
-        querydata.pdfpath,
+        5,
+        req.file.path,
         querydata.clientaddress,
         querydata.billingaddress,
         querydata.billingaddressname,
+        querydata.title,
       ]
     );
     const objectvalue2 = sql1[1][0];
-    const quatationid = objectvalue2["@prolistid"];
+    const deliverychallanid = objectvalue2["@invoiceid"];
     var deliverychallan;
-    if (quatationid != null && quatationid != 0) {
+    if (deliverychallanid != null && deliverychallanid != 0) {
       for (const product of querydata.product) {
         if (
+          !product.hasOwnProperty("productid") ||
           !product.hasOwnProperty("productname") ||
           !product.hasOwnProperty("producthsn") ||
           !product.hasOwnProperty("productgst") ||
           !product.hasOwnProperty("productprice") ||
-          !product.hasOwnProperty("productquantity")
+          !product.hasOwnProperty("productquantity") ||
+          !product.hasOwnProperty("productsno") ||
+          !product.hasOwnProperty("producttotal")
         ) {
           return helper.getErrorResponse(
             false,
             "error",
-            "Product details are incomplete. Please provide productname ,productquantity, producthsn, productgst and productprice.",
+            "Product details are incomplete. Please provide productid, productname ,productquantity, producthsn, productgst,producttotal,productsno and productprice.",
             "ADD DELIVERY CHALLAN",
             secret
           );
           // return helper.getErrorResponse(false,"error","Product details are incomplete. Please provide the Productname, Productquantity,producthsn")
         } else {
-          const [sql1] = await db.spcall(
-            `CALL SP_ADD_SALES_PROCESS_LIST(?,?,?,?,?,?,?,?,?,@prolistid); select @prolistid;`,
+          const [sql2] = await db.spcall(
+            `CALL SP_DELIVERYCHALLAN_ADD(?,?,?,?,?,?,?,?,?,?,?,?,@dcid); SELECT @dcid;`,
             [
-              querydata.title,
-              userid,
-              querydata.processid,
+              product.productname,
+              product.productquantity,
+              product.productgst,
+              product.productprice,
+              product.producthsn,
               querydata.dcgenid,
-              4,
-              querydata.pdfpath,
-              querydata.clientaddress,
-              querydata.billingaddress,
-              querydata.billingaddressname,
+              JSON.stringify(querydata.notes),
+              req.file.path,
+              deliverychallanid,
+              product.productsno,
+              product.producttotal,
+              product.productid,
             ]
           );
           const objectvalue2 = sql1[1][0];
-          deliverychallan = objectvalue2["@prolistid"];
+          deliverychallan = objectvalue2["@dcid"];
           // Quoteid = objectvalue3["@quoteid"];
         }
-        const sql = await db.query(
-          `Update generatedeliverychallanid set status = 0 where ec_id = '${querydata.dcgenid}'`
+        const sql2 = await db.query(
+          `Update salesprocesslist set feedback = '${querydata.productfeedback}' where dc_id IN('${querydata.dcgenid}')`
         );
+        const sql = await db.query(
+          `Update generatedeliverychallanid set status = 0 where dc_id IN('${querydata.dcgenid}')`
+        );
+        const promises = [];
+        const phoneNumbers = querydata.phoneno
+          ? querydata.phoneno
+              .split(",")
+              .map((num) => num.trim())
+              .filter((num) => num !== "") // Removes empty values
+          : [];
+        // Send Email or WhatsApp Message
+        if (querydata.messagetype === 1) {
+          // Send only email
+          EmailSent = await mailer.sendQuotation(
+            querydata.clientaddressname,
+            querydata.emailid,
+            "Your Delivery Challlan from Sporada Secure India Private Limited",
+            "deliverychallanpdf.html",
+            ``,
+            "DELIVERYCHALLAN_PDF_SEND",
+            req.file.path,
+            querydata.feedback,
+            querydata.ccemail
+          );
+        } else if (querydata.messagetype === 2) {
+          // Send only WhatsApp
+          WhatsappSent = await Promise.all(
+            phoneNumbers.map(async (number) => {
+              try {
+                const response = await axios.post(
+                  `${config.whatsappip}/billing/sendpdf`,
+                  {
+                    phoneno: number,
+                    feedback: querydata.feedback,
+                    pdfpath: req.file.path,
+                  }
+                );
+                return response.data.code;
+              } catch (error) {
+                console.error(`WhatsApp Error for ${number}:`, error.message);
+                return false;
+              }
+            })
+          );
+        } else if (querydata.messagetype === 3) {
+          // Send both email & WhatsApp in parallel
+          promises.push(
+            mailer.sendQuotation(
+              querydata.clientaddressname,
+              querydata.emailid,
+              "Your Delivery Challlan from Sporada Secure India Private Limited",
+              "deliverychallanpdf.html",
+              ``,
+              "DELIVERYCHALLAN_PDF_SEND",
+              req.file.path,
+              querydata.feedback,
+              querydata.ccemail
+            )
+          );
+
+          promises.push(
+            Promise.all(
+              phoneNumbers.map(async (number) => {
+                try {
+                  const response = await axios.post(
+                    `${config.whatsappip}/billing/sendpdf`,
+                    {
+                      phoneno: number,
+                      feedback: querydata.feedback,
+                      pdfpath: req.file.path,
+                    }
+                  );
+                  return response.data.code;
+                } catch (error) {
+                  console.error(`WhatsApp Error for ${number}:`, error.message);
+                  return false;
+                }
+              })
+            ).then((results) => (WhatsappSent = results))
+          );
+
+          // Run both requests in parallel and wait for completion
+          [EmailSent] = await Promise.all(promises);
+        }
         return helper.getSuccessResponse(
           true,
           "success",
           "Delivery challan added successfully",
-          deliverychallan,
+          {
+            dcid: deliverychallanid,
+            WhatsappSent: WhatsappSent,
+            EmailSent: EmailSent,
+          },
           secret
         );
       }
@@ -5445,7 +5686,7 @@ async function getBinaryFile(sales) {
           secret
         );
       }
-      binarydata = await convertFileToBinary(sql[0].salesprocess_path);
+      binarydata = await helper.convertFileToBinary(sql[0].salesprocess_path);
       return helper.getSuccessResponse(
         true,
         "success",
@@ -6341,7 +6582,7 @@ async function addRevisedQuotation(req, res) {
     const [sql1] = await db.spcall(
       `CALL SP_ADD_SALES_PROCESS_LIST(?,?,?,?,?,?,?,?,?,?,@prolistid); select @prolistid;`,
       [
-        querydata.title,
+        querydata.clientaddressname,
         userid,
         querydata.processid,
         querydata.quotationgenid,
@@ -6395,7 +6636,7 @@ async function addRevisedQuotation(req, res) {
           RevQuoteid = objectvalue3["@revquoteid"];
         }
         const sql = await db.query(
-          `Update generaterevisedquotationid set status = 0 where revquotation_id = '${querydata.quotationgenid}'`
+          `Update generaterevisedquotationid set status = 0 where revquotation_id IN('${querydata.quotationgenid}')`
         );
         // Send Email or WhatsApp Message
         const promises = [];
@@ -6752,11 +6993,20 @@ async function addCreditNote(req, res) {
         secret
       );
     }
+    if (!querydata.hasOwnProperty("feedback") || querydata.feedback == "") {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Feedback missing. Please provide the feedback.",
+        "ADD CREDIT NOTE FOR PROCESS",
+        secret
+      );
+    }
     var WhatsappSent, EmailSent;
     const [sql1] = await db.spcall(
       `CALL SP_ADD_SALES_PROCESS_LIST(?,?,?,?,?,?,?,?,?,?,@prolistid); select @prolistid;`,
       [
-        querydata.title,
+        querydata.clientaddressname,
         userid,
         querydata.processid,
         querydata.creditnoteid,
@@ -6770,7 +7020,7 @@ async function addCreditNote(req, res) {
     );
     const objectvalue2 = sql1[1][0];
     const creditnoteid = objectvalue2["@prolistid"];
-    var RevQuoteid;
+    var Creditnoteid;
     if (creditnoteid != null && creditnoteid != 0) {
       for (const product of querydata.product) {
         if (
@@ -6791,7 +7041,7 @@ async function addCreditNote(req, res) {
           );
         } else {
           const [sql2] = await db.spcall(
-            `CALL SP_CREDITNOTE_ADD(?,?,?,?,?,?,?,?,?,?,?,@revquoteid); SELECT @revquoteid;`,
+            `CALL SP_CREDITNOTE_ADD(?,?,?,?,?,?,?,?,?,?,?,@crdnteid); SELECT @crdnteid;`,
             [
               product.productname,
               product.productquantity,
@@ -6800,50 +7050,101 @@ async function addCreditNote(req, res) {
               product.producthsn,
               querydata.creditnoteid,
               JSON.stringify(querydata.notes),
-              querydata.pdfpath,
+              req.file.path,
               creditnoteid,
               product.productsno,
               product.producttotal,
             ]
           );
           const objectvalue3 = sql2[1][0];
-          RevQuoteid = objectvalue3["@revquoteid"];
+          Creditnoteid = objectvalue3["@crdnteid"];
         }
         const sql = await db.query(
           `Update generatecreditnteid set status = 0 where creditnotegen_id = '${querydata.creditnoteid}'`
         );
+        const promises = [];
+        const phoneNumbers = querydata.phoneno
+          ? querydata.phoneno
+              .split(",")
+              .map((num) => num.trim())
+              .filter((num) => num !== "") // Removes empty values
+          : [];
         // Send Email or WhatsApp Message
-        if (querydata.messagetype == 1 || querydata.messagetype == 3) {
+        if (querydata.messagetype === 1) {
+          // Send only email
           EmailSent = await mailer.sendInvoice(
             querydata.clientaddressname,
             querydata.emailid,
             "Your Credit Note from Sporada Secure India Private Limited",
             "quotationpdf.html",
             ``,
-            "QUOTATION_PDF_SEND",
+            "CREDITNOTE_PDF_SEND",
             req.file.path
           );
-        } else if (querydata.messagetype == 2 || querydata.messagetype == 3) {
-          WhatsappSent = await axios.post(
-            `${config.whatsappip}/billing/sendpdf`,
-            {
-              phoneno: querydata.phoneno,
-              feedback: `We hope you're doing well. Please find attached your credit note with Sporada Secure.`,
-              pdfpath: req.file.path,
-            }
+        } else if (querydata.messagetype === 2) {
+          // Send only WhatsApp
+          WhatsappSent = await Promise.all(
+            phoneNumbers.map(async (number) => {
+              try {
+                const response = await axios.post(
+                  `${config.whatsappip}/billing/sendpdf`,
+                  {
+                    phoneno: number,
+                    feedback: querydata.feedback,
+                    pdfpath: req.file.path,
+                  }
+                );
+                return response.data.code;
+              } catch (error) {
+                console.error(`WhatsApp Error for ${number}:`, error.message);
+                return false;
+              }
+            })
           );
-          if (WhatsappSent.data.code == true) {
-            WhatsappSent = WhatsappSent.data.code;
-          } else {
-            WhatsappSent = WhatsappSent.data.code;
-          }
+        } else if (querydata.messagetype === 3) {
+          // Send both email & WhatsApp in parallel
+          promises.push(
+            mailer.sendInvoice(
+              querydata.clientaddressname,
+              querydata.emailid,
+              "Your Credit Note from Sporada Secure India Private Limited",
+              "quotationpdf.html",
+              ``,
+              "CREDITNOTE_PDF_SEND",
+              req.file.path
+            )
+          );
+
+          promises.push(
+            Promise.all(
+              phoneNumbers.map(async (number) => {
+                try {
+                  const response = await axios.post(
+                    `${config.whatsappip}/billing/sendpdf`,
+                    {
+                      phoneno: number,
+                      feedback: querydata.feedback,
+                      pdfpath: req.file.path,
+                    }
+                  );
+                  return response.data.code;
+                } catch (error) {
+                  console.error(`WhatsApp Error for ${number}:`, error.message);
+                  return false;
+                }
+              })
+            ).then((results) => (WhatsappSent = results))
+          );
+
+          // Run both requests in parallel and wait for completion
+          [EmailSent] = await Promise.all(promises);
         }
         return helper.getSuccessResponse(
           true,
           "success",
           "Credit note added successfully",
           {
-            rfqid: RevQuoteid,
+            creditnoteid: Creditnoteid,
             WhatsappSent: WhatsappSent,
             EmailSent: EmailSent,
           },
@@ -6854,7 +7155,7 @@ async function addCreditNote(req, res) {
       return helper.getErrorResponse(
         false,
         "error",
-        "Error while adding the Revised Quotation.",
+        "Error while adding the Credit Note.",
         "ADD CREDIT NOTE FOR PROCESS",
         secret
       );
@@ -7111,6 +7412,7 @@ async function addDebitNote(req, res) {
         secret
       );
     }
+
     var WhatsappSent, EmailSent;
     const [sql1] = await db.spcall(
       `CALL SP_ADD_SALES_PROCESS_LIST(?,?,?,?,?,?,?,?,?,?,@prolistid); select @prolistid;`,
@@ -7230,6 +7532,523 @@ async function addDebitNote(req, res) {
   }
 }
 
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+
+async function getProducts(sales) {
+  try {
+    // Check if the session token exists
+    if (!sales.hasOwnProperty("STOKEN")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken missing. Please provide the Login sessiontoken",
+        "GET THE AVAILABLE PRODUCTS",
+        ""
+      );
+    }
+    var secret = sales.STOKEN.substring(0, 16);
+    var querydata;
+    // Validate session token length
+    if (sales.STOKEN.length > 50 || sales.STOKEN.length < 30) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
+        "GET THE AVAILABLE PRODUCTS",
+        secret
+      );
+    }
+
+    // Validate session token
+    const [result] = await db.spcall(
+      "CALL SP_STOKEN_CHECK(?,@result); SELECT @result;",
+      [sales.STOKEN]
+    );
+    const objectvalue = result[1][0];
+    const userid = objectvalue["@result"];
+
+    if (userid == null) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+        "GET THE AVAILABLE PRODUCTS",
+        secret
+      );
+    }
+    const sql = await db.query(
+      `select product_name,product_hsn,product_price,product_gst from productmaster where status = 1`
+    );
+
+    if (sql[0]) {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Products Fetched successfully",
+        sql,
+        secret
+      );
+    } else {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Products Fetched successfully",
+        sql,
+        secret
+      );
+    }
+  } catch (er) {
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal Error. Please contact Administration",
+      er,
+      secret
+    );
+  }
+}
+
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+
+async function getNotes(sales) {
+  try {
+    // Check if the session token exists
+    if (!sales.hasOwnProperty("STOKEN")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken missing. Please provide the Login sessiontoken",
+        "GET THE NOTES",
+        ""
+      );
+    }
+    var secret = sales.STOKEN.substring(0, 16);
+    var querydata;
+    // Validate session token length
+    if (sales.STOKEN.length > 50 || sales.STOKEN.length < 30) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
+        "GET THE NOTES",
+        secret
+      );
+    }
+
+    // Validate session token
+    const [result] = await db.spcall(
+      "CALL SP_STOKEN_CHECK(?,@result); SELECT @result;",
+      [sales.STOKEN]
+    );
+    const objectvalue = result[1][0];
+    const userid = objectvalue["@result"];
+
+    if (userid == null) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+        "GET THE NOTES",
+        secret
+      );
+    }
+    const sql = await db.query(
+      `select notes from notesmaster where status = 1`
+    );
+
+    if (sql[0]) {
+      const allNotes = sql.flatMap((row) => JSON.parse(row.notes));
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Notes Fetched successfully",
+        { notes: allNotes },
+        secret
+      );
+    } else {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Notes Fetched successfully",
+        { notes: [] },
+        secret
+      );
+    }
+  } catch (er) {
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal Error. Please contact Administration",
+      er,
+      secret
+    );
+  }
+}
+
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+
+async function salesData(sales) {
+  try {
+    // Check if the session token exists
+    if (!sales.hasOwnProperty("STOKEN")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken missing. Please provide the Login sessiontoken",
+        "FETCH SALES DATA",
+        ""
+      );
+    }
+    var secret = sales.STOKEN.substring(0, 16);
+    var querydata;
+    // Validate session token length
+    if (sales.STOKEN.length > 50 || sales.STOKEN.length < 30) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
+        "FETCH SALES DATA",
+        secret
+      );
+    }
+
+    // Validate session token
+    const [result] = await db.spcall(
+      `CALL SP_STOKEN_CHECK(?,@result); SELECT @result;`,
+      [sales.STOKEN]
+    );
+    const objectvalue = result[1][0];
+    const userid = objectvalue["@result"];
+
+    if (userid == null) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+        "FETCH SALES DATA",
+        secret
+      );
+    }
+
+    // Check if querystring is provided
+    if (!sales.hasOwnProperty("querystring")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring missing. Please provide the querystring",
+        "FETCH SALES DATA",
+        secret
+      );
+    }
+
+    // Decrypt querystring
+    try {
+      querydata = await helper.decrypt(sales.querystring, secret);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring Invalid error. Please provide the valid querystring.",
+        "FETCH SALES DATA",
+        secret
+      );
+    }
+
+    // Parse the decrypted querystring
+    try {
+      querydata = JSON.parse(querydata);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring JSON error. Please provide valid JSON",
+        "FETCH SALES DATA",
+        secret
+      );
+    }
+
+    // Validate required fields
+    if (
+      !querydata.hasOwnProperty("salesperiod") ||
+      querydata.salesperiod == ""
+    ) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Sales period missing. Please provide the sales period",
+        "FETCH SALES DATA",
+        secret
+      );
+    }
+    var sql;
+    let startDate;
+
+    if (querydata.salesperiod === "monthly") {
+      const now = new Date();
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    } else if (querydata.salesperiod === "yearly") {
+      const now = new Date();
+      startDate = new Date(now.getFullYear(), 0, 1);
+    }
+
+    sql = await db.query(
+      `SELECT 
+          SUM(product_total) AS Total_amount,
+          COUNT(inv_productid) AS Total_invoices,
+          SUM(CASE WHEN payment_status = 1 THEN product_total ELSE 0 END) AS Paid_total,
+          COUNT(CASE WHEN payment_status = 1 THEN inv_productid ELSE NULL END) AS Paid_invoices,
+          SUM(CASE WHEN payment_status = 0 THEN product_total ELSE 0 END) AS Pending_total,
+          COUNT(CASE WHEN payment_status = 0 THEN inv_productid ELSE NULL END) AS Pending_invoices
+       FROM invoice_productmaster 
+       WHERE status = 1 AND DATE(Row_updated_date) >= ?`,
+      [startDate.toISOString().split("T")[0]]
+    );
+    if (sql[0]) {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Sales data fetched successfully",
+        {
+          totalamount: sql[0].Total_amount,
+          paidamount: sql[0].Paid_total,
+          unpaidamount: sql[0].Pending_total,
+          totalinvoices: sql[0].Total_invoices,
+          paidinvoices: sql[0].Paid_invoices,
+          unpaidinvoices: sql[0].Pending_invoices,
+        },
+        secret
+      );
+    } else {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Sales data fetched successfully",
+        {
+          totalamount: 0,
+          paidamount: 0,
+          unpaidamount: 0,
+          totalinvoices: 0,
+          paidinvoices: 0,
+          unpaidinvoices: 0,
+        },
+        secret
+      );
+    }
+  } catch (er) {
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal Error. Please contact Administration",
+      er.message,
+      secret
+    );
+  }
+}
+
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+
+async function clientProfile(sales) {
+  try {
+    // Check if the session token exists
+    if (!sales.hasOwnProperty("STOKEN")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken missing. Please provide the Login sessiontoken",
+        "FETCH CLIENT PROFILE DATE",
+        ""
+      );
+    }
+    var secret = sales.STOKEN.substring(0, 16);
+    var querydata;
+    // Validate session token length
+    if (sales.STOKEN.length > 50 || sales.STOKEN.length < 30) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
+        "FETCH CLIENT PROFILE DATE",
+        secret
+      );
+    }
+
+    // Validate session token
+    const [result] = await db.spcall(
+      `CALL SP_STOKEN_CHECK(?,@result); SELECT @result;`,
+      [sales.STOKEN]
+    );
+    const objectvalue = result[1][0];
+    const userid = objectvalue["@result"];
+
+    if (userid == null) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+        "FETCH CLIENT PROFILE DATE",
+        secret
+      );
+    }
+
+    // Check if querystring is provided
+    if (!sales.hasOwnProperty("querystring")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring missing. Please provide the querystring",
+        "FETCH CLIENT PROFILE DATE",
+        secret
+      );
+    }
+
+    // Decrypt querystring
+    try {
+      querydata = await helper.decrypt(sales.querystring, secret);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring Invalid error. Please provide the valid querystring.",
+        "FETCH CLIENT PROFILE DATE",
+        secret
+      );
+    }
+
+    // Parse the decrypted querystring
+    try {
+      querydata = JSON.parse(querydata);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring JSON error. Please provide valid JSON",
+        "FETCH CLIENT PROFILE DATE",
+        secret
+      );
+    }
+
+    // Validate required fields
+    if (!querydata.hasOwnProperty("customerid") || querydata.customerid == "") {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Customer id missing. Please provide the customer id",
+        "FETCH CLIENT PROFILE DATE",
+        secret
+      );
+    }
+    var sql;
+    let startDate;
+
+    sql = await db.query(
+      `SELECT customer_name, customer_mailid, customer_phoneno, customer_gstno, 
+      Address, Billing_address, billingadddress_name, Customer_type,exist_customerid,exist_branchid,
+      (SELECT COUNT(*) FROM salesprocessmaster WHERE customer_id = c.customer_id AND status = 1) AS total_process,
+      (SELECT COUNT(*) FROM salesprocessmaster WHERE customer_id = c.customer_id AND active_status = 1 AND status = 1) AS active_process,
+      (SELECT COUNT(*) FROM salesprocessmaster WHERE customer_id = c.customer_id AND active_status = 0 AND status = 1) AS inactive_process
+FROM enquirycustomermaster c
+WHERE customer_id = ? and status =1`,
+      [querydata.customerid]
+    );
+    var customertype, companycount, sitecount;
+    if (sql[0]) {
+      if (sql[0].Customer_type == 1) {
+        customertype = "Enquiry";
+        companycount = 0;
+        sitecount = 0;
+      } else {
+        var sql1;
+        if (sql[0].exist_customerid != 0) {
+          sql1 = await db.query1(
+            `SELECT COUNT(*) AS companycount, Customer_type,(SELECT COUNT(*) FROM branchmaster WHERE customer_id = c.customer_id) AS branch_count
+     FROM customermaster c WHERE customer_id = ?`,
+            [sql[0].exist_customerid]
+          );
+        } else if (sql[0].exist_branchid != 0) {
+          sql1 = await db.query1(
+            `SELECT COUNT(*) AS branch_count, c.Customer_type,(SELECT COUNT(*) FROM customermaster WHERE customer_id IN  (SELECT customer_id FROM branchmaster WHERE branch_id = b.branch_id)) AS companycount FROM branchmaster b JOIN customermaster c ON b.customer_id = c.customer_id WHERE b.branch_id = ?`,
+            [sql[0].exist_branchid]
+          );
+        }
+        if (sql1[0].Customer_type == 1) {
+          customertype = "Company";
+        } else {
+          customertype = "Organization";
+        }
+        companycount = sql1[0].companycount;
+        sitecount = sql1[0].branch_count;
+      }
+    }
+    if (sql[0]) {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Client Profile Data fetched successfully",
+        {
+          customername: sql[0].customer_name,
+          mailid: sql[0].customer_mailid,
+          Phonenumber: sql[0].customer_phoneno,
+          gstnumber: sql[0].customer_gstno,
+          clientaddress: sql[0].Address,
+          clientaddressname: sql[0].customer_name,
+          billingaddress: sql[0].Billing_address,
+          billingaddressname: sql[0].billingadddress_name,
+          totalprocess: sql[0].total_process,
+          inactive_process: sql[0].inactive_process,
+          activeprocess: sql[0].active_process,
+          clienttype: customertype,
+          companycount: companycount,
+          sitecount: sitecount,
+        },
+        secret
+      );
+    } else {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Client Profile Data fetched successfully",
+        {
+          customername: "",
+          mailid: "",
+          Phonenumber: "",
+          gstnumber: "",
+          clientaddress: "",
+          clientaddressname: "",
+          billingaddress: "",
+          billingaddressname: "",
+          clienttype: "",
+          totalprocess: 0,
+          inactive_process: 0,
+          activeprocess: 0,
+          companycount: 0,
+          sitecount: 0,
+        },
+        secret
+      );
+    }
+  } catch (er) {
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal Error. Please contact Administration",
+      er.message,
+      secret
+    );
+  }
+}
+
 module.exports = {
   addsale,
   UpdateenqCustomer,
@@ -7266,4 +8085,8 @@ module.exports = {
   addRevisedQuotation,
   addCreditNote,
   addDebitNote,
+  getProducts,
+  getNotes,
+  salesData,
+  clientProfile,
 };

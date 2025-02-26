@@ -132,7 +132,7 @@ router.post("/updatesalesprocess", async function (req, res, next) {
   }
 });
 
-router.post("/fetcheventnumber", async function (req, res, next) {
+router.post("/detailspreloader", async function (req, res, next) {
   try {
     res.json(await sales.FetchIdforEvents(req.body));
   } catch (er) {
@@ -243,7 +243,7 @@ router.post("/dummy", async function (req, res, next) {
 
 router.post("/adddeliverychallan", async function (req, res, next) {
   try {
-    res.json(await sales.addDeliveryChallan(req.body));
+    res.json(await sales.addDeliveryChallan(req, res, next));
   } catch (er) {
     console.log(`Error while adding the Delivery Challan : ${er}`);
     next(er);
@@ -318,6 +318,42 @@ router.post("/adddebitnote", async function (req, res, next) {
     res.json(await sales.addDebitNote(req, res, next));
   } catch (er) {
     console.log(`Error while adding the Debit note : ${er}`);
+    next(er);
+  }
+});
+
+router.post("/getproducts", async function (req, res, next) {
+  try {
+    res.json(await sales.getProducts(req.body));
+  } catch (er) {
+    console.log(`Error while getting the products : ${er}`);
+    next(er);
+  }
+});
+
+router.post("/getnotes", async function (req, res, next) {
+  try {
+    res.json(await sales.getNotes(req.body));
+  } catch (er) {
+    console.log(`Error while`);
+    next(er);
+  }
+});
+
+router.post("/salesdata", async function (req, res, next) {
+  try {
+    res.json(await sales.salesData(req.body));
+  } catch (er) {
+    console.log(`Error while getting the sales data : ${er}`);
+    next(er);
+  }
+});
+
+router.post("/clientprofile", async function (req, res, next) {
+  try {
+    res.json(await sales.clientProfile(req.body));
+  } catch (er) {
+    console.log(`Error while getting the client profile : ${er}`);
     next(er);
   }
 });
