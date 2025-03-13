@@ -18,6 +18,7 @@
     "express": "^4.21.1",
     "fs-extra": "^11.2.0",
     "http": "^0.0.1-security",
+    "mqtt": "^5.10.4",
     "multer": "^1.4.5-lts.1",
     "mysql2": "^3.11.4",
     "node-cron": "^3.0.3",

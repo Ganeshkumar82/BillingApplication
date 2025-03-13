@@ -15,7 +15,16 @@ router.post("/addinvoice", async function (req, res, next) {
   try {
     res.json(await sales.addInvoice(req, res, next));
   } catch (er) {
-    console.log(`Error while uploading mor: ${er}`);
+    console.log(`Error while adding the invoice: ${er}`);
+    next(er);
+  }
+});
+
+router.post("/addcustominvoice", async function (req, res, next) {
+  try {
+    res.json(await sales.addCustomInvoice(req, res, next));
+  } catch (er) {
+    console.log(`Error while adding the custom invoice: ${er}`);
     next(er);
   }
 });
@@ -223,6 +232,7 @@ router.post("/getrfqid", async function (req, res, next) {
     next(er);
   }
 });
+
 router.post("/addquotation", async function (req, res, next) {
   try {
     res.json(await sales.addQuotation(req, res, next));
@@ -232,11 +242,20 @@ router.post("/addquotation", async function (req, res, next) {
   }
 });
 
-router.post("/dummy", async function (req, res, next) {
+router.post("/addcustomquotation", async function (req, res, next) {
   try {
-    res.json(await sales.Dummy(req.body));
+    res.json(await sales.addCustomQuotation(req, res, next));
   } catch (er) {
-    console.log(`Error while adding the Invoice : ${er}`);
+    console.log(`Error while adding the custom Quotation : ${er}`);
+    next(er);
+  }
+});
+
+router.post("/sendpdf", async function (req, res, next) {
+  try {
+    res.json(await sales.SendPdf(req, res, next));
+  } catch (er) {
+    console.log(`Error while sending the pdf : ${er}`);
     next(er);
   }
 });
@@ -246,6 +265,15 @@ router.post("/adddeliverychallan", async function (req, res, next) {
     res.json(await sales.addDeliveryChallan(req, res, next));
   } catch (er) {
     console.log(`Error while adding the Delivery Challan : ${er}`);
+    next(er);
+  }
+});
+
+router.post("/addcustomdc", async function (req, res, next) {
+  try {
+    res.json(await sales.addCustomDeliveryChallan(req, res, next));
+  } catch (er) {
+    console.log(`Error while adding the Custom Delivery Challan : ${er}`);
     next(er);
   }
 });
@@ -354,6 +382,51 @@ router.post("/clientprofile", async function (req, res, next) {
     res.json(await sales.clientProfile(req.body));
   } catch (er) {
     console.log(`Error while getting the client profile : ${er}`);
+    next(er);
+  }
+});
+
+router.post("/approvedquotation", async function (req, res, next) {
+  try {
+    res.json(await sales.approvedQuotation(req.body));
+  } catch (er) {
+    console.log(`Error while getting the approved quotation : ${er}`);
+    next(er);
+  }
+});
+
+router.get("/quoteapprove", async function (req, res, next) {
+  try {
+    await sales.QuotationApproval(req, res, next);
+  } catch (er) {
+    console.log(`Error while approving the quotation : ${er}`);
+    next(er);
+  }
+});
+
+router.get("/intquoteapprove", async function (req, res, next) {
+  try {
+    await sales.IntQuotationApproval(req, res, next);
+  } catch (er) {
+    console.log(`Error while approving the quotation internally: ${er}`);
+    next(er);
+  }
+});
+
+router.get("/rejectsuggest", async function (req, res, next) {
+  try {
+    await sales.RejectSuggestion(req, res, next);
+  } catch (er) {
+    console.log(`Error while rejecting the quotation : ${er}`);
+    next(er);
+  }
+});
+
+router.post("/getcustompdf", async function (req, res, next) {
+  try {
+    res.json(await sales.GetCustomPDF(req.body));
+  } catch (er) {
+    console.log(`Error while fetching the custom pdf : ${er}`);
     next(er);
   }
 });

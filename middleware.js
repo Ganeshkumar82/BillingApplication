@@ -159,10 +159,7 @@ let storage3 = multer.diskStorage({
   filename: (req, file, cb) => {
     const timestamp = Date.now();
     const date = new Date(timestamp);
-    const YYYYMMDD =
-      date.getFullYear().toString() +
-      (date.getMonth() + 1).toString().padStart(2, "0") +
-      date.getDate().toString().padStart(2, "0");
+
     cb(null, `${timestamp}_${file.originalname}`); // Use timestamp to avoid duplicate filenames
   },
 });
@@ -205,10 +202,6 @@ let storage4 = multer.diskStorage({
   filename: (req, file, cb) => {
     const timestamp = Date.now();
     const date = new Date(timestamp);
-    const YYYYMMDD =
-      date.getFullYear().toString() +
-      (date.getMonth() + 1).toString().padStart(2, "0") +
-      date.getDate().toString().padStart(2, "0");
     cb(null, `${timestamp}_${file.originalname}`); // Use timestamp to avoid duplicate filenames
   },
 });
@@ -251,10 +244,6 @@ let storage5 = multer.diskStorage({
   filename: (req, file, cb) => {
     const timestamp = Date.now();
     const date = new Date(timestamp);
-    const YYYYMMDD =
-      date.getFullYear().toString() +
-      (date.getMonth() + 1).toString().padStart(2, "0") +
-      date.getDate().toString().padStart(2, "0");
     cb(null, `${timestamp}_${file.originalname}`); // Use timestamp to avoid duplicate filenames
   },
 });
@@ -309,10 +298,6 @@ let storage6 = multer.diskStorage({
   filename: (req, file, cb) => {
     const timestamp = Date.now();
     const date = new Date(timestamp);
-    const YYYYMMDD =
-      date.getFullYear().toString() +
-      (date.getMonth() + 1).toString().padStart(2, "0") +
-      date.getDate().toString().padStart(2, "0");
     cb(null, `${timestamp}_${file.originalname}`); // Use timestamp to avoid duplicate filenames
   },
 });
@@ -367,10 +352,6 @@ let storage7 = multer.diskStorage({
   filename: (req, file, cb) => {
     const timestamp = Date.now();
     const date = new Date(timestamp);
-    const YYYYMMDD =
-      date.getFullYear().toString() +
-      (date.getMonth() + 1).toString().padStart(2, "0") +
-      date.getDate().toString().padStart(2, "0");
     cb(null, `${timestamp}_${file.originalname}`); // Use timestamp to avoid duplicate filenames
   },
 });
@@ -385,6 +366,88 @@ let uploadFile7 = multer({
 
 let uploadDebitNote = util.promisify(uploadFile7);
 
+//#############################################################################################################################################################################################
+//#############################################################################################################################################################################################
+//#############################################################################################################################################################################################
+//#############################################################################################################################################################################################
+
+/// Dynamically set the storage path
+let storage8 = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    try {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.toLocaleString("default", { month: "long" }); // e.g., December
+      const day = now.getDate();
+      let folder = config.filestorage; // Default folder
+
+      folder = `${folder}/${year}/${month}/${day}/SendPDF`;
+
+      // Ensure the folder exists
+      await fs.ensureDir(folder);
+
+      cb(null, folder);
+    } catch (err) {
+      cb(err);
+    }
+  },
+  filename: (req, file, cb) => {
+    const timestamp = Date.now();
+    cb(null, `${timestamp}_${file.originalname}`); // Use timestamp to avoid duplicate filenames
+  },
+});
+
+// Set max file size to 2MB
+const maxSize8 = 2 * 1024 * 1024;
+
+let uploadFile8 = multer({
+  storage: storage8,
+  limits: { fileSize: maxSize8 },
+}).single("file");
+
+let uploadcustompdf = util.promisify(uploadFile8);
+
+//#############################################################################################################################################################################################
+//#############################################################################################################################################################################################
+//#############################################################################################################################################################################################
+//#############################################################################################################################################################################################
+
+/// Dynamically set the storage path
+let storage9 = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    try {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.toLocaleString("default", { month: "long" }); // e.g., December
+      const day = now.getDate();
+      let folder = config.filestorage; // Default folder
+
+      folder = `${folder}/${year}/${month}/${day}/recurringinvoice`;
+
+      // Ensure the folder exists
+      await fs.ensureDir(folder);
+
+      cb(null, folder);
+    } catch (err) {
+      cb(err);
+    }
+  },
+  filename: (req, file, cb) => {
+    const timestamp = Date.now();
+    cb(null, `${timestamp}_${file.originalname}`); // Use timestamp to avoid duplicate filenames
+  },
+});
+
+// Set max file size to 2MB
+const maxSize9 = 2 * 1024 * 1024;
+
+let uploadFile9 = multer({
+  storage: storage9,
+  limits: { fileSize: maxSize9 },
+}).single("file");
+
+let uploadrecurringinvoicepdf = util.promisify(uploadFile9);
+
 module.exports = {
   uploadFileMOR,
   uploadFileInvoice,
@@ -394,4 +457,6 @@ module.exports = {
   uploadRFQuotation,
   uploadCreditNote,
   uploadDebitNote,
+  uploadcustompdf,
+  uploadrecurringinvoicepdf,
 };

@@ -288,11 +288,11 @@ async function GetVendor(vendor) {
       let sql;
       if (querydata.vendorid == 0) {
         sql = await db.query(
-          `select vendor_name,vendor_mail,vendor_phoneno,vendor_gstno,vendor_address,Logo_path from vendormaster where status =1 and deleted_flag = 0`
+          `select vendor_id,vendor_name,vendor_mail,vendor_phoneno,vendor_gstno,vendor_address,Logo_path from vendormaster where status =1 and deleted_flag = 0`
         );
       } else {
         sql = await db.query(
-          `select vendor_name,vendor_mail,vendor_phoneno,vendor_gstno,vendor_address,Logo_path from vendormaster where vendor_id = ${querydata.vendorid}`
+          `select vendor_id,vendor_name,vendor_mail,vendor_phoneno,vendor_gstno,vendor_address,Logo_path from vendormaster where vendor_id = ${querydata.vendorid}`
         );
       }
       // Convert Logo_path to binary if available

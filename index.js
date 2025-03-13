@@ -5,6 +5,7 @@ const http = require("http");
 const adminRouter = require("./routes/admin");
 const vendorRouter = require("./routes/vendor");
 const salesRouter = require("./routes/sales");
+const SubscriptionRouter = require("./routes/subscription");
 const productRouter = require("./routes/product");
 const verificaitonRouter = require("./routes/verification");
 const { startWebSocketClient } = require("./Websocket");
@@ -30,6 +31,7 @@ app.use("/vendor", vendorRouter);
 app.use("/sales", salesRouter);
 app.use("/product", productRouter);
 app.use("/verification", verificaitonRouter);
+app.use("/subscription", SubscriptionRouter);
 
 /* Error handler middleware */
 app.use((err, req, res, next) => {
