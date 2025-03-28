@@ -5,8 +5,8 @@ const options = {
   host: "localhost",
   port: 1883,
   protocol: "mqtt",
-  username: "myUser",
-  password: "myPass",
+  username: "Admin",
+  password: "Sporada@2014",
 };
 
 function publishMqttMessage(topic, message) {

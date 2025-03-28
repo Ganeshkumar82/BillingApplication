@@ -1,0 +1,28 @@
+^D:\NIDYA\GETTING_PARAMETER\BUILD\WINDOWS\X64\CMAKEFILES\A561232C096087C922754C873FA89779\FLUTTER_WINDOWS.DLL.RULE
+setlocal
+"C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -E env FLUTTER_ROOT=C:\Users\Sporada\Downloads\flutter_windows_3.27.3-stable\flutter PROJECT_DIR=D:\Nidya\getting_parameter FLUTTER_ROOT=C:\Users\Sporada\Downloads\flutter_windows_3.27.3-stable\flutter FLUTTER_EPHEMERAL_DIR=D:\Nidya\getting_parameter\windows\flutter\ephemeral PROJECT_DIR=D:\Nidya\getting_parameter FLUTTER_TARGET=lib\main.dart DART_OBFUSCATION=false TRACK_WIDGET_CREATION=true TREE_SHAKE_ICONS=true PACKAGE_CONFIG=D:\Nidya\getting_parameter\.dart_tool\package_config.json C:/Users/Sporada/Downloads/flutter_windows_3.27.3-stable/flutter/packages/flutter_tools/bin/tool_backend.bat windows-x64 Release
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^D:\NIDYA\GETTING_PARAMETER\BUILD\WINDOWS\X64\CMAKEFILES\C3434413EF1432CA5E7C1FA97D4FE594\FLUTTER_ASSEMBLE.RULE
+setlocal
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd
+^D:\NIDYA\GETTING_PARAMETER\WINDOWS\FLUTTER\CMAKELISTS.TXT
+setlocal
+"C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" -SD:/Nidya/getting_parameter/windows -BD:/Nidya/getting_parameter/build/windows/x64 --check-stamp-file D:/Nidya/getting_parameter/build/windows/x64/flutter/CMakeFiles/generate.stamp
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

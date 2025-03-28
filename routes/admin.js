@@ -72,7 +72,7 @@ router.post("/register", async function (req, res, next) {
   }
 });
 
-router.post("/organizationlist", async function (req, res, next) {
+router.post("/organization", async function (req, res, next) {
   try {
     res.json(await admin.OrganizationList(req.body));
   } catch (er) {
@@ -90,7 +90,7 @@ router.post("/companylist", async function (req, res, next) {
   }
 });
 
-router.post("/branchlist", async function (req, res, next) {
+router.post("/sitelist", async function (req, res, next) {
   try {
     res.json(await admin.BranchList(req.body));
   } catch (er) {
@@ -105,6 +105,67 @@ router.post("/fhf", async function (req, res, next) {
     res.json(await admin.FHF(req.body));
   } catch (er) {
     console.error(`Error while Getting the FHF list -> ${er.message}`);
+  }
+});
+
+//Upload the Image for the Company
+router.post("/uploadlogo", async function (req, res, next) {
+  try {
+    res.json(await admin.UploadLogo(req.body));
+  } catch (er) {
+    console.error(`Error while Uploading the Company Logo -> ${er.message}`);
+    next(er);
+  }
+});
+
+//Create the Subscription Packages
+router.post("/createsubscription", async function (req, res, next) {
+  try {
+    res.json(await admin.CreateSubscription(req.body));
+  } catch (er) {
+    console.error(
+      `Error while Creating the Subscription Package -> ${er.message}`
+    );
+    next(er);
+  }
+});
+
+//Get the Subscription Packages
+router.post("/getsubscription", async function (req, res, next) {
+  try {
+    res.json(await admin.GetSubscription(req.body));
+  } catch (er) {
+    console.error(
+      `Error while Fetching the Subscription Package -> ${er.message}`
+    );
+    next(er);
+  }
+});
+
+router.post("/updatecompany", async function (req, res, next) {
+  try {
+    res.json(await admin.AddUpdateCompany(req.body));
+  } catch (er) {
+    console.error(`Error while Updating the company ${er.message}`);
+    next(er);
+  }
+});
+
+router.post("/updateorganization", async function (req, res, next) {
+  try {
+    res.json(await admin.UpdateOrganization(req.body));
+  } catch (er) {
+    console.error(`Error while Updating the organization ${er.message}`);
+    next(er);
+  }
+});
+
+router.post("/updatebranch", async function (req, res, next) {
+  try {
+    res.json(await admin.UpdateBranch(req.body));
+  } catch (er) {
+    console.error(`Error while Updating the branch ${er.message}`);
+    next(er);
   }
 });
 

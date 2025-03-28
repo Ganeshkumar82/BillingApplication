@@ -386,11 +386,20 @@ router.post("/clientprofile", async function (req, res, next) {
   }
 });
 
-router.post("/approvedquotation", async function (req, res, next) {
+router.post("/approvequotation", async function (req, res, next) {
   try {
-    res.json(await sales.approvedQuotation(req.body));
+    res.json(await sales.approveQuotation(req.body));
   } catch (er) {
     console.log(`Error while getting the approved quotation : ${er}`);
+    next(er);
+  }
+});
+
+router.post("/rejectquotation", async function (req, res, next) {
+  try {
+    res.json(await sales.rejectQuotation(req.body));
+  } catch (er) {
+    console.log(`Error while getting the reject quotation : ${er}`);
     next(er);
   }
 });
@@ -413,9 +422,9 @@ router.get("/intquoteapprove", async function (req, res, next) {
   }
 });
 
-router.get("/rejectsuggest", async function (req, res, next) {
+router.post("/rejectsuggest", async function (req, res, next) {
   try {
-    await sales.RejectSuggestion(req, res, next);
+    res.json(await sales.RejectSuggestion(req.body));
   } catch (er) {
     console.log(`Error while rejecting the quotation : ${er}`);
     next(er);
@@ -427,6 +436,15 @@ router.post("/getcustompdf", async function (req, res, next) {
     res.json(await sales.GetCustomPDF(req.body));
   } catch (er) {
     console.log(`Error while fetching the custom pdf : ${er}`);
+    next(er);
+  }
+});
+
+router.post("/getquotationdetail", async function (req, res, next) {
+  try {
+    res.json(await sales.getQuotationDetails(req.body));
+  } catch (er) {
+    console.log(`Error while fetching the quotation detail : ${er}`);
     next(er);
   }
 });

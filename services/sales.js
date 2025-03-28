@@ -680,7 +680,7 @@ async function addsale(req, res) {
     if (salesid) {
       const [processSql] = await db.spcall(
         `CALL SP_ADD_SALES_PROCESS(?,?,?,@processid); select @processid;`,
-        [salesid, userid, querydata.customerrequirementid]
+        [salesid, userid, requirementid]
       );
       const objectvalue2 = processSql[1][0];
       const processid = objectvalue2["@processid"];
@@ -4958,12 +4958,14 @@ async function addQuotation(req, res) {
         `Update generatequotationid set status = 0 where quotation_id IN('${querydata.quotationgenid}')`
       );
       const sql2 = await db.query(
-        `select Email_id from usermaster where user_design = 'Administrator' and status = 1`
+        `select u.Email_id,a.secret from usermaster u CROSS JOIN apikey a where u.user_design = 'Administrator' and u.status = 1 and a.status = 1`
       );
-      var emailid = "";
+      var emailid = "",
+        secret = "15b97956-b296-11";
       if (sql2.length > 0) {
         emailid =
           sql2.length > 0 ? sql2.map((item) => item.Email_id).join(",") : "";
+        secret = sql2[0].secret;
       } else {
         emailid = `support@sporadasecure.com,ceo@sporadasecure.com,sales@sporadasecure.com`;
       }
@@ -4972,11 +4974,11 @@ async function addQuotation(req, res) {
         emailid,
         `Action Required!!! Received Quotation Approve Request for ${querydata.clientaddressname}`,
         "apporvequotation.html",
-        `http://192.168.0.200:8081/sales/intquoteapprove?quoteid=${quatationid}&STOKEN=${sales.STOKEN}&s=1&feedback='Apporved'`,
+        `http://192.168.0.200:8081/sales/intquoteapprove?quoteid=${quatationid}&STOKEN=${secret}&s=1&feedback='Apporved'`,
         "APPROVEQUOTATION_SEND",
         querydata.clientaddressname,
         "QUOTATION APPROVAL",
-        `http://192.168.0.200:8081/sales/intquoteapprove?quoteid=${quatationid}&STOKEN=${sales.STOKEN}&s=3`,
+        `http://192.168.0.200:8081/sales/intquoteapprove?quoteid=${quatationid}&STOKEN=${secret}&s=3`,
         req.file.path
       );
       if (EmailSent == true) {
@@ -4994,7 +4996,12 @@ async function addQuotation(req, res) {
             req.file.path,
           ]
         );
-
+        await mqttclient.publishMqttMessage(
+          "Notification",
+          "Email sent successfully to the Administrator for eventid" +
+            quatationid +
+            ". Please contact Administrator for further action."
+        );
         return helper.getSuccessResponse(
           true,
           "success",
@@ -5006,6 +5013,12 @@ async function addQuotation(req, res) {
         const sql = await db.query(
           `delete from salesprocesslist where cprocess_id =?`,
           [quatationid]
+        );
+        await mqttclient.publishMqttMessage(
+          "Notification",
+          "Error sending the Email for eventid" +
+            quatationid +
+            ". Please try again"
         );
         return helper.getErrorResponse(
           false,
@@ -8073,6 +8086,9 @@ async function addCreditNote(req, res) {
           const objectvalue3 = sql2[1][0];
           Creditnoteid = objectvalue3["@crdnteid"];
         }
+        // const sql1 = await db.query(`Update generatecreditnteid set status =1 where creditnotegen_id = ?`,[querydata.creditnoteid]);
+        // const promises1 = [];
+
         const sql = await db.query(
           `Update generatecreditnteid set status = 0 where creditnotegen_id = '${querydata.creditnoteid}'`
         );
@@ -8382,7 +8398,15 @@ async function addDebitNote(req, res) {
         secret
       );
     }
-
+    if (!querydata.hasOwnProperty("rrrrr") || querydata.rrrrr == "") {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Contact number missing. Please provide the contact number.",
+        "ADD CREDIR NOTE FOR PROCESS",
+        secret
+      );
+    }
     if (!querydata.hasOwnProperty("phoneno") || querydata.phoneno == "") {
       return helper.getErrorResponse(
         false,
@@ -8965,7 +8989,6 @@ async function clientProfile(sales) {
     }
     var sql;
     let startDate;
-
     sql = await db.query(
       `SELECT customer_name, customer_mailid, customer_phoneno, customer_gstno, 
       Address, Billing_address, billingadddress_name, Customer_type,exist_customerid,exist_branchid,
@@ -9068,7 +9091,7 @@ WHERE customer_id = ? and status =1`,
 //###############################################################################################################################################################################################
 //###############################################################################################################################################################################################
 
-async function approvedQuotation(sales) {
+async function approveQuotation(sales) {
   try {
     // Check if the session token exists
     if (!sales.hasOwnProperty("STOKEN")) {
@@ -9083,7 +9106,7 @@ async function approvedQuotation(sales) {
     var secret = sales.STOKEN.substring(0, 16);
     var querydata;
     // Validate session token length
-    if (sales.STOKEN.length > 50 || sales.STOKEN.length < 30) {
+    if (sales.STOKEN.length > 50 || sales.STOKEN.length < 10) {
       return helper.getErrorResponse(
         false,
         "error",
@@ -9094,14 +9117,10 @@ async function approvedQuotation(sales) {
     }
 
     // Validate session token
-    const [result] = await db.spcall(
-      `CALL SP_STOKEN_CHECK(?,@result); SELECT @result;`,
-      [sales.STOKEN]
-    );
-    const objectvalue = result[1][0];
-    const userid = objectvalue["@result"];
-
-    if (userid == null) {
+    const result = await db.query(`select secret from apikey where secret =?`, [
+      sales.STOKEN,
+    ]);
+    if (result.length == 0) {
       return helper.getErrorResponse(
         false,
         "error",
@@ -9149,7 +9168,7 @@ async function approvedQuotation(sales) {
     }
 
     // Validate required fields
-    if (!querydata.hasOwnProperty("eventid") || querydata.eventid == "") {
+    if (!querydata.hasOwnProperty("eventid") || querydata.eventid == 0) {
       return helper.getErrorResponse(
         false,
         "error",
@@ -9160,56 +9179,163 @@ async function approvedQuotation(sales) {
     }
 
     const sql = await db.query(
-      `select Email_id from usermaster where user_design = 'Administrator' and status = 1`
-    );
-    const sql1 = await db.query(
-      `select custsales_name,salesprocess_path from salesprocesslist where cprocess_id in (?);`,
-      [querydata.eventid]
-    );
-    const sql2 = await db.query(
       `Update salesprocesslist set Approved_status =2 where cprocess_id = ?`,
       [querydata.eventid]
     );
-    var name = "",
-      pdfpath = "";
-    if (sql1[0]) {
-      name = sql1[0].custsales_name;
-      pdfpath = sql1[0].salesprocess_path;
-    }
-    var emailid = "";
-    if (sql.length > 0) {
-      emailid =
-        sql.length > 0 ? sql.map((item) => item.Email_id).join(",") : "";
-    } else {
-      emailid = `support@sporadasecure.com,ceo@sporadasecure.com,sales@sporadasecure.com`;
-    }
-    EmailSent = await mailer.sendapprovequotation(
-      "Administrator",
-      emailid,
-      // ,ceo@sporadasecure.com.ramachadran.m@sporadasecure.com',
-      `Action Required!!! Received Quotation Approve Request for ${name}`,
-      "apporvequotation.html",
-      `http://192.168.0.200:8081/sales/quoteapprove?quoteid=${querydata.eventid}&STOKEN=${sales.STOKEN}&s=1&feedback='Apporved'`,
-      "APPROVEQUOTATION_SEND",
-      name,
-      "QUOTATION APPROVAL",
-      `http://192.168.0.200:8081/sales/quoteapprove?quoteid=${querydata.eventid}&STOKEN=${sales.STOKEN}&s=3`,
-      pdfpath
-    );
-    if (EmailSent == true) {
+    if (sql.affectedRows > 0) {
+      await mqttclient.publishMqttMessage(
+        "refresh",
+        "Sales Quotation approved for the process id " + querydata.eventid
+      );
+      await mqttclient.publishMqttMessage(
+        "Notification",
+        "Sales Quotation approved for the process id " + querydata.eventid
+      );
       return helper.getSuccessResponse(
         true,
         "success",
-        "Email sent successfully to the Administrator. Please contact Administrator for further action.",
-        { EmailSent: EmailSent },
+        "Approved Successfully",
+        querydata.eventid,
+        secret
+      );
+    } else {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Approved Successfully",
+        querydata.eventid,
+        secret
+      );
+    }
+  } catch (er) {
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal Error. Please contact Administration",
+      er.message,
+      secret
+    );
+  }
+}
+//##############################################################################################################################################################################################
+//##############################################################################################################################################################################################
+//##############################################################################################################################################################################################
+//##############################################################################################################################################################################################
+
+async function rejectQuotation(sales) {
+  try {
+    // Check if the session token exists
+    if (!sales.hasOwnProperty("STOKEN")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken missing. Please provide the Login sessiontoken",
+        "REJECT QUOTATION",
+        ""
+      );
+    }
+    var secret = sales.STOKEN.substring(0, 16);
+    var querydata;
+    // Validate session token length
+    if (sales.STOKEN.length > 50 || sales.STOKEN.length < 10) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
+        "REJECT QUOTATION",
+        secret
+      );
+    }
+
+    // Validate session token
+    const result = await db.query(`select secret from apikey where secret =?`, [
+      sales.STOKEN,
+    ]);
+    if (result.length == 0) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+        "REJECT QUOTATION",
+        secret
+      );
+    }
+
+    // Check if querystring is provided
+    if (!sales.hasOwnProperty("querystring")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring missing. Please provide the querystring",
+        "REJECT QUOTATION",
+        secret
+      );
+    }
+
+    // Decrypt querystring
+    try {
+      querydata = await helper.decrypt(sales.querystring, secret);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring Invalid error. Please provide the valid querystring.",
+        "REJECT QUOTATION",
+        secret
+      );
+    }
+
+    // Parse the decrypted querystring
+    try {
+      querydata = JSON.parse(querydata);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring JSON error. Please provide valid JSON",
+        "REJECT QUOTATION",
+        secret
+      );
+    }
+
+    // Validate required fields
+    if (!querydata.hasOwnProperty("eventid") || querydata.eventid == 0) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Event id missing. Please provide the event id",
+        "REJECT QUOTATION",
+        secret
+      );
+    }
+    if (!querydata.hasOwnProperty("reason") || querydata.reason == "") {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Reason missing. Please provide the reason",
+        "REJECT QUOTATION",
+        secret
+      );
+    }
+
+    const sql = await db.query(
+      `Update salesprocesslist set Approved_status =3,Rejected_reason = ? where cprocess_id = ?`,
+      [querydata.reason, querydata.eventid]
+    );
+    if (sql.affectedRows > 0) {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Rejected Successfully",
+        querydata.eventid,
         secret
       );
     } else {
       return helper.getErrorResponse(
-        false,
-        "error",
-        "Error sending the Email. Please try again",
-        { EmailSent: EmailSent },
+        true,
+        "success",
+        "Rejected Successfully",
+        querydata.eventid,
         secret
       );
     }
@@ -9224,118 +9350,34 @@ async function approvedQuotation(sales) {
   }
 }
 
-//###############################################################################################################################################################################################
-//###############################################################################################################################################################################################
-//###############################################################################################################################################################################################
-//###############################################################################################################################################################################################
+//#############################################################################################################################################################################################
+//##############################################################################################################################################################################################
+//##############################################################################################################################################################################################
+//##############################################################################################################################################################################################
 
-// async function QuotationApproval(sales) {
-//   try {
-//     // Check if the session token exists
-//     if (!sales.hasOwnProperty("STOKEN")) {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Login sessiontoken missing. Please provide the Login sessiontoken",
-//         "APPROVE THE QUOTATION",
-//         ""
-//       );
-//     }
-//     var secret = sales.STOKEN.substring(0, 16);
-//     var querydata;
-//     // Validate session token length
-//     if (sales.STOKEN.length > 50 || sales.STOKEN.length < 30) {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
-//         "APPROVE THE QUOTATION",
-//         secret
-//       );
-//     }
-
-//     // Validate session token
-//     const [result] = await db.spcall(
-//       `CALL SP_STOKEN_CHECK(?,@result); SELECT @result;`,
-//       [sales.STOKEN]
-//     );
-//     const objectvalue = result[1][0];
-//     const userid = objectvalue["@result"];
-
-//     if (userid == null) {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Login sessiontoken Invalid. Please provide the valid sessiontoken",
-//         "APPROVE THE QUOTATION"
-//       );
-//     }
-//     // Validate required fields
-//     if (
-//       !sales.hasOwnProperty("quoteid") ||
-//       sales.quoteid == 0 ||
-//       sales.quoteid == undefined
-//     ) {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Quotation id missing. Please provide the quotation id",
-//         "APPROVE THE QUOTATION"
-//       );
-//     }
-//     if (!sales.hasOwnProperty("s") || sales.s == 0 || sales.s == undefined) {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Link Invalid. Please try again",
-//         "APPROVE THE QUOTATION"
-//       );
-//     }
-//     const sql = await db.query(
-//       `UPDATE salesprocesslist set Approved_status = ${sales.s} where cprocess_id = ?`,
-//       [sales.quoteid]
-//     );
-//     if (sales.s == 1) {
-//       return helper.getSuccessResponse(
-//         true,
-//         "success",
-//         "Quotation Approved Successfully",
-//         { quoteid: sales.quoteid }
-//       );
-//     } else {
-//       return helper.getSuccessResponse(
-//         true,
-//         "success",
-//         "Quotation rejected Successfully",
-//         { quoteid: sales.quoteid }
-//       );
-//     }
-//   } catch (er) {
-//     return helper.getErrorResponse(
-//       false,
-//       "error",
-//       "Internal Error. Please contact Administration",
-//       er.message
-//     );
-//   }
-// }
-async function QuotationApproval(req, res) {
+async function QuotationApproval(sales) {
   try {
-    let sales = req.query;
-
-    // Path to HTML files
-    const htmlPath = path.resolve(__dirname, "..", "htmlresponse");
-
     // Check if the session token exists
     if (!sales.hasOwnProperty("STOKEN")) {
-      return res.sendFile(path.join(htmlPath, "error.html"));
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken missing. Please provide the Login sessiontoken",
+        "APPROVE THE QUOTATION",
+        ""
+      );
     }
-
     var secret = sales.STOKEN.substring(0, 16);
-
+    var querydata;
     // Validate session token length
-    if (sales.STOKEN.length > 50 || sales.STOKEN.length < 30) {
-      return res.sendFile(path.join(htmlPath, "invalid_token.html"));
+    if (sales.STOKEN.length > 50 || sales.STOKEN.length < 10) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
+        "APPROVE THE QUOTATION",
+        secret
+      );
     }
 
     // Validate session token
@@ -9347,141 +9389,234 @@ async function QuotationApproval(req, res) {
     const userid = objectvalue["@result"];
 
     if (userid == null) {
-      return res.sendFile(path.join(htmlPath, "invalid_token.html"));
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+        "APPROVE THE QUOTATION"
+      );
     }
     // Validate required fields
-    if (!sales.hasOwnProperty("quoteid") || !sales.quoteid) {
-      return res.sendFile(path.join(htmlPath, "missing_quoteid.html"));
-    }
-
-    if (!sales.hasOwnProperty("s") || sales.s == 0 || sales.s == undefined) {
-      return res.sendFile(path.join(htmlPath, "internal_error.html"));
-    }
-
     if (
-      !sales.hasOwnProperty("feedback") ||
-      sales.feedback == "" ||
-      sales.feedback == undefined
+      !sales.hasOwnProperty("quoteid") ||
+      sales.quoteid == 0 ||
+      sales.quoteid == undefined
     ) {
-      return res.sendFile(path.join(htmlPath, "internal_error.html"));
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Quotation id missing. Please provide the quotation id",
+        "APPROVE THE QUOTATION"
+      );
     }
-
-    // Update the database
-    await db.query(
-      `UPDATE salesprocesslist SET Approved_status = ? WHERE cprocess_id = ?`,
-      [sales.s, sales.quoteid]
+    if (!sales.hasOwnProperty("s") || sales.s == 0 || sales.s == undefined) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Link Invalid. Please try again",
+        "APPROVE THE QUOTATION"
+      );
+    }
+    const sql = await db.query(
+      `UPDATE salesprocesslist set Approved_status = ${sales.s} where cprocess_id = ?`,
+      [sales.quoteid]
     );
-
-    // Send the correct HTML file
     if (sales.s == 1) {
-      const sql = await db.query(
-        `select emailid,ccemail,clientname,phoneno,feedback,message_type,pdf_path from quotation_mailbox where status = 1 and process_id = ${sales.quoteid} LIMIT 1 `
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Quotation Approved Successfully",
+        { quoteid: sales.quoteid }
       );
-      if (sql[0]) {
-        const promises = [];
-        const phoneNumbers = sql[0].phoneno
-          ? sql[0].phoneno
-              .split(",")
-              .map((num) => num.trim())
-              .filter((num) => num !== "") // Removes empty values
-          : [];
-        // Send Email or WhatsApp Message
-        if (sql[0].message_type === 1) {
-          // Send only email
-          EmailSent = await mailer.sendQuotation(
-            sql[0].clientname,
-            sql[0].emailid,
-            "Your Quotation from Sporada Secure India Private Limited",
-            "quotationpdf.html",
-            ``,
-            "QUOTATION_PDF_SEND",
-            sql[0].pdf_path,
-            sql[0].feedback,
-            sql[0].ccemail
-          );
-        } else if (sql[0].message_type === 2) {
-          // Send only WhatsApp
-          WhatsappSent = await Promise.all(
-            phoneNumbers.map(async (number) => {
-              try {
-                const response = await axios.post(
-                  `${config.whatsappip}/billing/sendpdf`,
-                  {
-                    phoneno: number,
-                    feedback: sql[0].feedback,
-                    pdfpath: sql[0].pdf_path,
-                  }
-                );
-                return response.data.code;
-              } catch (error) {
-                console.error(`WhatsApp Error for ${number}:`, error.message);
-                return false;
-              }
-            })
-          );
-        } else if (sql[0].message_type === 3) {
-          // Send both email & WhatsApp in parallel
-          promises.push(
-            mailer.sendQuotation(
-              sql[0].clientname,
-              sql[0].emailid,
-              "Your Quotation from Sporada Secure India Private Limited",
-              "quotationpdf.html",
-              ``,
-              "QUOTATION_PDF_SEND",
-              sql[0].pdf_path,
-              sql[0].feedback,
-              sql[0].ccemail
-            )
-          );
-
-          promises.push(
-            Promise.all(
-              phoneNumbers.map(async (number) => {
-                try {
-                  const response = await axios.post(
-                    `${config.whatsappip}/billing/sendpdf`,
-                    {
-                      phoneno: number,
-                      feedback: sql[0].feedback,
-                      pdfpath: sql[0].pdf_path,
-                    }
-                  );
-                  return response.data.code;
-                } catch (error) {
-                  console.error(`WhatsApp Error for ${number}:`, error.message);
-                  return false;
-                }
-              })
-            ).then((results) => (WhatsappSent = results))
-          );
-
-          // Run both requests in parallel and wait for completion
-          [EmailSent] = await Promise.all(promises);
-        }
-      }
-      await mqttclient.publishMqttMessage(
-        "refresh",
-        "Quotation approved for the process id " + sales.quoteid
-      );
-      await mqttclient.publishMqttMessage(
-        "Notification",
-        "Quotation approved for the process id " + sales.quoteid
-      );
-      return res.sendFile(path.join(htmlPath, "approved.html"));
     } else {
-      await mqttclient.publishMqttMessage(
-        "Notification",
-        "Quotation Rejected for the process id " + sales.quoteid
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Quotation rejected Successfully",
+        { quoteid: sales.quoteid }
       );
-      return res.sendFile(path.join(htmlPath, "rejected.html"));
     }
   } catch (er) {
-    return res.sendFile(
-      path.join(__dirname, "..", "htmlresponse", "internal_error.html")
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal Error. Please contact Administration",
+      er.message
     );
   }
 }
+// async function QuotationApproval(req, res) {
+//   try {
+//     let sales = req.query;
+
+//     // Path to HTML files
+//     const htmlPath = path.resolve(__dirname, "..", "htmlresponse");
+
+//     // Check if the session token exists
+//     if (!sales.hasOwnProperty("STOKEN")) {
+//       return res.sendFile(path.join(htmlPath, "error.html"));
+//     }
+
+//     var secret = sales.STOKEN.substring(0, 16);
+
+//     // Validate session token length
+//     if (sales.STOKEN.length > 50 || sales.STOKEN.length < 30) {
+//       return res.sendFile(path.join(htmlPath, "invalid_token.html"));
+//     }
+
+//     // Validate session token
+//     const [result] = await db.spcall(
+//       `CALL SP_STOKEN_CHECK(?,@result); SELECT @result;`,
+//       [sales.STOKEN]
+//     );
+//     const objectvalue = result[1][0];
+//     const userid = objectvalue["@result"];
+
+//     if (userid == null) {
+//       return res.sendFile(path.join(htmlPath, "invalid_token.html"));
+//     }
+//     // Validate required fields
+//     if (!sales.hasOwnProperty("quoteid") || !sales.quoteid) {
+//       return res.sendFile(path.join(htmlPath, "missing_quoteid.html"));
+//     }
+
+//     if (!sales.hasOwnProperty("s") || sales.s == 0 || sales.s == undefined) {
+//       return res.sendFile(path.join(htmlPath, "internal_error.html"));
+//     }
+
+//     if (
+//       !sales.hasOwnProperty("feedback") ||
+//       sales.feedback == "" ||
+//       sales.feedback == undefined
+//     ) {
+//       return res.sendFile(path.join(htmlPath, "internal_error.html"));
+//     }
+
+//     // Update the database
+//     await db.query(
+//       `UPDATE salesprocesslist SET Approved_status = ? WHERE cprocess_id = ?`,
+//       [sales.s, sales.quoteid]
+//     );
+
+//     // Send the correct HTML file
+//     if (sales.s == 1) {
+//       const sql = await db.query(
+//         `select emailid,ccemail,clientname,phoneno,feedback,message_type,pdf_path from quotation_mailbox where status = 1 and process_id = ${sales.quoteid} LIMIT 1 `
+//       );
+//       if (sql[0]) {
+//         const promises = [];
+//         const phoneNumbers = sql[0].phoneno
+//           ? sql[0].phoneno
+//               .split(",")
+//               .map((num) => num.trim())
+//               .filter((num) => num !== "") // Removes empty values
+//           : [];
+//         // Send Email or WhatsApp Message
+//         if (sql[0].message_type === 1) {
+//           // Send only email
+//           EmailSent = await mailer.sendQuotation(
+//             sql[0].clientname,
+//             sql[0].emailid,
+//             "Your Quotation from Sporada Secure India Private Limited",
+//             "quotationpdf.html",
+//             ``,
+//             "QUOTATION_PDF_SEND",
+//             sql[0].pdf_path,
+//             sql[0].feedback,
+//             sql[0].ccemail
+//           );
+//         } else if (sql[0].message_type === 2) {
+//           // Send only WhatsApp
+//           WhatsappSent = await Promise.all(
+//             phoneNumbers.map(async (number) => {
+//               try {
+//                 const response = await axios.post(
+//                   `${config.whatsappip}/billing/sendpdf`,
+//                   {
+//                     phoneno: number,
+//                     feedback: sql[0].feedback,
+//                     pdfpath: sql[0].pdf_path,
+//                   }
+//                 );
+//                 return response.data.code;
+//               } catch (error) {
+//                 console.error(`WhatsApp Error for ${number}:`, error.message);
+//                 return false;
+//               }
+//             })
+//           );
+//         } else if (sql[0].message_type === 3) {
+//           // Send both email & WhatsApp in parallel
+//           promises.push(
+//             mailer.sendQuotation(
+//               sql[0].clientname,
+//               sql[0].emailid,
+//               "Your Quotation from Sporada Secure India Private Limited",
+//               "quotationpdf.html",
+//               ``,
+//               "QUOTATION_PDF_SEND",
+//               sql[0].pdf_path,
+//               sql[0].feedback,
+//               sql[0].ccemail
+//             )
+//           );
+
+//           promises.push(
+//             Promise.all(
+//               phoneNumbers.map(async (number) => {
+//                 try {
+//                   const response = await axios.post(
+//                     `${config.whatsappip}/billing/sendpdf`,
+//                     {
+//                       phoneno: number,
+//                       feedback: sql[0].feedback,
+//                       pdfpath: sql[0].pdf_path,
+//                     }
+//                   );
+//                   return response.data.code;
+//                 } catch (error) {
+//                   console.error(`WhatsApp Error for ${number}:`, error.message);
+//                   return false;
+//                 }
+//               })
+//             ).then((results) => (WhatsappSent = results))
+//           );
+
+//           // Run both requests in parallel and wait for completion
+//           [EmailSent] = await Promise.all(promises);
+//         }
+//       }
+//       await mqttclient.publishMqttMessage(
+//         "refresh",
+//         "Quotation approved for the process id " + sales.quoteid
+//       );
+//       await mqttclient.publishMqttMessage(
+//         "Notification",
+//         "Quotation approved for the process id " + sales.quoteid
+//       );
+//       return res.sendFile(path.join(htmlPath, "approved.html"));
+//     } else {
+//       await mqttclient.publishMqttMessage(
+//         "Notification",
+//         "Quotation Rejected for the process id " + sales.quoteid
+//       );
+//       return res.sendFile(path.join(htmlPath, "rejected.html"));
+//     }
+//   } catch (er) {
+//     // await mqttclient.publishMqttMessage(
+//     //   "Configuration",
+//     //   "Error in the quotation approval process " + sales.quoteid
+//     // );
+//     return res.sendFile(
+//       path.join(__dirname, "..", "htmlresponse", "internal_error.html")
+//     );
+//   }
+// }
+
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
 
 async function IntQuotationApproval(req, res) {
   try {
@@ -9495,22 +9630,19 @@ async function IntQuotationApproval(req, res) {
       return res.sendFile(path.join(htmlPath, "error.html"));
     }
 
-    var secret = sales.STOKEN.substring(0, 16);
+    // var secret = sales.STOKEN.substring(0, 16);
 
     // Validate session token length
-    if (sales.STOKEN.length > 50 || sales.STOKEN.length < 30) {
+    if (sales.STOKEN.length > 50 || sales.STOKEN.length < 10) {
       return res.sendFile(path.join(htmlPath, "invalid_token.html"));
     }
 
     // Validate session token
-    const [result] = await db.spcall(
-      `CALL SP_STOKEN_CHECK(?,@result); SELECT @result;`,
-      [sales.STOKEN]
-    );
-    const objectvalue = result[1][0];
-    const userid = objectvalue["@result"];
+    const result = await db.query(`select secret from apikey where secret =?`, [
+      sales.STOKEN,
+    ]);
 
-    if (userid == null) {
+    if (result.length == 0) {
       return res.sendFile(path.join(htmlPath, "invalid_token.html"));
     }
     // Validate required fields
@@ -9547,8 +9679,14 @@ async function IntQuotationApproval(req, res) {
     if (sql1.affectedRows) {
       if (sales.s == 1) {
         const sql = await db.query(
-          `select emailid,ccemail,clientname,phoneno,feedback,message_type,pdf_path from quotation_mailbox where status = 1 and process_id = ${sales.quoteid} LIMIT 1 `
+          `SELECT q.emailid, q.ccemail, q.clientname, q.phoneno, q.feedback,q.message_type, q.pdf_path, a.secret FROM quotation_mailbox q CROSS JOIN apikey a
+          WHERE q.status = 1 AND q.process_id = ? AND a.status = 1;`,
+          [sales.quoteid]
         );
+
+        // const sql = await db.query(
+        //   `select emailid,ccemail,clientname,phoneno,feedback,message_type,pdf_path from quotation_mailbox where status = 1 and process_id = ${sales.quoteid} LIMIT 1 `
+        // );
         if (sql[0]) {
           const promises = [];
           const phoneNumbers = sql[0].phoneno
@@ -9570,8 +9708,8 @@ async function IntQuotationApproval(req, res) {
               sql[0].pdf_path,
               sql[0].feedback,
               sql[0].ccemail,
-              `http://192.168.0.200:8081/sales/quoteapprove?quoteid=${sales.quoteid}&STOKEN=${sales.STOKEN}&s=1&feedback='Apporved'`,
-              `http://192.168.0.200:8081/sales/quoteapprove?quoteid=${sales.quoteid}&STOKEN=${sales.STOKEN}&s=1&feedback='Rejected'`
+              `http://192.168.0.200:8081?eventid==${sales.quoteid}&STOKEN=${sql[0].secret}`,
+              `http://192.168.0.200:8081?eventid==${sales.quoteid}&STOKEN=${sql[0].secret}`
             );
           } else if (sql[0].message_type === 2) {
             // Send only WhatsApp
@@ -9606,8 +9744,8 @@ async function IntQuotationApproval(req, res) {
                 sql[0].pdf_path,
                 sql[0].feedback,
                 sql[0].ccemail,
-                `http://192.168.0.200:8081/sales/quoteapprove?quoteid=${sales.quoteid}&STOKEN=${sales.STOKEN}&s=1&feedback='Apporved'`,
-                `http://192.168.0.200:8081/sales/quoteapprove?quoteid=${sales.quoteid}&STOKEN=${sales.STOKEN}&s=1&feedback='Rejected'`
+                `http://192.168.0.200:8081?eventid==${sales.quoteid}&STOKEN=${sql[0].secret}`,
+                `http://192.168.0.200:8081?eventid==${sales.quoteid}&STOKEN=${sql[0].secret}`
               )
             );
 
@@ -9674,32 +9812,80 @@ async function IntQuotationApproval(req, res) {
 //###############################################################################################################################################################################################
 //###############################################################################################################################################################################################
 
-async function RejectSuggestion(req, res) {
+async function RejectSuggestion(sales) {
   try {
-    let sales = req.query;
-    // Update the database
-    await db.query(`select * from Suggestions from status = 1;`, [
-      sales.s,
-      sales.quoteid,
+    if (!sales.hasOwnProperty("STOKEN")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken missing. Please provide the Login sessiontoken",
+        "REJECT THE SUGGESTION",
+        ""
+      );
+    }
+    var secret = sales.STOKEN.substring(0, 16);
+    var querydata;
+    // Validate session token length
+    if (sales.STOKEN.length > 50 || sales.STOKEN.length < 10) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
+        "REJECT THE SUGGESTION",
+        secret
+      );
+    }
+
+    // Validate session token
+    const result = await db.query(`select secret from apikey where secret =?`, [
+      sales.STOKEN,
     ]);
 
+    if (result.length == 0) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+        "REJECT THE SUGGESTION",
+        secret
+      );
+    }
+    // Update the database
+    const sql = await db.query(`select * from rejectsugest where status = 1;`);
+
     // Send the correct HTML file
-    if (sales.s == 1) {
-      return res.sendFile(path.join(htmlPath, "approved.html"));
+    if (sql[0]) {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Reason Fetched Successfully",
+        sql,
+        secret
+      );
     } else {
-      return res.sendFile(path.join(htmlPath, "rejected.html"));
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Reason Fetched Successfully",
+        sql,
+        secret
+      );
     }
   } catch (er) {
-    return res.sendFile(
-      path.join(__dirname, "views", "quotation_status", "internal_error.html")
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal Error. Please contact Administration",
+      er.message,
+      secret
     );
   }
 }
 
-//###############################################################################################################################################################################################
-//###############################################################################################################################################################################################
-//###############################################################################################################################################################################################
-//###############################################################################################################################################################################################
+//###########################################################################################################################################################################################
+//############################################################################################################################################################################################
+//#############################################################################################################################################################################################
+//############################################################################################################################################################################################
 
 async function GetCustomPDF(sales) {
   try {
@@ -9743,23 +9929,23 @@ async function GetCustomPDF(sales) {
         secret
       );
     }
-
     const sql = await db.query(
       `select customeraddress_name,customeraddress,billing_address,billingaddress_name,customer_mailid,customer_phoneno,customer_gstno,add_date date,custom_type,gen_id,pdf_path,pdf_path path from custompdfmaster where status = 1`
     );
     var data;
     if (sql.length >= 0) {
-      // Ensure file exists
-      if (!fs.existsSync(sql[0].pdf_path)) {
-        return helper.getErrorResponse(
-          false,
-          "error",
-          "File does not exist",
-          "GET BINARY DATA FOR PDF",
-          secret
-        );
-      }
       for (let i = 0; i < sql.length; i++) {
+        // Ensure file exists
+        if (!fs.existsSync(sql[i].pdf_path)) {
+          return helper.getErrorResponse(
+            false,
+            "error",
+            "File does not exist",
+            "GET BINARY DATA FOR PDF",
+            secret
+          );
+        }
+        // for (let i = 0; i < sql.length; i++) {
         binarydata = await helper.convertFileToBinary(sql[i].pdf_path);
         sql[i].pdf_path = binarydata;
       }
@@ -9790,6 +9976,151 @@ async function GetCustomPDF(sales) {
     );
   }
 }
+
+//##########################################################################################################################################################################################
+//############################################################################################################################################################################################
+//#############################################################################################################################################################################################
+//##############################################################################################################################################################################################
+
+async function getQuotationDetails(sales) {
+  try {
+    // Check if the session token exists
+    if (!sales.hasOwnProperty("STOKEN")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken missing. Please provide the Login sessiontoken",
+        "GET BINARY DATA FOR PDF AND QUOTATION DETAILS",
+        ""
+      );
+    }
+    var secret = sales.STOKEN.substring(0, 16);
+    var querydata;
+    // Validate session token length
+    if (sales.STOKEN.length > 50 || sales.STOKEN.length < 15) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
+        "GET BINARY DATA FOR PDF AND QUOTATION DETAILS",
+        secret
+      );
+    }
+
+    // Validate session token
+    const result = await db.query(`select secret from apikey where secret =?`, [
+      sales.STOKEN,
+    ]);
+
+    if (result.length == 0) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+        "GET BINARY DATA FOR PDF AND QUOTATION DETAILS",
+        secret
+      );
+    }
+    // Check if querystring is provided
+    if (!sales.hasOwnProperty("querystring")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring missing. Please provide the querystring",
+        "GET BINARY DATA FOR PDF AND QUOTATION DETAILS",
+        secret
+      );
+    }
+
+    // Decrypt querystring
+    try {
+      querydata = await helper.decrypt(sales.querystring, secret);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring Invalid error. Please provide the valid querystring.",
+        "GET BINARY DATA FOR PDF AND QUOTATION DETAILS",
+        secret
+      );
+    }
+
+    // Parse the decrypted querystring
+    try {
+      querydata = JSON.parse(querydata);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring JSON error. Please provide valid JSON",
+        "GET BINARY DATA FOR PDF AND QUOTATION DETAILS",
+        secret
+      );
+    }
+    if (querydata.hasOwnProperty("eventid") == false) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Event id missing",
+        "Get Quotation",
+        secret
+      );
+    }
+    const sql = await db.query(
+      `select custsales_name,salesprocess_path,DATE_FORMAT(salesprocess_date, '%Y-%m-%d %H:%i:%s') AS salesprocess_date,salesprocess_path pdf_path,cprocess_gene_id quotation_id, 'Sporada Secure India Private Limited' AS mailed_by,'alerts@sporadasecure.com' AS mail_from
+       from salesprocesslist where status = 1 and cprocess_id = ?`,
+      [querydata.eventid]
+    );
+    var data;
+    if (sql.length >= 0) {
+      for (let i = 0; i < sql.length; i++) {
+        // Ensure file exists
+        if (!fs.existsSync(sql[i].pdf_path)) {
+          return helper.getErrorResponse(
+            false,
+            "error",
+            "File does not exist",
+            "GET BINARY DATA FOR PDF AND QUOTATION DETAILS",
+            secret
+          );
+        }
+        // for (let i = 0; i < sql.length; i++) {
+        binarydata = await helper.convertFileToBinary(sql[i].pdf_path);
+        sql[i].pdf_path = binarydata;
+      }
+
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Quotation Details Fetched Successfully",
+        sql[0],
+        secret
+      );
+    } else {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Quotation Details Fetched Successfully",
+        sql,
+        secret
+      );
+    }
+  } catch (er) {
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal Error. Please contact Administration",
+      er.message,
+      secret
+    );
+  }
+}
+
+//#############################################################################################################################################################################################
+//#############################################################################################################################################################################################
+//#############################################################################################################################################################################################
+//##############################################################################################################################################################################################
+
 module.exports = {
   addsale,
   UpdateenqCustomer,
@@ -9833,9 +10164,11 @@ module.exports = {
   getNotes,
   salesData,
   clientProfile,
-  approvedQuotation,
+  approveQuotation,
+  rejectQuotation,
   QuotationApproval,
   IntQuotationApproval,
   RejectSuggestion,
   GetCustomPDF,
+  getQuotationDetails,
 };

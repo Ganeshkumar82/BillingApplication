@@ -14,7 +14,7 @@
       margin-bottom: 15px; line-height: 1.6; } .button { display: inline-block;
       padding: 12px 20px; margin: 20px 0; color: #ffffff; border-radius: 4px;
       text-decoration: none; font-weight: bold; text-align: center; }
-      .btn-approve { background-color: rgba(82, 216, 5, 0.842); } .btn-reject {
+      .btn-approve { background-color: rgba(48, 159, 233, 0.842); } .btn-reject {
       background-color: red; } .quotation-details { background: #f9f9f9;
       padding: 15px; border-radius: 6px; margin: 20px 0; } .quotation-details p
       { margin: 5px 0; font-size: 14px; } .footer { text-align: center;
@@ -46,17 +46,12 @@
               {{/if}}
               <!-- Deactivation Button -->
               {{#if link}}
-                {{#if link1}}
-                  <p>If you would like to proceed with the Quotation, please
-                    confirm by clicking the button below:</p>
+               
+                  <p>If you would like to View Or Download the Quotation, please
+                    proceed by clicking the button below:</p>
 
                   <p style="text-align: center;">
-                    <a href="{{link}}" class="button btn-approve">Confirm
-                      Approval</a>
-                    <a href="{{link1}}" class="button btn-reject">Reject
-                      Quotation</a>
-                  </p>
-                {{/if}}
+                    <a href="{{link}}" class="button btn-approve">View and Take Action</a>
               {{/if}}
 
               <p>If you have any questions regarding your quotation or need

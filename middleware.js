@@ -448,6 +448,95 @@ let uploadFile9 = multer({
 
 let uploadrecurringinvoicepdf = util.promisify(uploadFile9);
 
+//#############################################################################################################################################################################################
+//#############################################################################################################################################################################################
+//#############################################################################################################################################################################################
+//#############################################################################################################################################################################################
+
+// Dynamically set the storage path
+let storage10 = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    try {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.toLocaleString("default", { month: "long" }); // e.g., December
+      const day = now.getDate();
+      let folder = config.filestorage; // Default folder
+
+      folder = `${folder}/${year}/${month}/${day}/Subscription/CustomerRequirements`;
+
+      // Ensure the folder exists
+      await fs.ensureDir(folder);
+
+      cb(null, folder);
+    } catch (err) {
+      cb(err);
+    }
+  },
+  filename: (req, file, cb) => {
+    const timestamp = Date.now();
+    const date = new Date(timestamp);
+    const YYYYMMDD =
+      date.getFullYear().toString() +
+      (date.getMonth() + 1).toString().padStart(2, "0") +
+      date.getDate().toString().padStart(2, "0");
+    cb(null, `${timestamp}_${file.originalname}`); // Use timestamp to avoid duplicate filenames
+  },
+});
+
+// Set max file size to 2MB
+const maxSize10 = 2 * 1024 * 1024;
+
+let uploadFile10 = multer({
+  storage: storage10,
+  limits: { fileSize: maxSize10 },
+}).single("file");
+
+let uploadSubCustomerrequ = util.promisify(uploadFile10);
+
+//#############################################################################################################################################################################################
+//#############################################################################################################################################################################################
+//#############################################################################################################################################################################################
+//#############################################################################################################################################################################################
+
+// Dynamically set the storage path
+let storage11 = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    try {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.toLocaleString("default", { month: "long" }); // e.g., December
+      const day = now.getDate();
+      let folder = config.filestorage; // Default folder
+
+      folder = `${folder}/${year}/${month}/${day}/SubQuotation`;
+
+      // Ensure the folder exists
+      await fs.ensureDir(folder);
+
+      cb(null, folder);
+    } catch (err) {
+      cb(err);
+    }
+  },
+  filename: (req, file, cb) => {
+    const timestamp = Date.now();
+    const date = new Date(timestamp);
+
+    cb(null, `${timestamp}_${file.originalname}`); // Use timestamp to avoid duplicate filenames
+  },
+});
+
+// Set max file size to 2MB
+const maxSize11 = 2 * 1024 * 1024;
+
+let uploadFile11 = multer({
+  storage: storage11,
+  limits: { fileSize: maxSize11 },
+}).single("file");
+
+let uploadSubQuotationp = util.promisify(uploadFile11);
+
 module.exports = {
   uploadFileMOR,
   uploadFileInvoice,
@@ -459,4 +548,6 @@ module.exports = {
   uploadDebitNote,
   uploadcustompdf,
   uploadrecurringinvoicepdf,
+  uploadSubCustomerrequ,
+  uploadSubQuotationp,
 };

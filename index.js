@@ -2,6 +2,7 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 const http = require("http");
+const path = require("path");
 const adminRouter = require("./routes/admin");
 const vendorRouter = require("./routes/vendor");
 const salesRouter = require("./routes/sales");
@@ -16,6 +17,9 @@ startWebSocketClient();
 app.use(express.json({ limit: "100mb" }));
 app.use(cors());
 app.use(express.urlencoded({ limit: "100mb", extended: true }));
+app.use(express.text());
+
+app.use(express.static(path.join((__dirname, "./mailpage"))));
 
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
@@ -23,9 +27,13 @@ app.use((req, res, next) => {
   next(); // Call the next middleware in the stack
 });
 
+// Fallback for client-side routing: serve index.html for all unknown routes
 app.get("/", (req, res) => {
-  res.send("welcome");
+  res.sendFile(path.join(__dirname, "./mailpage", "index.html"));
 });
+// app.get("/", (req, res) => {
+//   res.send("welcome");
+// });
 app.use("/admin", adminRouter);
 app.use("/vendor", vendorRouter);
 app.use("/sales", salesRouter);

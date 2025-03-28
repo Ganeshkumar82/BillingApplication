@@ -43,8 +43,22 @@ async function query1(sql, params) {
   }
 }
 
+async function spcall1(sql, params) {
+  const connection = await pool1.getConnection();
+  try {
+    const result = await connection.query(sql, params);
+    return result;
+  } catch (er) {
+    console.log(`Error ${er}`);
+    throw er;
+  } finally {
+    connection.release();
+  }
+}
+
 module.exports = {
   query,
   spcall,
   query1,
+  spcall1,
 };
