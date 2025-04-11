@@ -4961,24 +4961,25 @@ async function addQuotation(req, res) {
         `select u.Email_id,a.secret from usermaster u CROSS JOIN apikey a where u.user_design = 'Administrator' and u.status = 1 and a.status = 1`
       );
       var emailid = "",
-        secret = "15b97956-b296-11";
+        apikey = "15b97956-b296-11";
       if (sql2.length > 0) {
         emailid =
           sql2.length > 0 ? sql2.map((item) => item.Email_id).join(",") : "";
-        secret = sql2[0].secret;
+        apikey = sql2[0].secret;
       } else {
         emailid = `support@sporadasecure.com,ceo@sporadasecure.com,sales@sporadasecure.com`;
+        apikey = "15b97956-b296-11";
       }
       EmailSent = await mailer.sendapprovequotation(
         "Administrator",
         emailid,
         `Action Required!!! Received Quotation Approve Request for ${querydata.clientaddressname}`,
         "apporvequotation.html",
-        `http://192.168.0.200:8081/sales/intquoteapprove?quoteid=${quatationid}&STOKEN=${secret}&s=1&feedback='Apporved'`,
+        `http://192.168.0.200:8081/sales/intquoteapprove?quoteid=${quatationid}&STOKEN=${apikey}&s=1&feedback='Apporved'`,
         "APPROVEQUOTATION_SEND",
         querydata.clientaddressname,
         "QUOTATION APPROVAL",
-        `http://192.168.0.200:8081/sales/intquoteapprove?quoteid=${quatationid}&STOKEN=${secret}&s=3`,
+        `http://192.168.0.200:8081/sales/intquoteapprove?quoteid=${quatationid}&STOKEN=${apikey}&s=3`,
         req.file.path
       );
       if (EmailSent == true) {
@@ -5537,7 +5538,7 @@ async function SendPdf(req, res) {
         secret
       );
     }
-    if (!querydata.hasOwnProperty("emailid") || querydata.emailid == "") {
+    if (!querydata.hasOwnProperty("emailid")) {
       return helper.getErrorResponse(
         false,
         "error",
@@ -5568,6 +5569,8 @@ async function SendPdf(req, res) {
         secret
       );
     }
+    var WhatsappSent = 0,
+      EmailSent = 0;
     const promises = [];
     const phoneNumbers = querydata.phoneno
       ? querydata.phoneno
@@ -5670,10 +5673,10 @@ async function SendPdf(req, res) {
   }
 }
 
-//###############################################################################################################################################################################################
-//###############################################################################################################################################################################################
-//###############################################################################################################################################################################################
-//###############################################################################################################################################################################################
+//######################################################################################################################################################################################
+//#########################################################################################################################################################################################
+//########################################################################################################################################################################################
+//#########################################################################################################################################################################################
 
 async function addDeliveryChallan(req, res) {
   try {
@@ -5985,7 +5988,7 @@ async function addDeliveryChallan(req, res) {
         ) {
           return helper.getErrorResponse(
             false,
-            "error",
+            -"error",
             "Product details are incomplete. Please provide productid, productname ,productquantity, producthsn, productgst,producttotal,productsno and productprice.",
             "ADD DELIVERY CHALLAN",
             secret
@@ -9177,10 +9180,28 @@ async function approveQuotation(sales) {
         secret
       );
     }
+    if (!querydata.hasOwnProperty("user_ip") || querydata.user_ip == 0) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "User ip missing. Please provide the User ip",
+        "APPROVE THE QUOTATION",
+        secret
+      );
+    }
+    if (!querydata.hasOwnProperty("timestamp") || querydata.timestamp == 0) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "timestamp missing. Please provide the timestamp",
+        "APPROVE THE QUOTATION",
+        secret
+      );
+    }
 
     const sql = await db.query(
-      `Update salesprocesslist set Approved_status =2 where cprocess_id = ?`,
-      [querydata.eventid]
+      `Update salesprocesslist set Approved_status =2,user_ip= ?,Timestamp=? where cprocess_id = ?`,
+      [querydata.user_ip, querydata.timestamp, querydata.eventid]
     );
     if (sql.affectedRows > 0) {
       await mqttclient.publishMqttMessage(
@@ -9654,13 +9675,6 @@ async function IntQuotationApproval(req, res) {
       return res.sendFile(path.join(htmlPath, "internal_error.html"));
     }
 
-    if (
-      !sales.hasOwnProperty("feedback") ||
-      sales.feedback == "" ||
-      sales.feedback == undefined
-    ) {
-      return res.sendFile(path.join(htmlPath, "internal_error.html"));
-    }
     var sql1;
     // Update the database
     if (sales.s == 1) {
@@ -9708,8 +9722,8 @@ async function IntQuotationApproval(req, res) {
               sql[0].pdf_path,
               sql[0].feedback,
               sql[0].ccemail,
-              `http://192.168.0.200:8081?eventid==${sales.quoteid}&STOKEN=${sql[0].secret}`,
-              `http://192.168.0.200:8081?eventid==${sales.quoteid}&STOKEN=${sql[0].secret}`
+              `http://192.168.0.200:8081?eventid=${sales.quoteid}&STOKEN=${sql[0].secret}`,
+              `http://192.168.0.200:8081?eventid=${sales.quoteid}&STOKEN=${sql[0].secret}`
             );
           } else if (sql[0].message_type === 2) {
             // Send only WhatsApp
@@ -9744,8 +9758,8 @@ async function IntQuotationApproval(req, res) {
                 sql[0].pdf_path,
                 sql[0].feedback,
                 sql[0].ccemail,
-                `http://192.168.0.200:8081?eventid==${sales.quoteid}&STOKEN=${sql[0].secret}`,
-                `http://192.168.0.200:8081?eventid==${sales.quoteid}&STOKEN=${sql[0].secret}`
+                `http://192.168.0.200:8081?eventid=${sales.quoteid}&STOKEN=${sql[0].secret}`,
+                `http://192.168.0.200:8081?eventid=${sales.quoteid}&STOKEN=${sql[0].secret}`
               )
             );
 
@@ -9807,10 +9821,10 @@ async function IntQuotationApproval(req, res) {
   }
 }
 
-//###############################################################################################################################################################################################
-//###############################################################################################################################################################################################
-//###############################################################################################################################################################################################
-//###############################################################################################################################################################################################
+//#########################################################################################################################################################################################
+//#########################################################################################################################################################################################
+//#########################################################################################################################################################################################
+//#########################################################################################################################################################################################
 
 async function RejectSuggestion(sales) {
   try {
@@ -9937,6 +9951,7 @@ async function GetCustomPDF(sales) {
       for (let i = 0; i < sql.length; i++) {
         // Ensure file exists
         if (!fs.existsSync(sql[i].pdf_path)) {
+          // return helper.getErrorResponse(false,"error","File does not exist","GET BINARY DATA FOR THE PDF",secret);
           return helper.getErrorResponse(
             false,
             "error",
@@ -10057,7 +10072,11 @@ async function getQuotationDetails(sales) {
         secret
       );
     }
-    if (querydata.hasOwnProperty("eventid") == false) {
+    if (
+      querydata.hasOwnProperty("eventid") == false ||
+      querydata.eventid == 0 ||
+      querydata.eventid == null
+    ) {
       return helper.getErrorResponse(
         false,
         "error",
@@ -10067,7 +10086,7 @@ async function getQuotationDetails(sales) {
       );
     }
     const sql = await db.query(
-      `select custsales_name,salesprocess_path,DATE_FORMAT(salesprocess_date, '%Y-%m-%d %H:%i:%s') AS salesprocess_date,salesprocess_path pdf_path,cprocess_gene_id quotation_id, 'Sporada Secure India Private Limited' AS mailed_by,'alerts@sporadasecure.com' AS mail_from
+      `select custsales_name,salesprocess_path pdfpath,DATE_FORMAT(salesprocess_date, '%Y-%m-%d %H:%i:%s') AS salesprocess_date,salesprocess_path pdf_path,cprocess_gene_id quotation_id, 'Sporada Secure India Private Limited' AS mailed_by,'alerts@sporadasecure.com' AS mail_from
        from salesprocesslist where status = 1 and cprocess_id = ?`,
       [querydata.eventid]
     );
@@ -10116,10 +10135,251 @@ async function getQuotationDetails(sales) {
   }
 }
 
-//#############################################################################################################################################################################################
-//#############################################################################################################################################################################################
-//#############################################################################################################################################################################################
-//##############################################################################################################################################################################################
+//#########################################################################################################################################################################################
+//#########################################################################################################################################################################################
+//#########################################################################################################################################################################################
+//#########################################################################################################################################################################################
+async function ClientSendPdf(sales) {
+  try {
+    var secret;
+
+    // Check if the session token exists
+    if (!sales.STOKEN) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login session token missing. Please provide the Login session token",
+        "SEND PDF",
+        ""
+      );
+    }
+    secret = sales.STOKEN.substring(0, 16);
+    var querydata;
+
+    // Validate session token length
+    if (sales.STOKEN.length > 50 || sales.STOKEN.length < 10) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login session token size invalid. Please provide the valid Session token",
+        "SEND PDF",
+        secret
+      );
+    }
+
+    // Validate session token
+    const result = await db.query(`select secret from apikey where secret =?`, [
+      sales.STOKEN,
+    ]);
+
+    if (result.length == 0) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+        "SEND PDF",
+        secret
+      );
+    }
+
+    // Check if querystring is provided
+    if (!sales.querystring) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring missing. Please provide the querystring",
+        "SEND PDF",
+        secret
+      );
+    }
+
+    // Decrypt querystring
+    try {
+      querydata = await helper.decrypt(sales.querystring, secret);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring Invalid error. Please provide the valid querystring.",
+        "SEND PDF",
+        secret
+      );
+      0;
+    }
+
+    // Parse the decrypted querystring
+    try {
+      querydata = JSON.parse(querydata);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring JSON error. Please provide valid JSON",
+        "SEND PDF",
+        secret
+      );
+    }
+    if (!querydata.hasOwnProperty("pdfpath")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Pdf path missing. Please provide the Pdf Path",
+        "SEND PDF",
+        secret
+      );
+    }
+    if (!querydata.hasOwnProperty("feedback")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Feedback missing. Please provide the Feedback.",
+        "SEND PDF",
+        secret
+      );
+    }
+    if (!querydata.hasOwnProperty("ccemail")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "CC Email id missing. Please provide the CC Email id",
+        "SEND PDF",
+        secret
+      );
+    }
+    if (!querydata.hasOwnProperty("emailid")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Email id missing. Please provide the Email id",
+        "SEND PDF",
+        secret
+      );
+    }
+
+    if (!querydata.hasOwnProperty("phoneno")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Contact number missing. Please provide the contact number.",
+        "SEND PDF",
+        secret
+      );
+    }
+    if (
+      !querydata.hasOwnProperty("messagetype") ||
+      querydata.messagetype == ""
+    ) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Message type missing. Please provide the message type.",
+        "SEND PDF",
+        secret
+      );
+    }
+    const promises = [];
+    var EmailSent = 0,
+      WhatsappSent = 0;
+    const phoneNumbers = querydata.phoneno
+      ? querydata.phoneno
+          .split(",")
+          .map((num) => num.trim())
+          .filter((num) => num !== "") // Removes empty values
+      : [];
+    // Send Email or WhatsApp Message
+    if (querydata.messagetype === 1) {
+      // Send only email
+      EmailSent = await mailer.sendQuotation(
+        "",
+        querydata.emailid,
+        "PDF from Sporada Secure India Private Limited",
+        "sendpdf.html",
+        ``,
+        "SENDPDF",
+        querydata.pdfpath,
+        querydata.feedback,
+        querydata.ccemail
+      );
+    } else if (querydata.messagetype === 2) {
+      // Send only WhatsApp
+      WhatsappSent = await Promise.all(
+        phoneNumbers.map(async (number) => {
+          try {
+            const response = await axios.post(
+              `${config.whatsappip}/billing/sendpdf`,
+              {
+                phoneno: number,
+                feedback: querydata.feedback,
+                pdfpath: querydata.pdfpath,
+              }
+            );
+            return response.data.code;
+          } catch (error) {
+            console.error(`WhatsApp Error for ${number}:`, error.message);
+            return false;
+          }
+        })
+      );
+    } else if (querydata.messagetype === 3) {
+      // Send both email & WhatsApp in parallel
+      promises.push(
+        mailer.sendQuotation(
+          "",
+          querydata.emailid,
+          "PDF from Sporada Secure India Private Limited",
+          "sendpdf.html",
+          ``,
+          "SENDPDF",
+          querydata.pdfpath,
+          querydata.feedback,
+          querydata.ccemail
+        )
+      );
+
+      promises.push(
+        Promise.all(
+          phoneNumbers.map(async (number) => {
+            try {
+              const response = await axios.post(
+                `${config.whatsappip}/billing/sendpdf`,
+                {
+                  phoneno: number,
+                  feedback: querydata.feedback,
+                  pdfpath: querydata.pdfpath,
+                }
+              );
+              return response.data.code;
+            } catch (error) {
+              console.error(`WhatsApp Error for ${number}:`, error.message);
+              return false;
+            }
+          })
+        ).then((results) => (WhatsappSent = results))
+      );
+
+      // Run both requests in parallel and wait for completion
+      [EmailSent] = await Promise.all(promises);
+    }
+    return helper.getSuccessResponse(
+      true,
+      "success",
+      "Pdf send successfully",
+      {
+        WhatsappSent: WhatsappSent,
+        EmailSent: EmailSent,
+      },
+      secret
+    );
+  } catch (er) {
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal error. Please contact Administration",
+      er.message,
+      secret
+    );
+  }
+}
 
 module.exports = {
   addsale,
@@ -10171,4 +10431,5 @@ module.exports = {
   RejectSuggestion,
   GetCustomPDF,
   getQuotationDetails,
+  ClientSendPdf,
 };

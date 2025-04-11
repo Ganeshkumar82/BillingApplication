@@ -84,9 +84,11 @@ async function sendInvoice() {
           'internetcharges', sbm.Internet_charges, 
           'billperiod', sbm.bill_Period,
           'billdate', sbm.bill_date,
-          'duedate', sbm.Due_date
+          'duedate', sbm.Due_date,
+          'subscription_billid' , sbm.subscription_billid
       ) AS billplandetails,
       JSON_OBJECT(
+          'customerid', sbm.customer_id,
           'relationshipid', sbm.Relationshipid,
           'billnumber', sbm.billnumber,
           'customergstin', sbm.customer_GST,
@@ -127,22 +129,22 @@ async function sendInvoice() {
     reconnectWebSocket();
   }
 }
-
+sendInvoice();
 // Cron job to start sending messages every minute after 03:14 AM
-cron.schedule("05 00 * * *", () => {
-  console.log("Cron job started at 21:58 PM");
+cron.schedule("40 15 * * *", () => {
+  console.log("Cron job started at 07:16 PM");
   sendInvoice();
   if (interval) {
     clearInterval(interval);
   }
 
   interval = setInterval(() => {
-    sendInvoice();
+    // sendInvoice();
   }, 60 * 1000); // Send every 1 minute
 });
 
 // Start WebSocket client
-connectWebSocket();
+// connectWebSocket();
 
 module.exports = {
   startWebSocketClient: connectWebSocket,

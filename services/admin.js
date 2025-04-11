@@ -1514,26 +1514,26 @@ async function CompanyList(admin) {
         querydata.organizationid != 0
       ) {
         sql = await db.query1(
-          `SELECT Customer_id,Organization_id,Customer_name,ccode,Email_id,Customer_Logo,CASE WHEN Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type,Admin_username contactperson,reportcontacts contactpersonno,customer_cin,customer_pan,ccode customercode,customer_type from customermaster where status = 1 and deleted_flag =0 and site_type = 0`
+          `SELECT Customer_id,Organization_id,Customer_name,ccode,Email_id,Customer_Logo,CASE WHEN Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type,Admin_username contactperson,Contact_no contactpersonno,customer_cin,customer_pan,ccode customercode,customer_type from customermaster where status = 1 and deleted_flag =0 and site_type = 0`
         );
         sql1 = await db.query1(
-          `SELECT Customer_id,Organization_id,Customer_name,ccode,Email_id,Customer_Logo,CASE WHEN Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type,Admin_username contactperson,reportcontacts contactpersonno,customer_cin,customer_pan,ccode customercode,customer_type from customermaster where status = 1 and deleted_flag =0 and site_type = 1`
+          `SELECT Customer_id,Organization_id,Customer_name,ccode,Email_id,Customer_Logo,CASE WHEN Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type,Admin_username contactperson,Contact_no contactpersonno,customer_cin,customer_pan,ccode customercode,customer_type from customermaster where status = 1 and deleted_flag =0 and site_type = 1`
         );
       }
       sql = await db.query1(
-        `SELECT Customer_id,Organization_id,Customer_name,ccode,Email_id,Customer_Logo,address,billing_address,CASE WHEN Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type,Admin_username contactperson,reportcontacts contactpersonno,customer_cin,customer_pan,ccode customercode,customer_type from customermaster where site_type = 0 and status = 1 and deleted_flag =0 and Customer_type In(1,2) and Organization_id = ?`,
+        `SELECT Customer_id,Organization_id,Customer_name,ccode,Email_id,Customer_Logo,address,billing_address,CASE WHEN Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type,Admin_username contactperson,Contact_no contactpersonno,customer_cin,customer_pan,ccode customercode,customer_type from customermaster where site_type = 0 and status = 1 and deleted_flag =0 and Customer_type In(1,2) and Organization_id = ?`,
         [querydata.organizationid]
       );
       sql1 = await db.query1(
-        `SELECT Customer_id,Organization_id,Customer_name,ccode,Email_id,Customer_Logo,address,billing_address,CASE WHEN Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type,Admin_username contactperson,reportcontacts contactpersonno,customer_cin,customer_pan,ccode customercode,customer_type from customermaster where site_type = 1 and status = 1 and deleted_flag =0 and Customer_type In(1,2) and Organization_id = ?`,
+        `SELECT Customer_id,Organization_id,Customer_name,ccode,Email_id,Customer_Logo,address,billing_address,CASE WHEN Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type,Admin_username contactperson,Contact_no contactpersonno,customer_cin,customer_pan,ccode customercode,customer_type from customermaster where site_type = 1 and status = 1 and deleted_flag =0 and Customer_type In(1,2) and Organization_id = ?`,
         [querydata.organizationid]
       );
     } else {
       sql = await db.query1(
-        `SELECT Customer_id,Organization_id,Customer_name,ccode,Email_id,Customer_Logo,address,billing_address,CASE WHEN Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type,Admin_username contactperson,reportcontacts contactpersonno,customer_cin,customer_pan,ccode customercode,customer_type from customermaster where status = 1 and deleted_flag =0 and site_type = 0`
+        `SELECT Customer_id,Organization_id,Customer_name,ccode,Email_id,Customer_Logo,address,billing_address,CASE WHEN Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type,Admin_username contactperson,Contact_no contactpersonno,customer_cin,customer_pan,ccode customercode,customer_type from customermaster where status = 1 and deleted_flag =0 and site_type = 0`
       );
       sql1 = await db.query1(
-        `SELECT Customer_id,Organization_id,Customer_name,ccode,Email_id,Customer_Logo,address,billing_address,CASE WHEN Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type,Admin_username contactperson,reportcontacts contactpersonno,customer_cin,customer_pan,ccode customercode,customer_type from customermaster where status = 1 and deleted_flag =0 and site_type = 1`
+        `SELECT Customer_id,Organization_id,Customer_name,ccode,Email_id,Customer_Logo,address,billing_address,CASE WHEN Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type,Admin_username contactperson,Contact_no contactpersonno,customer_cin,customer_pan,ccode customercode,customer_type from customermaster where status = 1 and deleted_flag =0 and site_type = 1`
       );
     }
     if (sql[0]) {
@@ -1821,7 +1821,7 @@ async function BranchList(admin) {
       if (querydata.hasOwnProperty("companyid") && querydata.companyid != 0) {
         sql = await db.query1(
           `SELECT bm.Branch_id, bm.Branch_name, bm.Branch_code, bm.branch_name AS client_addressname, bm.address AS clientaddress, 
-                bm.gstno AS gst_number, bm.Email_id AS emailid, bm.Contact_no AS contact_number, bm.billing_address, 
+                bm.gstno AS gst_number,bm.contact_person, bm.Email_id AS emailid, bm.Contact_no AS contact_number, bm.billing_address, 
                 bm.Billingaddress_name AS billing_addressname, 
                 CASE WHEN bm.Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type, 
                 bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode, cst.from_date, cst.to_date, cst.Amount, cst.billingperiod 
@@ -1833,7 +1833,7 @@ async function BranchList(admin) {
 
         sql1 = await db.query1(
           `SELECT bm.Branch_id, bm.Branch_name, bm.Branch_code, bm.branch_name AS client_addressname, bm.address AS clientaddress, 
-          bm.gstno AS gst_number, bm.Email_id AS emailid, bm.Contact_no AS contact_number, bm.billing_address, 
+          bm.gstno AS gst_number,bm.contact_person, bm.Email_id AS emailid, bm.Contact_no AS contact_number, bm.billing_address, 
           bm.Billingaddress_name AS billing_addressname, 
           CASE WHEN bm.Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type, 
           bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode, cst.from_date, cst.to_date, cst.Amount, cst.billingperiod 
@@ -1848,7 +1848,7 @@ async function BranchList(admin) {
       ) {
         sql = await db.query1(
           `SELECT bm.Branch_id, bm.Branch_name, bm.Branch_code, bm.branch_name AS client_addressname, bm.address AS clientaddress, 
-          bm.gstno AS gst_number, bm.Email_id AS emailid, bm.Contact_no AS contact_number, bm.billing_address, 
+          bm.gstno AS gst_number,bm.contact_person, bm.Email_id AS emailid, bm.Contact_no AS contact_number, bm.billing_address, 
           bm.Billingaddress_name AS billing_addressname, 
           CASE WHEN bm.Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type, 
           bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode, cst.from_date, cst.to_date, cst.Amount, cst.billingperiod 
@@ -1861,7 +1861,7 @@ async function BranchList(admin) {
 
         sql1 = await db.query1(
           `SELECT bm.Branch_id, bm.Branch_name, bm.Branch_code, bm.branch_name AS client_addressname, bm.address AS clientaddress, 
-          bm.gstno AS gst_number, bm.Email_id AS emailid, bm.Contact_no AS contact_number, bm.billing_address, 
+          bm.gstno AS gst_number,bm.contact_person, bm.Email_id AS emailid, bm.Contact_no AS contact_number, bm.billing_address, 
           bm.Billingaddress_name AS billing_addressname, 
           CASE WHEN bm.Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type, 
           bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode, cst.from_date, cst.to_date, cst.Amount, cst.billingperiod 
@@ -1875,7 +1875,7 @@ async function BranchList(admin) {
     } else {
       sql = await db.query1(
         `SELECT bm.Branch_id, bm.Branch_name, bm.Branch_code, bm.branch_name AS client_addressname, bm.address AS clientaddress, 
-        bm.gstno AS gst_number, bm.Email_id AS emailid, bm.Contact_no AS contact_number, bm.billing_address, 
+        bm.gstno AS gst_number,bm.contact_person, bm.Email_id AS emailid, bm.Contact_no AS contact_number, bm.billing_address, 
         bm.Billingaddress_name AS billing_addressname, 
         CASE WHEN bm.Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type, 
         bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode, cst.from_date, cst.to_date, cst.Amount, cst.billingperiod 
@@ -1886,7 +1886,7 @@ async function BranchList(admin) {
 
       sql1 = await db.query1(
         `SELECT bm.Branch_id, bm.Branch_name, bm.Branch_code, bm.branch_name AS client_addressname, bm.address AS clientaddress, 
-        bm.gstno AS gst_number, bm.Email_id AS emailid, bm.Contact_no AS contact_number, bm.billing_address, 
+        bm.gstno AS gst_number,bm.contact_person, bm.Email_id AS emailid, bm.Contact_no AS contact_number, bm.billing_address, 
         bm.Billingaddress_name AS billing_addressname, 
         CASE WHEN bm.Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type, 
         bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode, cst.from_date, cst.to_date, cst.Amount, cst.billingperiod 
@@ -2443,76 +2443,74 @@ async function GetSubscription(admin) {
     }
     var sql;
     if (!admin.hasOwnProperty("querystring") && admin.querystring == "") {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Querystring missing. Please provide the querystring",
-        "GET THE SUBSCRIPTION LIST",
-        admin.Secret
-      );
-    }
-    try {
-      querydata = await helper.decrypt(admin.querystring, secret);
-    } catch (ex) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Querystring Invalid error. Please provide the valid querystring.",
-        "GET THE SUBSCRIPTION LIST",
-        secret
-      );
-    }
-
-    // Parse the decrypted querystring
-    try {
-      querydata = JSON.parse(querydata);
-    } catch (ex) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Querystring JSON error. Please provide valid JSON",
-        "GET THE SUBSCRIPTION LIST",
-        secret
-      );
-    }
-    const requiredFields = [
-      {
-        field: "siteid",
-        message: "Site id missing. Please provide the valid site id",
-      },
-    ];
-
-    for (const { field, message } of requiredFields) {
-      if (!querydata.hasOwnProperty(field)) {
-        return helper.getErrorResponse(
-          false,
-          "error",
-          message,
-          "GET THE SUBSCRIPTION LIST",
-          secret
-        );
-      }
-    }
-    var organizationid = 0,
-      companyid = 0,
-      sql = [];
-    // const result1 = await db.query(
-    //   `SELECT o.Organization_id, c.Customer_id FROM organizations o JOIN customermaster c ON o.Organization_id = c.Organization_id JOIN branchmaster b ON c.customer_id = b.customer_id where b.branch_id = ${querydata.siteid}`
-    // );
-    // if (result1.length > 0) {
-    //   organizationid = result1[0].Organization_id;
-    //   companyid = result1[0].Customer_id;
-    if (querydata.siteid != 0) {
-      sql = await db.query(
-        `SELECT DISTINCT Subscription_ID,Subscription_Name, No_of_Devices, No_of_Cameras, Addl_cameras, Addl_patrol, 
-         Patrol_hours, Valid_Months, Valid_Years, Valid_Days, No_of_Analytics,Cloud_Storage, Amount, product_desc FROM subscriptionmaster WHERE Subscription_type = 1 OR (organization_id = ? AND organization_id != 0) OR (site_id = ? AND site_id != 0);`,
-        [querydata.siteid]
-      );
-    } else {
       sql = await db.query(
         `SELECT DISTINCT Subscription_ID,Subscription_Name,No_of_Devices, No_of_Cameras, Addl_cameras, Addl_patrol, 
          Patrol_hours, Valid_Months, Valid_Years, Valid_Days, No_of_Analytics,Cloud_Storage, Amount, product_desc FROM subscriptionmaster WHERE Subscription_type = 1`
       );
+    } else {
+      try {
+        querydata = await helper.decrypt(admin.querystring, secret);
+      } catch (ex) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Querystring Invalid error. Please provide the valid querystring.",
+          "GET THE SUBSCRIPTION LIST",
+          secret
+        );
+      }
+
+      // Parse the decrypted querystring
+      try {
+        querydata = JSON.parse(querydata);
+      } catch (ex) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Querystring JSON error. Please provide valid JSON",
+          "GET THE SUBSCRIPTION LIST",
+          secret
+        );
+      }
+      const requiredFields = [
+        {
+          field: "siteid",
+          message: "Site id missing. Please provide the valid site id",
+        },
+      ];
+
+      for (const { field, message } of requiredFields) {
+        if (!querydata.hasOwnProperty(field)) {
+          return helper.getErrorResponse(
+            false,
+            "error",
+            message,
+            "GET THE SUBSCRIPTION LIST",
+            secret
+          );
+        }
+      }
+      var organizationid = 0,
+        companyid = 0,
+        sql = [];
+      // const result1 = await db.query(
+      //   `SELECT o.Organization_id, c.Customer_id FROM organizations o JOIN customermaster c ON o.Organization_id = c.Organization_id JOIN branchmaster b ON c.customer_id = b.customer_id where b.branch_id = ${querydata.siteid}`
+      // );
+      // if (result1.length > 0) {
+      //   organizationid = result1[0].Organization_id;
+      //   companyid = result1[0].Customer_id;
+      if (querydata.siteid != 0) {
+        sql = await db.query(
+          `SELECT DISTINCT Subscription_ID,Subscription_Name, No_of_Devices, No_of_Cameras, Addl_cameras, Addl_patrol, 
+         Patrol_hours, Valid_Months, Valid_Years, Valid_Days, No_of_Analytics,Cloud_Storage, Amount, product_desc FROM subscriptionmaster WHERE Subscription_type = 1 OR (organization_id = ? AND organization_id != 0) OR (site_id = ? AND site_id != 0);`,
+          [querydata.siteid]
+        );
+      } else {
+        sql = await db.query(
+          `SELECT DISTINCT Subscription_ID,Subscription_Name,No_of_Devices, No_of_Cameras, Addl_cameras, Addl_patrol, 
+         Patrol_hours, Valid_Months, Valid_Years, Valid_Days, No_of_Analytics,Cloud_Storage, Amount, product_desc FROM subscriptionmaster WHERE Subscription_type = 1`
+        );
+      }
     }
 
     if (sql.length > 0) {
@@ -2546,6 +2544,7 @@ async function GetSubscription(admin) {
 //##############################################################################################################################################################################################################
 //##############################################################################################################################################################################################################
 async function AddUpdateCompany(admin) {
+  var secret = "";
   try {
     if (!admin.hasOwnProperty("STOKEN")) {
       return helper.getErrorResponse(
@@ -2557,7 +2556,7 @@ async function AddUpdateCompany(admin) {
       );
     }
 
-    const secret = admin.STOKEN.substring(0, 16);
+    secret = admin.STOKEN.substring(0, 16);
     if (admin.STOKEN.length > 50 || admin.STOKEN.length < 30) {
       return helper.getErrorResponse(
         false,
@@ -2613,18 +2612,20 @@ async function AddUpdateCompany(admin) {
     for (const company of companies) {
       const validationError = validateCompany(company);
       if (validationError) {
-        results.push(
-          helper.getErrorResponse(
-            false,
-            "error",
-            validationError.message,
-            "UPDATE COMPANY",
-            validationError.id
-          )
+        return helper.getErrorResponse(
+          false,
+          "error",
+          validationError.message,
+          validationError.id,
+          secret
         );
-        continue;
       }
-
+      var sitetype = 0;
+      if (company.sitetype == "live") {
+        sitetype = 0;
+      } else {
+        sitetype = 1;
+      }
       try {
         const [spResult] = await db.spcall1(
           "CALL SP_COMPANY_ADD(?,?,?,?,?,?,?,?,?,?,?,?,?,?,@cid); SELECT @cid;",
@@ -2644,30 +2645,26 @@ async function AddUpdateCompany(admin) {
             company.address,
             company.billingaddress,
             0,
-            company.sitetype,
+            sitetype,
           ]
         );
 
         const mcustID = spResult[1][0]["@cid"];
         if (!mcustID) {
-          results.push(
-            helper.getErrorResponse(
-              false,
-              "error",
-              "Error while Adding/Updating company. Please try again",
-              "UPDATE COMPANY",
-              company.companyid
-            )
+          return helper.getErrorResponse(
+            false,
+            "error",
+            "Error while Adding/Updating company. Please try again",
+            company.companyid,
+            secret
           );
         } else {
-          results.push(
-            helper.getSuccessResponse(
-              true,
-              "success",
-              "Company has been added/updated successfully.",
-              "UPDATE COMPANY",
-              mcustID
-            )
+          return helper.getSuccessResponse(
+            true,
+            "success",
+            "Company has been added/updated successfully.",
+            mcustID,
+            secret
           );
         }
       } catch (ex) {
@@ -2677,26 +2674,22 @@ async function AddUpdateCompany(admin) {
             : ex.sqlMessage === "Wrong Email"
             ? "Invalid Email address. Please provide a valid email address."
             : ex.message;
-        results.push(
-          helper.getErrorResponse(
-            false,
-            "error",
-            errorMsg,
-            "UPDATE COMPANY",
-            company.companyid
-          )
+        return helper.getErrorResponse(
+          false,
+          "error",
+          errorMsg,
+          company.companyid,
+          secret
         );
       }
     }
-
-    return results;
   } catch (er) {
     return helper.getErrorResponse(
       false,
       "error",
       "Internal error. Please contact Administration.",
       "UPDATE COMPANY",
-      null
+      secret
     );
   }
 }
@@ -2749,10 +2742,10 @@ function capitalizeFirstLetter(string) {
   return string.charAt(0).toUpperCase() + string.slice(1);
 }
 
-//###############################################################################################################################################################################################
-//###############################################################################################################################################################################################
-//##############################################################################################################################################################################################
-//###############################################################################################################################################################################################
+//##########################################################################################################################################################################################
+//##########################################################################################################################################################################################
+//##########################################################################################################################################################################################
+//###########################################################################################################################################################################################
 
 async function UpdateOrganization(admin) {
   try {
@@ -2859,18 +2852,23 @@ async function UpdateOrganization(admin) {
         );
       }
     }
-
-    const [sql1] = await db.spcall(
+    var stype = 0;
+    if (querydata.sitetype == "live") {
+      stype = 0;
+    } else {
+      stype = 1;
+    }
+    const [sql1] = await db.spcall1(
       `CALL SP_ORGANIZATION_UPDATE(?,?,?,?,?,?,?,?,?,?,@oid); select @oid;`,
       [
         2, // Assuming this is a constant value in your call
-        Fullname,
-        admin.emailid,
-        admin.contactperson,
-        admin.contactno,
-        admin.address,
-        2, // Another constant value
-        admin.sitetype,
+        querydata.organizationname,
+        querydata.emailid,
+        querydata.contactperson,
+        querydata.contactno,
+        querydata.address,
+        userid, // Another constant value
+        stype,
         querydata.organizationid,
         querydata.orgcode,
       ]
@@ -3018,7 +3016,12 @@ async function UpdateBranch(admin) {
         );
       }
     }
-
+    var stype = 0;
+    if (querydata.sitetype == "live") {
+      stype = 0;
+    } else {
+      stype = 1;
+    }
     await db.query1(
       `UPDATE branchmaster SET Branch_name = ?, Branch_code = ?, address = ?,Billing_address = ?,Billingaddress_name = ?,gstno = ?, Site_type = ?, Email_id = ?,Contact_no = ? WHERE Branch_id = ?`,
       [
@@ -3028,21 +3031,22 @@ async function UpdateBranch(admin) {
         querydata.billingaddress,
         querydata.billingaddressname,
         querydata.gstno,
-        querydata.sitetype,
+        stype,
         querydata.emailid,
         querydata.contactno,
         querydata.branchid,
       ]
     );
-
+    const startDate = await helper.formatDateToSQL(querydata.startdate);
+    const endDate = await helper.formatDateToSQL(querydata.enddate);
     if (querydata.hasOwnProperty("subscriptionid")) {
       await db.query1(
         `UPDATE subscriptioncustomertrans SET billing_plan = ?, Bill_mode = ?, from_date = ?, to_date = ?, Amount = ?, billingperiod = ?,Subscription_ID = ? WHERE Branch_id =?`,
         [
           querydata.billingplan,
-          querydata.Billmode,
-          querydata.startdate,
-          querydata.enddate,
+          querydata.billmode,
+          startDate,
+          endDate,
           querydata.amount,
           querydata.billingperiod,
           querydata.subscriptionid,
@@ -3056,6 +3060,252 @@ async function UpdateBranch(admin) {
       "success",
       "Company details updated successfully",
       querydata.branchid,
+      secret
+    );
+  } catch (er) {
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal error. Please contact Administration",
+      er.message,
+      secret
+    );
+  }
+}
+
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+async function SendPdf(admin) {
+  try {
+    var secret;
+
+    // Check if the session token exists
+    if (!admin.STOKEN) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login session token missing. Please provide the Login session token",
+        "SEND PDF",
+        ""
+      );
+    }
+    secret = admin.STOKEN.substring(0, 16);
+    var querydata;
+
+    // Validate session token length
+    if (admin.STOKEN.length > 50 || admin.STOKEN.length < 30) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login session token size invalid. Please provide the valid Session token",
+        "SEND PDF",
+        secret
+      );
+    }
+
+    // Validate session token
+    const [result] = await db.spcall(
+      "CALL SP_STOKEN_CHECK(?,@result); SELECT @result;",
+      [admin.STOKEN]
+    );
+    const objectvalue = result[1][0];
+    const userid = objectvalue["@result"];
+
+    if (userid == null) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+        "SEND PDF",
+        secret
+      );
+    }
+
+    // Check if querystring is provided
+    if (!admin.querystring) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring missing. Please provide the querystring",
+        "SEND PDF",
+        secret
+      );
+    }
+
+    // Decrypt querystring
+    try {
+      querydata = await helper.decrypt(admin.querystring, secret);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring Invalid error. Please provide the valid querystring.",
+        "SEND PDF",
+        secret
+      );
+    }
+
+    // Parse the decrypted querystring
+    try {
+      querydata = JSON.parse(querydata);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring JSON error. Please provide valid JSON",
+        "SEND PDF",
+        secret
+      );
+    }
+    if (!querydata.hasOwnProperty("pdfpath")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Pdf path missing. Please provide the Pdf Path",
+        "SEND PDF",
+        secret
+      );
+    }
+    if (!querydata.hasOwnProperty("feedback")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Feedback missing. Please provide the Feedback.",
+        "SEND PDF",
+        secret
+      );
+    }
+    if (!querydata.hasOwnProperty("ccemail")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "CC Email id missing. Please provide the CC Email id",
+        "SEND PDF",
+        secret
+      );
+    }
+    if (!querydata.hasOwnProperty("emailid")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Email id missing. Please provide the Email id",
+        "SEND PDF",
+        secret
+      );
+    }
+
+    if (!querydata.hasOwnProperty("phoneno")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Contact number missing. Please provide the contact number.",
+        "SEND PDF",
+        secret
+      );
+    }
+    if (
+      !querydata.hasOwnProperty("messagetype") ||
+      querydata.messagetype == ""
+    ) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Message type missing. Please provide the message type.",
+        "SEND PDF",
+        secret
+      );
+    }
+    const promises = [];
+    const phoneNumbers = querydata.phoneno
+      ? querydata.phoneno
+          .split(",")
+          .map((num) => num.trim())
+          .filter((num) => num !== "") // Removes empty values
+      : [];
+    // Send Email or WhatsApp Message
+    if (querydata.messagetype === 1) {
+      // Send only email
+      EmailSent = await mailer.sendQuotation(
+        "",
+        querydata.emailid,
+        "PDF from Sporada Secure India Private Limited",
+        "sendpdf.html",
+        ``,
+        "SENDPDF",
+        pdfpath,
+        querydata.feedback,
+        querydata.ccemail
+      );
+    } else if (querydata.messagetype === 2) {
+      // Send only WhatsApp
+      WhatsappSent = await Promise.all(
+        phoneNumbers.map(async (number) => {
+          try {
+            const response = await axios.post(
+              `${config.whatsappip}/billing/sendpdf`,
+              {
+                phoneno: number,
+                feedback: querydata.feedback,
+                pdfpath: pdfpath,
+              }
+            );
+            return response.data.code;
+          } catch (error) {
+            console.error(`WhatsApp Error for ${number}:`, error.message);
+            return false;
+          }
+        })
+      );
+    } else if (querydata.messagetype === 3) {
+      // Send both email & WhatsApp in parallel
+      promises.push(
+        mailer.sendQuotation(
+          "",
+          querydata.emailid,
+          "PDF from Sporada Secure India Private Limited",
+          "sendpdf.html",
+          ``,
+          "SENDPDF",
+          pdfpath,
+          querydata.feedback,
+          querydata.ccemail
+        )
+      );
+
+      promises.push(
+        Promise.all(
+          phoneNumbers.map(async (number) => {
+            try {
+              const response = await axios.post(
+                `${config.whatsappip}/billing/sendpdf`,
+                {
+                  phoneno: number,
+                  feedback: querydata.feedback,
+                  pdfpath: pdfpath,
+                }
+              );
+              return response.data.code;
+            } catch (error) {
+              console.error(`WhatsApp Error for ${number}:`, error.message);
+              return false;
+            }
+          })
+        ).then((results) => (WhatsappSent = results))
+      );
+
+      // Run both requests in parallel and wait for completion
+      [EmailSent] = await Promise.all(promises);
+    }
+    return helper.getSuccessResponse(
+      true,
+      "success",
+      "Pdf send successfully",
+      {
+        WhatsappSent: WhatsappSent,
+        EmailSent: EmailSent,
+      },
       secret
     );
   } catch (er) {
@@ -3086,4 +3336,5 @@ module.exports = {
   AddUpdateCompany,
   UpdateOrganization,
   UpdateBranch,
+  SendPdf,
 };

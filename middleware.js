@@ -422,7 +422,7 @@ let storage9 = multer.diskStorage({
       const day = now.getDate();
       let folder = config.filestorage; // Default folder
 
-      folder = `${folder}/${year}/${month}/${day}/recurringinvoice`;
+      folder = `${folder}/${year}/${month}/${day}/Subscription/recurringinvoice`;
 
       // Ensure the folder exists
       await fs.ensureDir(folder);
@@ -444,7 +444,7 @@ const maxSize9 = 2 * 1024 * 1024;
 let uploadFile9 = multer({
   storage: storage9,
   limits: { fileSize: maxSize9 },
-}).single("file");
+}).array("file", 10);
 
 let uploadrecurringinvoicepdf = util.promisify(uploadFile9);
 

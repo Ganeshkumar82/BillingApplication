@@ -449,4 +449,12 @@ router.post("/getquotationdetail", async function (req, res, next) {
   }
 });
 
+router.post("/sendclientpdf", async function (req, res, next) {
+  try {
+    res.json(await sales.ClientSendPdf(req.body));
+  } catch (er) {
+    console.log(`Error while sending the pdf : ${er}`);
+    next(er);
+  }
+});
 module.exports = router;

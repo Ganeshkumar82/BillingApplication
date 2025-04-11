@@ -151,4 +151,41 @@ router.post("/addcustominvoice", async function (req, res, next) {
     next(er);
   }
 });
+
+router.post("/getcustompdf", async function (req, res, next) {
+  try {
+    res.json(await subscription.GetCustomPDF(req.body));
+  } catch (er) {
+    console.log(`Error while fetching the custom pdf : ${er}`);
+    next(er);
+  }
+});
+
+router.post("/getsubscripioncustomer", async function (req, res, next) {
+  try {
+    res.json(await subscription.getSubscriptionCustomer(req.body));
+  } catch (er) {
+    console.log(`Error while fetching the subscription customer : ${er}`);
+    next(er);
+  }
+});
+
+router.post("/getglobalsubscription", async function (req, res, next) {
+  try {
+    res.json(await subscription.getGlobalSubscription(req.body));
+  } catch (er) {
+    console.log(`Error while fetching the global subscription : ${er}`);
+    next(er);
+  }
+});
+
+router.post("/getclientdetails", async function (req, res, next) {
+  try {
+    res.json(await subscription.getClientDetails(req.body));
+  } catch (er) {
+    console.log(`Error while fetching the client details : ${er}`);
+    next(er);
+  }
+});
+
 module.exports = router;

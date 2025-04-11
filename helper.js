@@ -124,6 +124,10 @@ async function convertFileToBinary(filePath) {
   });
 }
 
+async function formatDateToSQL(dateString) {
+  const date = new Date(dateString);
+  return date.toISOString().slice(0, 19).replace("T", " ");
+}
 module.exports = {
   encrypt,
   decrypt,
@@ -133,4 +137,5 @@ module.exports = {
   getServerSetting,
   phonenumber,
   convertFileToBinary,
+  formatDateToSQL,
 };
