@@ -1433,6 +1433,131 @@ async function OrganizationList(admin) {
     );
   }
 }
+//###########################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+
+async function OrgList(admin) {
+  try {
+    // Check if the session token exists
+    if (!admin.hasOwnProperty("STOKEN")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken missing. Please provide the Login sessiontoken",
+        "FETCH ORGANIZATION",
+        ""
+      );
+    }
+    var secret = admin.STOKEN.substring(0, 16);
+    var querydata;
+
+    // Validate session token length
+    if (admin.STOKEN.length > 50 || admin.STOKEN.length < 30) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login session token size invalid. Please provide the valid Session token",
+        "FETCH ORGANIZATION",
+        secret
+      );
+    }
+
+    // Validate session token
+    const [result] = await db.spcall(
+      "CALL SP_STOKEN_CHECK(?,@result); SELECT @result;",
+      [admin.STOKEN]
+    );
+    const objectvalue = result[1][0];
+    const userid = objectvalue["@result"];
+
+    if (userid == null) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+        "FETCH ORGANIZATION",
+        secret
+      );
+    }
+    var sql = [],
+      sql1 = [];
+    if (admin.hasOwnProperty("querystring")) {
+      try {
+        querydata = await helper.decrypt(admin.querystring, secret);
+      } catch (ex) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Querystring Invalid error. Please provide the valid querystring.",
+          "FETCH ORGANIZATION",
+          secret
+        );
+      }
+
+      // Parse the decrypted querystring
+      try {
+        querydata = JSON.parse(querydata);
+      } catch (ex) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Querystring JSON error. Please provide valid JSON",
+          "FETCH ORGANIZATION",
+          secret
+        );
+      }
+      if (querydata.hasOwnProperty("organizationid") == false) {
+        return helper.getSuccessResponse(
+          true,
+          "error",
+          `Organization id missing. Please provide the Organization id`,
+          "FETCH ORGANIZATION CUSTOMERS",
+          secret
+        );
+      }
+      sql = await db.query1(
+        `SELECT Organization_id,Organization_name,orgcode from organizations where status = 1 and deleted_flag =0 `
+      );
+      sql = await db.query1(
+        `SELECT Organization_id,Organization_name,orgcode from organizations where status = 1 and deleted_flag =0 `
+      );
+    } else {
+      sql = await db.query1(
+        `SELECT Organization_id,Organization_name,orgcode from organizations where status = 1 and deleted_flag =0 `
+      );
+      sql = await db.query1(
+        `SELECT Organization_id,Organization_name,orgcode from organizations where status = 1 and deleted_flag =0 `
+      );
+    }
+    if (sql[0]) {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Organization Fetched Successfully",
+        sql,
+        secret
+      );
+    } else {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Organization Fetched Successfully",
+        sql,
+        secret
+      );
+    }
+  } catch (er) {
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal error. Please contact Administration",
+      er.message,
+      secret
+    );
+  }
+}
 
 //###############################################################################################################################################################################################
 //###############################################################################################################################################################################################
@@ -1514,10 +1639,10 @@ async function CompanyList(admin) {
         querydata.organizationid != 0
       ) {
         sql = await db.query1(
-          `SELECT Customer_id,Organization_id,Customer_name,ccode,Email_id,Customer_Logo,CASE WHEN Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type,Admin_username contactperson,Contact_no contactpersonno,customer_cin,customer_pan,ccode customercode,customer_type from customermaster where status = 1 and deleted_flag =0 and site_type = 0`
+          `SELECT Customer_id,Organization_id,Customer_name,ccode,Email_id,Customer_Logo,address,billing_address,CASE WHEN Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type,Admin_username contactperson,Contact_no contactpersonno,customer_cin,customer_pan,ccode customercode,customer_type from customermaster where status = 1 and deleted_flag =0 and site_type = 0`
         );
         sql1 = await db.query1(
-          `SELECT Customer_id,Organization_id,Customer_name,ccode,Email_id,Customer_Logo,CASE WHEN Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type,Admin_username contactperson,Contact_no contactpersonno,customer_cin,customer_pan,ccode customercode,customer_type from customermaster where status = 1 and deleted_flag =0 and site_type = 1`
+          `SELECT Customer_id,Organization_id,Customer_name,ccode,Email_id,Customer_Logo,address,billing_address,CASE WHEN Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type,Admin_username contactperson,Contact_no contactpersonno,customer_cin,customer_pan,ccode customercode,customer_type from customermaster where status = 1 and deleted_flag =0 and site_type = 1`
         );
       }
       sql = await db.query1(
@@ -2290,7 +2415,7 @@ async function CreateSubscription(admin) {
     }
     var sql;
     if (querydata.customerType == "organization") {
-      sql = await db.query(
+      sql = await db.query1(
         `INSERT INTO subscriptionmaster(customerbased_type,Subscription_type,Subscription_Name,No_of_Devices,No_of_Cameras,Addl_cameras,Amount,product_desc,Created_by,organization_id,gst_percentage,hsnno) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           querydata.customerType,
@@ -2308,60 +2433,54 @@ async function CreateSubscription(admin) {
         ]
       );
     } else if (querydata.customerType == "company") {
-      sql = await db.query(
+      sql = await db.query1(
         `INSERT INTO subscriptionmaster(customerbased_type, customerbased_id,Subscription_type,Subscription_Name,No_of_Devices,No_of_Cameras,Addl_cameras,Amount,product_desc,Created_by,gst_percentage,hsnno) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
-          [
-            querydata.customerType,
-            querydata.clientId,
-            0,
-            querydata.subscriptionName,
-            querydata.noOfDevice,
-            querydata.noOfCameras,
-            querydata.AdditionalCameraCharges,
-            querydata.amount,
-            querydata.productDescription,
-            userid,
-            querydata.gstpercentage,
-            querydata.hsnno,
-          ],
+          querydata.customerType,
+          querydata.clientId,
+          0,
+          querydata.subscriptionName,
+          querydata.noOfDevice,
+          querydata.noOfCameras,
+          querydata.AdditionalCameraCharges,
+          querydata.amount,
+          querydata.productDescription,
+          userid,
+          querydata.gstpercentage,
+          querydata.hsnno,
         ]
       );
     } else if (querydata.customerType == "site") {
-      sql = await db.query(
+      sql = await db.query1(
         `INSERT INTO subscriptionmaster(customerbased_type,Subscription_type,Subscription_Name,No_of_Devices,No_of_Cameras,Addl_cameras,Amount,product_desc,Created_by,site_id,gst_percentage,hsnno) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
-          [
-            querydata.customerType,
-            0,
-            querydata.subscriptionName,
-            querydata.noOfDevice,
-            querydata.noOfCameras,
-            querydata.AdditionalCameraCharges,
-            querydata.amount,
-            querydata.productDescription,
-            userid,
-            querydata.clientId,
-            querydata.gstpercentage,
-            querydata.hsnno,
-          ],
+          querydata.customerType,
+          0,
+          querydata.subscriptionName,
+          querydata.noOfDevice,
+          querydata.noOfCameras,
+          querydata.AdditionalCameraCharges,
+          querydata.amount,
+          querydata.productDescription,
+          userid,
+          querydata.clientId,
+          querydata.gstpercentage,
+          querydata.hsnno,
         ]
       );
     } else {
-      sql = await db.query(
-        `INSERT INTO subscriptionmaster(customerbased_type,Subscription_type,Subscription_Name,No_of_Devices,No_of_Cameras,Addl_cameras,Amount,product_desc,Created_by) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+      sql = await db.query1(
+        `INSERT INTO subscriptionmaster(customerbased_type,Subscription_type,Subscription_Name,No_of_Devices,No_of_Cameras,Addl_cameras,Amount,product_desc,Created_by) VALUES (?,?,?,?,?,?,?,?,?)`,
         [
-          [
-            querydata.customerType,
-            1,
-            querydata.subscriptionName,
-            querydata.noOfDevice,
-            querydata.noOfCameras,
-            querydata.AdditionalCameraCharges,
-            querydata.amount,
-            querydata.productDescription,
-            userid,
-          ],
+          querydata.customerType,
+          1,
+          querydata.subscriptionName,
+          querydata.noOfDevice,
+          querydata.noOfCameras,
+          querydata.AdditionalCameraCharges,
+          querydata.amount,
+          querydata.productDescription,
+          userid,
         ]
       );
     }
@@ -2383,6 +2502,7 @@ async function CreateSubscription(admin) {
       );
     }
   } catch (er) {
+    console.log(JSON.stringify(er));
     return helper.getErrorResponse(
       false,
       "error",
@@ -3328,6 +3448,7 @@ module.exports = {
   changepassword,
   Register,
   OrganizationList,
+  OrgList,
   CompanyList,
   BranchList,
   UploadLogo,

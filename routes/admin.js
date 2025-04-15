@@ -81,6 +81,15 @@ router.post("/organization", async function (req, res, next) {
   }
 });
 
+router.post("/organizationlist", async function (req, res, next) {
+  try {
+    res.json(await admin.OrgList(req.body));
+  } catch (er) {
+    console.error(`Error while Getting the Organization list -> ${er.message}`);
+    next(er);
+  }
+});
+
 router.post("/companylist", async function (req, res, next) {
   try {
     res.json(await admin.CompanyList(req.body));

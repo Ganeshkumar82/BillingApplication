@@ -4199,6 +4199,471 @@ async function getClientDetails(subscription) {
     );
   }
 }
+
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+
+// async function UploadSubscription(subscription) {
+//   try {
+//     var secret;
+//     // Check if the session token exists
+//     if (!subscription.STOKEN) {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         "Login session token missing. Please provide the Login session token",
+//         "UPLOAD THE SUBSCRIPTION DETAILS",
+//         ""
+//       );
+//     }
+//     secret = subscription.STOKEN.substring(0, 16);
+//     var querydata;
+
+//     // Validate session token length
+//     if (subscription.STOKEN.length > 50 || subscription.STOKEN.length < 30) {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         "Login session token size invalid. Please provide the valid Session token",
+//         "UPLOAD THE SUBSCRIPTION DETAILS",
+//         secret
+//       );
+//     }
+
+//     // Validate session token
+//     const [result] = await db.spcall(
+//       "CALL SP_STOKEN_CHECK(?,@result); SELECT @result;",
+//       [subscription.STOKEN]
+//     );
+//     const objectvalue = result[1][0];
+//     const userid = objectvalue["@result"];
+
+//     if (userid == null) {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+//         "UPLOAD THE SUBSCRIPTION DETAILS",
+//         secret
+//       );
+//     }
+
+//     // Check if querystring is provided
+//     if (!subscription.querystring) {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         "Querystring missing. Please provide the querystring",
+//         "UPLOAD THE SUBSCRIPTION DETAILS",
+//         secret
+//       );
+//     }
+
+//     // Decrypt querystring
+//     try {
+//       querydata = await helper.decrypt(subscription.querystring, secret);
+//     } catch (ex) {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         "Querystring Invalid error. Please provide the valid querystring.",
+//         "UPLOAD THE SUBSCRIPTION DETAILS",
+//         secret
+//       );
+//     }
+
+//     // Parse the decrypted querystring
+//     try {
+//       querydata = JSON.parse(querydata);
+//     } catch (ex) {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         "Querystring JSON error. Please provide valid JSON",
+//         "UPLOAD THE SUBSCRIPTION DETAILS",
+//         secret
+//       );
+//     }
+//     if (!Array.isArray(querydata)) {
+//       querydata = [querydata];
+//     }
+//     const requiredFields = [
+//       { field: "organizationname", message: "Organization missing." },
+//       { field: "companyname", message: "Company name missing." },
+//       { field: "billtype", message: "Bill Type missing." },
+//       {
+//         field: "sitename",
+//         message: "Site name missing.",
+//       },
+//       { field: "subscriptionplan", message: "Subscription plan missing" },
+//       { field: "subscriptionamount", message: "Subscription amount missing." },
+//       { field: "billmode", message: "Billing mode missing" },
+//       { field: "contactpersonname", message: "Contact person name missing" },
+//       {
+//         field: "emailid",
+//         message: "Emailid missing.",
+//       },
+//       { field: "branchcode", message: "Branch code missing." },
+//       { field: "customertype", message: "Customer type missing." },
+//       { field: "plantype", message: "Plan Type missing." },
+//       { field: "phoneno", message: "Phone number missing." },
+//       { field: "hsncode", message: "Hsn Code missing." },
+//       { field: "relationshipid", message: "Relationship id missing." },
+//       { field: "clientaddress", message: "Client address misssing." },
+//       { field: "billingaddress", message: "Billing address missing." },
+//       { field: "billinggst", message: "Billing GST number missing." },
+//       { field: "cameraquantity", message: "Camera quantity missing." },
+//       {
+//         field: "emergencycontactname1",
+//         message: "Emergency contact person name one missing.",
+//       },
+//       {
+//         field: "emergencycontactnumber1",
+//         message: "Emergency contact number one missing.",
+//       },
+//       {
+//         field: "emergencycontactname2",
+//         message: "Emergency contact person name two missing.",
+//       },
+//       {
+//         field: "emergencycontactnumber2",
+//         message: "Emergency contact number two missing.",
+//       },
+//     ];
+//     const results = [];
+//     for (const [index, item] of querydata.entries()) {
+//       for (const { field, message } of requiredFields) {
+//         if (!querydata.hasOwnProperty(field)) {
+//           results.push(
+//             helper.getErrorResponse(
+//               false,
+//               "error",
+//               message,
+//               "UPLOAD THE SUBSCRIPTION DETAILS",
+//               secret
+//             )
+//           );
+//         }
+//       }
+
+//       if (results.length == 0) {
+//         const sql1 = await db.query1(
+//           `select customer_id,branch_id from branchmaster where branch_name = '${querydata.sitename}'`
+//         );
+//         const sql2 = await db.query1(
+//           `select subscription_id from subscriptionmaster where Subscription_name = '${querydata.subscriptionname}'`
+//         );
+//         if (sql1.length > 0 && sql2.length > 0) {
+//           const branchid = sql1[0].branch_id;
+//           const customerid = sql1[0].customer_id;
+//           const subscriptionid = sql1[0].subscription_id;
+//           const sql = await db.query1(
+//             `insert into subscriptioncustomertrans(Subscription_ID,Customer_ID,Relationship_id,branch_id,No_of_Analytics,billingperiod,billing_plan,Bill_mode
+//         ,bill_type,Amount,hsncode,customer_address,billing_address,billing_gst,branchcode,customer_type,emailid,Phoneno,Contactperson_name) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+//             [
+//               subscriptionid,
+//               customerid,
+//               querydata.relationshipid,
+//               branchid,
+//               querydata.cameraquantity,
+//               1,
+//               querydata.billtype,
+//               querydata.billmode,
+//               querydata.plantype,querydata.subscriptionamount,querydata.hsncode,querydata.clientaddress,querydata.billingaddress,querydata.billinggst,
+//               querydata.branchcode,querydata.customertype,querydata.emailid,querydata.phoneno,querydata.contactpersonname
+//             ]
+//           );
+//           if(sql.affectedRows > 0 ){
+//             results.push(helper.getSuccessResponse(true, "success", `Subscription customer transaction inserted successfully for ${querydata.sitename}`, branchid,secret));
+//           }else{
+//             results.push(helper.getErrorResponse(false,"error",`Failed to Update subscription for ${querydata.sitename}`,branchid,secret));
+//           }
+//         }
+//       }
+//     }
+//     return results;
+//   } catch (er) {
+//     return helper.getErrorResponse(
+//       false,
+//       "error",
+//       "Internal error. Please contact Administration",
+//       er.message,
+//       secret
+//     );
+//   }
+// }
+
+async function UploadSubscription(subscription) {
+  let secret = "";
+  try {
+    // Validate session token
+    if (!subscription.STOKEN) {
+      return [
+        helper.getErrorResponse(
+          false,
+          "error",
+          "Login session token missing. Please provide the Login session token",
+          "UPLOAD THE SUBSCRIPTION DETAILS",
+          ""
+        ),
+      ];
+    }
+
+    secret = subscription.STOKEN.substring(0, 16);
+    if (subscription.STOKEN.length > 50 || subscription.STOKEN.length < 30) {
+      return [
+        helper.getErrorResponse(
+          false,
+          "error",
+          "Login session token size invalid. Please provide the valid Session token",
+          "UPLOAD THE SUBSCRIPTION DETAILS",
+          secret
+        ),
+      ];
+    }
+
+    const [result] = await db.spcall(
+      "CALL SP_STOKEN_CHECK(?,@result); SELECT @result;",
+      [subscription.STOKEN]
+    );
+    const objectvalue = result[1][0];
+    const userid = objectvalue["@result"];
+
+    if (userid == null) {
+      return [
+        helper.getErrorResponse(
+          false,
+          "error",
+          "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+          "UPLOAD THE SUBSCRIPTION DETAILS",
+          secret
+        ),
+      ];
+    }
+
+    if (!subscription.querystring) {
+      return [
+        helper.getErrorResponse(
+          false,
+          "error",
+          "Querystring missing. Please provide the querystring",
+          "UPLOAD THE SUBSCRIPTION DETAILS",
+          secret
+        ),
+      ];
+    }
+
+    let querydata;
+    try {
+      querydata = await helper.decrypt(subscription.querystring, secret);
+      querydata = JSON.parse(querydata);
+    } catch (ex) {
+      return [
+        helper.getErrorResponse(
+          false,
+          "error",
+          "Querystring decryption or JSON parse error. Please provide valid querystring JSON.",
+          "UPLOAD THE SUBSCRIPTION DETAILS",
+          secret
+        ),
+      ];
+    }
+
+    // Convert single object to array
+    if (!Array.isArray(querydata)) querydata = [querydata];
+
+    const requiredFields = [
+      { field: "organizationname", message: "Organization missing." },
+      { field: "companyname", message: "Company name missing." },
+      { field: "billtype", message: "Bill Type missing." },
+      { field: "sitename", message: "Site name missing." },
+      { field: "subscriptionplan", message: "Subscription plan missing" },
+      { field: "subscriptionamount", message: "Subscription amount missing." },
+      { field: "billmode", message: "Billing mode missing" },
+      { field: "contactpersonname", message: "Contact person name missing" },
+      { field: "emailid", message: "Emailid missing." },
+      { field: "branchcode", message: "Branch code missing." },
+      { field: "customertype", message: "Customer type missing." },
+      { field: "plantype", message: "Plan Type missing." },
+      { field: "phoneno", message: "Phone number missing." },
+      { field: "hsncode", message: "Hsn Code missing." },
+      { field: "relationshipid", message: "Relationship id missing." },
+      { field: "clientaddress", message: "Client address misssing." },
+      { field: "billingaddress", message: "Billing address missing." },
+      { field: "billinggst", message: "Billing GST number missing." },
+      { field: "cameraquantity", message: "Camera quantity missing." },
+      {
+        field: "emergencycontactname1",
+        message: "Emergency contact person name one missing.",
+      },
+      {
+        field: "emergencycontactnumber1",
+        message: "Emergency contact number one missing.",
+      },
+      {
+        field: "emergencycontactname2",
+        message: "Emergency contact person name two missing.",
+      },
+      {
+        field: "emergencycontactnumber2",
+        message: "Emergency contact number two missing.",
+      },
+    ];
+
+    const results = [];
+
+    for (const item of querydata) {
+      let hasError = false;
+      for (const { field, message } of requiredFields) {
+        if (!item.hasOwnProperty(field) || item[field] === "") {
+          results.push(
+            await helper.getErrorResponse(
+              false,
+              "error",
+              message,
+              "UPLOAD THE SUBSCRIPTION DETAILS",
+              secret
+            )
+          );
+          hasError = true;
+          break;
+        }
+      }
+
+      if (hasError) continue;
+
+      try {
+        const siteData = await db.query1(
+          `SELECT customer_id, branch_id FROM branchmaster WHERE branch_name = ?`,
+          [item.sitename]
+        );
+        const subscriptionData = await db.query1(
+          `SELECT subscription_id FROM subscriptionmaster WHERE Subscription_name = ?`,
+          [item.subscriptionplan]
+        );
+
+        if (siteData.length === 0 || subscriptionData.length === 0) {
+          results.push(
+            await helper.getErrorResponse(
+              false,
+              "error",
+              `Site or Subscription not found for ${item.sitename}`,
+              "UPLOAD THE SUBSCRIPTION DETAILS",
+              secret
+            )
+          );
+          continue;
+        }
+
+        const branchid = siteData[0].branch_id;
+        const customerid = siteData[0].customer_id;
+        const subscriptionid = subscriptionData[0].subscription_id;
+
+        const [result] = await db.spcall1(
+          `CALL SP_SUBSCRIPTION_UPSERT(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@subscription_trans_id); SELECT @subscription_trans_id`,
+          [
+            subscriptionid,
+            customerid,
+            item.relationshipid,
+            branchid,
+            item.cameraquantity,
+            1,
+            1,
+            item.plantype,
+            item.billmode,
+            item.billtype,
+            item.subscriptionamount,
+            item.hsncode,
+            item.clientaddress,
+            item.billingaddress,
+            item.billinggst,
+            item.branchcode,
+            item.customertype,
+            item.emailid,
+            item.phoneno,
+            item.contactpersonname,
+          ]
+        );
+
+        const objectvalue = result[1][0];
+        const usubscriptionid = objectvalue["@subscription_trans_id"];
+        // const insert = await db.query1(
+        //   `INSERT INTO subscriptioncustomertrans (Subscription_ID, Customer_ID, Relationship_id, branch_id, No_of_Analytics,No_of_devices ,billingperiod, billing_plan, Bill_mode, bill_type, Amount, hsncode, customer_address, billing_address, billing_gst, branchcode, customer_type, emailid, Phoneno, Contactperson_name)
+        //    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?, ?, ?)`,
+        //   [
+        //     subscriptionid,
+        //     customerid,
+        //     item.relationshipid,
+        //     branchid,
+        //     item.cameraquantity,
+        //     1,
+        //     1,
+        //     item.billtype,
+        //     item.billmode,
+        //     item.plantype,
+        //     item.subscriptionamount,
+        //     item.hsncode,
+        //     item.clientaddress,
+        //     item.billingaddress,
+        //     item.billinggst,
+        //     item.branchcode,
+        //     item.customertype,
+        //     item.emailid,
+        //     item.phoneno,
+        //     item.contactpersonname,
+        //   ]
+        // );
+
+        if (usubscriptionid != 0) {
+          results.push(
+            await helper.getSuccessResponse(
+              true,
+              "success",
+              `Subscription uploaded successfully for ${item.sitename}`,
+              usubscriptionid,
+              secret
+            )
+          );
+        } else {
+          results.push(
+            await helper.getErrorResponse(
+              false,
+              "error",
+              `Insert failed for ${item.sitename}`,
+              "UPLOAD THE SUBSCRIPTION DETAILS",
+              secret
+            )
+          );
+        }
+      } catch (e) {
+        results.push(
+          await helper.getErrorResponse(
+            false,
+            "error",
+            `DB error for ${item.sitename}`,
+            e.message,
+            secret
+          )
+        );
+      }
+    }
+
+    return results;
+  } catch (er) {
+    return [
+      helper.getErrorResponse(
+        false,
+        "error",
+        "Internal error. Please contact Administration",
+        er.message,
+        secret
+      ),
+    ];
+  }
+}
+
 module.exports = {
   addRecurringInvoice,
   GetRecurredInvoice,
@@ -4221,4 +4686,5 @@ module.exports = {
   getSubscriptionCustomer,
   getGlobalSubscription,
   getClientDetails,
+  UploadSubscription,
 };

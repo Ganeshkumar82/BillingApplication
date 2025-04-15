@@ -7704,14 +7704,17 @@ async function addRevisedQuotation(req, res) {
         `Update generaterevisedquotationid set status = 0 where revquotation_id IN('${querydata.quotationgenid}')`
       );
       const sql2 = await db.query(
-        `select Email_id from usermaster where user_design = 'Administrator' and status = 1`
+        `select u.Email_id,a.secret from usermaster u CROSS JOIN apikey a where u.user_design = 'Administrator' and u.status = 1 and a.status = 1`
       );
-      var emailid = "";
+      var emailid = "",
+        apikey = "15b97956-b296-11";
       if (sql2.length > 0) {
         emailid =
           sql2.length > 0 ? sql2.map((item) => item.Email_id).join(",") : "";
+        apikey = sql2[0].secret;
       } else {
         emailid = `support@sporadasecure.com,ceo@sporadasecure.com,sales@sporadasecure.com`;
+        apikey = "15b97956-b296-11";
       }
       EmailSent = await mailer.sendapprovequotation(
         "Administrator",
@@ -7719,11 +7722,11 @@ async function addRevisedQuotation(req, res) {
         // ,ceo@sporadasecure.com.ramachadran.m@sporadasecure.com',
         `Action Required!!! Received Quotation Approve Request for ${querydata.clientaddressname}`,
         "apporvequotation.html",
-        `http://192.168.0.200:8081/sales/intquoteapprove?quoteid=${quatationid}&STOKEN=${sales.STOKEN}&s=1&feedback='Apporved'`,
+        `http://192.168.0.200:8081/sales/intquoteapprove?quoteid=${quatationid}&STOKEN=${apikey}&s=1&feedback='Apporved'`,
         "APPROVEQUOTATION_SEND",
         querydata.clientaddressname,
         "QUOTATION APPROVAL",
-        `http://192.168.0.200:8081/sales/intquoteapprove?quoteid=${quatationid}&STOKEN=${sales.STOKEN}&s=3`,
+        `http://192.168.0.200:8081/sales/intquoteapprove?quoteid=${quatationid}&STOKEN=${apikey}&s=3`,
         req.file.path
       );
       if (EmailSent == true) {

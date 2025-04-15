@@ -188,4 +188,13 @@ router.post("/getclientdetails", async function (req, res, next) {
   }
 });
 
+router.post("/uploadsubscription", async function (req, res, next) {
+  try {
+    res.json(await subscription.UploadSubscription(req.body));
+  } catch (er) {
+    console.log(`Error while Uploading the Subscription Details : ${er}`);
+    next(er);
+  }
+});
+
 module.exports = router;
