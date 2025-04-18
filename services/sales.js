@@ -607,51 +607,6 @@ async function addsale(req, res) {
         );
       }
     }
-
-    if (querydata.customer_type == 1) {
-      const [result1] = await db.spcall(
-        `CALL GenerateCustomerReqId(?,@p_customerreq_id); select @p_customerreq_id`,
-        [userid]
-      );
-      const objectValue = result1[1][0];
-      requirementid = objectValue["@p_customerreq_id"];
-
-      // Update generateecid status
-      await db.query(
-        `UPDATE generateecid SET status = 0 WHERE customerreq_id = ?`,
-        [requirementid]
-      );
-    } else {
-      var customercode;
-      if (querydata.companyid != 0) {
-        const sql1 = await db.query1(
-          `select ccode from customermaster where customer_id in(?) and status = 1`,
-          [querydata.companyid]
-        );
-        if (sql1[0]) customercode = sql1[0].ccode;
-      } else {
-        const sql1 = await db.query1(
-          `select branch_code from branchmaster where branch_id in(?) and status =1`,
-          querydata.branchid
-        );
-        if (sql1[0]) customercode = sql1[0].branch_code;
-      }
-      if (customercode == "" || customercode == null) {
-        return helper.getErrorResponse(
-          false,
-          "error",
-          "There is No customer code for the selected company/branch",
-          "CLIENT REQUIREMENT ADD",
-          secret
-        );
-      }
-      const [result1] = await db.spcall(
-        `CALL Gen_sub_reqId(?,?,@p_req_id); SELECT @p_req_id;`,
-        [userid, customercode]
-      );
-      const objectValue = result1[1][0];
-      requirementid = objectValue["@p_req_id"];
-    }
     // Insert sales data into the database
     const [sql] = await db.spcall(
       `CALL SP_ADD_SALES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@salesid); select @salesid;`,
@@ -680,7 +635,7 @@ async function addsale(req, res) {
     if (salesid) {
       const [processSql] = await db.spcall(
         `CALL SP_ADD_SALES_PROCESS(?,?,?,@processid); select @processid;`,
-        [salesid, userid, requirementid]
+        [salesid, userid, salesid]
       );
       const objectvalue2 = processSql[1][0];
       const processid = objectvalue2["@processid"];
@@ -692,7 +647,7 @@ async function addsale(req, res) {
             querydata.name,
             userid,
             processid,
-            requirementid,
+            salesid,
             1,
             req.file.path,
             querydata.address,
@@ -729,18 +684,6 @@ async function addsale(req, res) {
 
           await Promise.all(productQueries);
 
-          // Update generateecid status
-          if (querydata.customer_type == 1) {
-            await db.query(
-              `UPDATE generateecid SET status = 0 WHERE customerreq_id = ?`,
-              [requirementid]
-            );
-          } else {
-            await db.query(
-              `UPDATE gen_subscrreq_id SET status = 0 WHERE req_id = ?`,
-              [requirementid]
-            );
-          }
           // Send Email or WhatsApp
           let EmailSent = 0;
           let WhatsappSent = 0;
@@ -780,7 +723,10 @@ async function addsale(req, res) {
             `INSERT INTO morupload(MOR_path, Created_by, Email_sent, Whatsapp_sent) VALUES(?,?,?,?)`,
             [req.file.path, userid, EmailSent, WhatsappSent]
           );
-
+          await mqttclient.publishMqttMessage(
+            "refresh",
+            "Sales Quotation approved for the process id "
+          );
           return helper.getSuccessResponse(
             true,
             "success",
@@ -802,6 +748,15 @@ async function addsale(req, res) {
       );
     }
   } catch (er) {
+    if (er.code === "ER_DUP_ENTRY") {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Requirement already exists",
+        er.message,
+        secret
+      );
+    }
     return helper.getErrorResponse(
       false,
       "error",
@@ -1422,7 +1377,7 @@ async function addInvoice(req, res) {
     );
 
     // Send Email or WhatsApp Message
-    if (querydata.messagetype == 1 || querydata.messagetype == 3) {
+    if (querydata.messagetype == 1) {
       EmailSent = await mailer.sendInvoice(
         querydata.clientaddressname,
         querydata.emailid,
@@ -1437,7 +1392,7 @@ async function addInvoice(req, res) {
         querydata.ccemail,
         querydata.feedback
       );
-    } else if (querydata.messagetype == 2 || querydata.messagetype == 3) {
+    } else if (querydata.messagetype == 2) {
       WhatsappSent = await axios.post(`${config.whatsappip}/billing/sendpdf`, {
         phoneno: querydata.phoneno,
         feedback: querydata.feedback,
@@ -4825,7 +4780,7 @@ async function addQuotation(req, res) {
         secret
       );
     }
-    if (!querydata.hasOwnProperty("emailid") || querydata.emailid == "") {
+    if (!querydata.hasOwnProperty("emailid")) {
       return helper.getErrorResponse(
         false,
         "error",
@@ -4844,7 +4799,7 @@ async function addQuotation(req, res) {
       );
     }
 
-    if (!querydata.hasOwnProperty("phoneno") || querydata.phoneno == "") {
+    if (!querydata.hasOwnProperty("phoneno")) {
       return helper.getErrorResponse(
         false,
         "error",
@@ -4999,14 +4954,18 @@ async function addQuotation(req, res) {
         );
         await mqttclient.publishMqttMessage(
           "Notification",
-          "Email sent successfully to the Administrator for eventid" +
+          "Quotation sent successfully to the Administrator for eventid" +
             quatationid +
             ". Please contact Administrator for further action."
+        );
+        await mqttclient.publishMqttMessage(
+          "Notification",
+          "Quotation sent Internally for " + querydata.clientaddressname
         );
         return helper.getSuccessResponse(
           true,
           "success",
-          "Email sent successfully to the Administrator. Please contact Administrator for further action.",
+          "Quotation sent successfully to the Administrator. Please contact Administrator for further action.",
           { EmailSent: EmailSent },
           secret
         );
@@ -5017,14 +4976,14 @@ async function addQuotation(req, res) {
         );
         await mqttclient.publishMqttMessage(
           "Notification",
-          "Error sending the Email for eventid" +
+          "Error sending the Quotation for eventid" +
             quatationid +
             ". Please try again"
         );
         return helper.getErrorResponse(
           false,
           "error",
-          "Error sending the Email. Please try again",
+          "Error sending the Quotation. Please try again",
           { EmailSent: EmailSent },
           secret
         );
@@ -6774,6 +6733,148 @@ async function getBinaryFile(sales) {
 //###############################################################################################################################################################################################
 //###############################################################################################################################################################################################
 
+async function getCustomBinaryfile(sales) {
+  try {
+    // Check if the session token exists
+    if (!sales.hasOwnProperty("STOKEN")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken missing. Please provide the Login sessiontoken",
+        "GET BINARY DATA FOR PDF",
+        ""
+      );
+    }
+    var secret = sales.STOKEN.substring(0, 16);
+    var querydata;
+    // Validate session token length
+    if (sales.STOKEN.length > 50 || sales.STOKEN.length < 30) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
+        "GET BINARY DATA FOR PDF",
+        secret
+      );
+    }
+
+    // Validate session token
+    const [result] = await db.spcall(
+      `CALL SP_STOKEN_CHECK(?,@result); SELECT @result;`,
+      [sales.STOKEN]
+    );
+    const objectvalue = result[1][0];
+    const userid = objectvalue["@result"];
+
+    if (userid == null) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+        "GET BINARY DATA FOR PDF",
+        secret
+      );
+    }
+
+    // Check if querystring is provided
+    if (!sales.hasOwnProperty("querystring")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring missing. Please provide the querystring",
+        "GET BINARY DATA FOR PDF",
+        secret
+      );
+    }
+
+    // Decrypt querystring
+    try {
+      querydata = await helper.decrypt(sales.querystring, secret);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring Invalid error. Please provide the valid querystring.",
+        "GET BINARY DATA FOR PDF",
+        secret
+      );
+    }
+
+    // Parse the decrypted querystring
+    try {
+      querydata = JSON.parse(querydata);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring JSON error. Please provide valid JSON",
+        "GET BINARY DATA FOR PDF",
+        secret
+      );
+    }
+
+    // Validate required fields
+    if (
+      !querydata.hasOwnProperty("custompdfid") ||
+      querydata.custompdfid == ""
+    ) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Custom PDF id missing. Please provide the Custom PDF id",
+        "GET BINARY DATA FOR PDF",
+        secret
+      );
+    }
+    const sql = await db.query(
+      `select pdf_path from custompdfmaster where custom_id = ?`,
+      [querydata.custompdfid]
+    );
+    var data;
+    if (sql[0]) {
+      // Ensure file exists
+      if (!fs.existsSync(sql[0].pdf_path)) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "File does not exist",
+          "GET BINARY DATA FOR PDF",
+          secret
+        );
+      }
+      binarydata = await helper.convertFileToBinary(sql[0].pdf_path);
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "File Binary Fetched Successfully",
+        binarydata,
+        secret
+      );
+    } else {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "File Binary Fetched Successfully",
+        { binarydata: data },
+        secret
+      );
+    }
+  } catch (er) {
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal Error. Please contact Administration",
+      er.message,
+      secret
+    );
+  }
+}
+
+//##############################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+
 async function DeleteProcess(sales) {
   try {
     // Check if the session token exists
@@ -7589,7 +7690,7 @@ async function addRevisedQuotation(req, res) {
     }
     //
 
-    if (!querydata.hasOwnProperty("emailid") || querydata.emailid == "") {
+    if (!querydata.hasOwnProperty("emailid")) {
       return helper.getErrorResponse(
         false,
         "error",
@@ -7599,7 +7700,7 @@ async function addRevisedQuotation(req, res) {
       );
     }
 
-    if (!querydata.hasOwnProperty("phoneno") || querydata.phoneno == "") {
+    if (!querydata.hasOwnProperty("phoneno")) {
       return helper.getErrorResponse(
         false,
         "error",
@@ -7744,11 +7845,14 @@ async function addRevisedQuotation(req, res) {
             req.file.path,
           ]
         );
-
+        await mqttclient.publishMqttMessage(
+          "Notification",
+          "Quotation sent Internally for " + querydata.clientaddressname
+        );
         return helper.getSuccessResponse(
           true,
           "success",
-          "Email sent successfully to the Administrator. Please contact Administrator for further action.",
+          "Quotation sent successfully to the Administrator. Please contact Administrator for further action.",
           { EmailSent: EmailSent },
           secret
         );
@@ -9203,7 +9307,7 @@ async function approveQuotation(sales) {
     }
 
     const sql = await db.query(
-      `Update salesprocesslist set Approved_status =2,user_ip= ?,Timestamp=? where cprocess_id = ?`,
+      `Update salesprocesslist set Approved_status =1,user_ip= ?,Timestamp=? where cprocess_id = ?`,
       [querydata.user_ip, querydata.timestamp, querydata.eventid]
     );
     if (sql.affectedRows > 0) {
@@ -9691,16 +9795,14 @@ async function IntQuotationApproval(req, res) {
         [sales.s, sales.quoteid]
       );
     }
-
+    const sql = await db.query(
+      `SELECT q.emailid, q.ccemail, q.clientname, q.phoneno, q.feedback,q.message_type, q.pdf_path, a.secret FROM quotation_mailbox q CROSS JOIN apikey a
+      WHERE q.status = 1 AND q.process_id = ? AND a.status = 1;`,
+      [sales.quoteid]
+    );
     // Send the correct HTML file
     if (sql1.affectedRows) {
       if (sales.s == 1) {
-        const sql = await db.query(
-          `SELECT q.emailid, q.ccemail, q.clientname, q.phoneno, q.feedback,q.message_type, q.pdf_path, a.secret FROM quotation_mailbox q CROSS JOIN apikey a
-          WHERE q.status = 1 AND q.process_id = ? AND a.status = 1;`,
-          [sales.quoteid]
-        );
-
         // const sql = await db.query(
         //   `select emailid,ccemail,clientname,phoneno,feedback,message_type,pdf_path from quotation_mailbox where status = 1 and process_id = ${sales.quoteid} LIMIT 1 `
         // );
@@ -9796,21 +9898,21 @@ async function IntQuotationApproval(req, res) {
         }
         await mqttclient.publishMqttMessage(
           "refresh",
-          "Quotation approved Internally for the process id " + sales.quoteid
+          "Quotation approved Internally for " + sql[0].clientname
         );
         await mqttclient.publishMqttMessage(
           "Notification",
-          "Quotation approved Internally for the process id " + sales.quoteid
+          "Quotation approved Internally for " + sql[0].clientname
         );
         return res.sendFile(path.join(htmlPath, "approved.html"));
       } else {
         await mqttclient.publishMqttMessage(
           "Notification",
-          "Quotation Rejected Internally for the process id " + sales.quoteid
+          "Quotation Rejected Internally for " + sql[0].clientname
         );
         await mqttclient.publishMqttMessage(
           "refresh",
-          "Quotation Rejected Internally for the process id " + sales.quoteid
+          "Quotation Rejected Internally for " + sql[0].clientname
         );
         return res.sendFile(path.join(htmlPath, "rejected.html"));
       }
@@ -9947,26 +10049,26 @@ async function GetCustomPDF(sales) {
       );
     }
     const sql = await db.query(
-      `select customeraddress_name,customeraddress,billing_address,billingaddress_name,customer_mailid,customer_phoneno,customer_gstno,add_date date,custom_type,gen_id,pdf_path,pdf_path path from custompdfmaster where status = 1`
+      `select custom_id custompdfid,customeraddress_name,customeraddress,billing_address,billingaddress_name,customer_mailid,customer_phoneno,customer_gstno,add_date date,custom_type,gen_id,pdf_path,pdf_path path from custompdfmaster where status = 1`
     );
     var data;
     if (sql.length >= 0) {
-      for (let i = 0; i < sql.length; i++) {
-        // Ensure file exists
-        if (!fs.existsSync(sql[i].pdf_path)) {
-          // return helper.getErrorResponse(false,"error","File does not exist","GET BINARY DATA FOR THE PDF",secret);
-          return helper.getErrorResponse(
-            false,
-            "error",
-            "File does not exist",
-            "GET BINARY DATA FOR PDF",
-            secret
-          );
-        }
-        // for (let i = 0; i < sql.length; i++) {
-        binarydata = await helper.convertFileToBinary(sql[i].pdf_path);
-        sql[i].pdf_path = binarydata;
-      }
+      // for (let i = 0; i < sql.length; i++) {
+      //   // Ensure file exists
+      //   if (!fs.existsSync(sql[i].pdf_path)) {
+      //     // return helper.getErrorResponse(false,"error","File does not exist","GET BINARY DATA FOR THE PDF",secret);
+      //     return helper.getErrorResponse(
+      //       false,
+      //       "error",
+      //       "File does not exist",
+      //       "GET BINARY DATA FOR PDF",
+      //       secret
+      //     );
+      //   }
+      //   // for (let i = 0; i < sql.length; i++) {
+      //   binarydata = await helper.convertFileToBinary(sql[i].pdf_path);
+      //   sql[i].pdf_path = binarydata;
+      // }
 
       return helper.getSuccessResponse(
         true,
@@ -10417,6 +10519,7 @@ module.exports = {
   addCustomDeliveryChallan,
   addFeedback,
   getBinaryFile,
+  getCustomBinaryfile,
   DeleteProcess,
   ArchiveProcess,
   addRFQ,

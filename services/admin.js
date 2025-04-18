@@ -1691,6 +1691,84 @@ async function CompanyList(admin) {
 
 //###############################################################################################################################################################################################
 //###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+
+async function GetCompany(admin) {
+  try {
+    // Check if the session token exists
+    if (!admin.hasOwnProperty("STOKEN")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken missing. Please provide the Login sessiontoken",
+        "FETCH COMPANY LIST",
+        ""
+      );
+    }
+    var secret = admin.STOKEN.substring(0, 16);
+    var querydata;
+
+    // Validate session token length
+    if (admin.STOKEN.length > 50 || admin.STOKEN.length < 30) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login session token size invalid. Please provide the valid Session token",
+        "FETCH COMPANY LIST",
+        secret
+      );
+    }
+
+    // Validate session token
+    const [result] = await db.spcall(
+      "CALL SP_STOKEN_CHECK(?,@result); SELECT @result;",
+      [admin.STOKEN]
+    );
+    const objectvalue = result[1][0];
+    const userid = objectvalue["@result"];
+
+    if (userid == null) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken.",
+        "FETCH COMPANY LIST",
+        secret
+      );
+    }
+    const sql = await db.query1(
+      `select customer_id companyid,customer_name companyname,Email_id emailid,customer_name client_addressname,address client_address,customer_name billing_addressname,billing_address billing_addressname, contact_no contactnumber,gst_number from customermaster where status =1 and deleted_flag =0`
+    );
+    if (sql[0]) {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Customer Fetched Successfully",
+        sql,
+        secret
+      );
+    } else {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Customer Fetched Successfully",
+        { Live: sql, Demo: sql1 },
+        secret
+      );
+    }
+  } catch (er) {
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal error. Please contact Administration",
+      er.message,
+      secret
+    );
+  }
+}
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
 //##############################################################################################################################################################################################
 //###############################################################################################################################################################################################
 
@@ -2053,6 +2131,120 @@ async function BranchList(admin) {
 //###############################################################################################################################################################################################
 //###############################################################################################################################################################################################
 //###############################################################################################################################################################################################
+async function GetBranchList(admin) {
+  try {
+    // Check if the session token exists
+    if (!admin.hasOwnProperty("STOKEN")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken missing. Please provide the Login sessiontoken",
+        "FETCH BRANCH LIST",
+        ""
+      );
+    }
+    var secret = admin.STOKEN.substring(0, 16);
+    var querydata;
+
+    // Validate session token length
+    if (admin.STOKEN.length > 50 || admin.STOKEN.length < 30) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login session token size invalid. Please provide the valid Session token",
+        "FETCH BRANCH LIST",
+        secret
+      );
+    }
+    // Validate session token
+    const [result] = await db.spcall(
+      "CALL SP_STOKEN_CHECK(?,@result); SELECT @result;",
+      [admin.STOKEN]
+    );
+    const objectvalue = result[1][0];
+    const userid = objectvalue["@result"];
+
+    if (userid == null) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+        "FETCH BRANCH LIST",
+        secret
+      );
+    }
+    var sql = [],
+      sql1 = [];
+    if (admin.hasOwnProperty("querystring")) {
+      try {
+        querydata = await helper.decrypt(admin.querystring, secret);
+      } catch (ex) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Querystring Invalid error. Please provide the valid querystring.",
+          "FETCH BRANCH LIST",
+          secret
+        );
+      }
+
+      // Parse the decrypted querystring
+      try {
+        querydata = JSON.parse(querydata);
+      } catch (ex) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Querystring JSON error. Please provide valid JSON",
+          "FETCH BRANCH LIST",
+          secret
+        );
+      }
+      if (querydata.hasOwnProperty("companyid") && querydata.companyid != 0) {
+        sql = await db.query1(
+          `SELECT bm.Branch_id, bm.Branch_name, bm.Branch_code, bm.branch_name AS clientaddress_name, bm.address AS clientaddress, 
+                bm.gstno AS gst_number,bm.contact_person, bm.Email_id AS emailid, bm.Contact_no AS contact_number, bm.billing_address, 
+                bm.Billingaddress_name AS billing_addressname FROM branchmaster bm 
+                WHERE bm.site_type = 0 AND bm.status = 1 AND bm.deleted_flag = 0 AND bm.Customer_id = ?`,
+          [querydata.companyid]
+        );
+      }
+    } else {
+      sql = await db.query1(
+        `SELECT bm.Branch_id, bm.Branch_name, bm.Branch_code, bm.branch_name AS clientaddress_name, bm.address AS clientaddress, 
+        bm.gstno AS gst_number,bm.contact_person, bm.Email_id AS emailid, bm.Contact_no AS contact_number, bm.billing_address, 
+        bm.Billingaddress_name AS billing_addressname FROM branchmaster bm 
+        WHERE bm.site_type = 0 AND bm.status = 1 AND bm.deleted_flag = 0`
+      );
+    }
+
+    if (sql[0]) {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Branch list Fetched Successfully",
+        sql,
+        secret
+      );
+    } else {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Branch list Fetched Successfully",
+        sql,
+        secret
+      );
+    }
+  } catch (er) {
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal error. Please contact Administration",
+      er.message,
+      secret
+    );
+  }
+}
 
 // async function UploadLogo(admin) {
 //   try {
@@ -2493,8 +2685,8 @@ async function CreateSubscription(admin) {
         secret
       );
     } else {
-      return helper.getSuccessResponse(
-        true,
+      return helper.getErrorResponse(
+        false,
         "error",
         "Error in creating subscription",
         sql,
@@ -2502,6 +2694,15 @@ async function CreateSubscription(admin) {
       );
     }
   } catch (er) {
+    if (er.code == "ER_DUP_ENTRY") {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Subscription name already exists",
+        sql,
+        secret
+      );
+    }
     console.log(JSON.stringify(er));
     return helper.getErrorResponse(
       false,
@@ -2565,7 +2766,7 @@ async function GetSubscription(admin) {
     if (!admin.hasOwnProperty("querystring") && admin.querystring == "") {
       sql = await db.query(
         `SELECT DISTINCT Subscription_ID,Subscription_Name,No_of_Devices, No_of_Cameras, Addl_cameras, Addl_patrol, 
-         Patrol_hours, Valid_Months, Valid_Years, Valid_Days, No_of_Analytics,Cloud_Storage, Amount, product_desc FROM subscriptionmaster WHERE Subscription_type = 1`
+         Patrol_hours, Valid_Months, Valid_Years, Valid_Days, No_of_Analytics,Cloud_Storage, Amount, product_desc FROM subscriptionmaster WHERE Subscription_type = 1 and status =1 and deleted_flag = 0`
       );
     } else {
       try {
@@ -2622,13 +2823,13 @@ async function GetSubscription(admin) {
       if (querydata.siteid != 0) {
         sql = await db.query(
           `SELECT DISTINCT Subscription_ID,Subscription_Name, No_of_Devices, No_of_Cameras, Addl_cameras, Addl_patrol, 
-         Patrol_hours, Valid_Months, Valid_Years, Valid_Days, No_of_Analytics,Cloud_Storage, Amount, product_desc FROM subscriptionmaster WHERE Subscription_type = 1 OR (organization_id = ? AND organization_id != 0) OR (site_id = ? AND site_id != 0);`,
+         Patrol_hours, Valid_Months, Valid_Years, Valid_Days, No_of_Analytics,Cloud_Storage, Amount, product_desc FROM subscriptionmaster WHERE Subscription_type = 1 OR (organization_id = ? AND organization_id != 0) OR (site_id = ? AND site_id != 0) and status =1 and deleted_flag = 0;`,
           [querydata.siteid]
         );
       } else {
         sql = await db.query(
           `SELECT DISTINCT Subscription_ID,Subscription_Name,No_of_Devices, No_of_Cameras, Addl_cameras, Addl_patrol, 
-         Patrol_hours, Valid_Months, Valid_Years, Valid_Days, No_of_Analytics,Cloud_Storage, Amount, product_desc FROM subscriptionmaster WHERE Subscription_type = 1`
+         Patrol_hours, Valid_Months, Valid_Years, Valid_Days, No_of_Analytics,Cloud_Storage, Amount, product_desc FROM subscriptionmaster WHERE Subscription_type = 1 and status =1 and deleted_flag = 0`
         );
       }
     }
@@ -3439,6 +3640,310 @@ async function SendPdf(admin) {
   }
 }
 
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+
+async function UpdateSubscription(admin) {
+  try {
+    // Check if the session token exists
+    if (!admin.hasOwnProperty("STOKEN")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken missing. Please provide the Login sessiontoken",
+        "UPDATE SUBSCRIPTION",
+        ""
+      );
+    }
+    var secret = admin.STOKEN.substring(0, 16);
+    var querydata;
+
+    // Validate session token length
+    if (admin.STOKEN.length > 50 || admin.STOKEN.length < 30) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login session token size invalid. Please provide the valid Session token",
+        "UPDATE SUBSCRIPTION",
+        secret
+      );
+    }
+
+    // Validate session token
+    const [result] = await db.spcall(
+      "CALL SP_STOKEN_CHECK(?,@result); SELECT @result;",
+      [admin.STOKEN]
+    );
+    const objectvalue = result[1][0];
+    const userid = objectvalue["@result"];
+
+    if (userid == null) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+        "UPDATE SUBSCRIPTION",
+        secret
+      );
+    }
+    var sql;
+    if (!admin.hasOwnProperty("querystring") && admin.querystring == "") {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring missing. Please provide the querystring",
+        "UPDATE SUBSCRIPTION",
+        admin.Secret
+      );
+    }
+    try {
+      querydata = await helper.decrypt(admin.querystring, secret);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring Invalid error. Please provide the valid querystring.",
+        "UPDATE SUBSCRIPTION",
+        secret
+      );
+    }
+
+    // Parse the decrypted querystring
+    try {
+      querydata = JSON.parse(querydata);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring JSON error. Please provide valid JSON",
+        "UPDATE SUBSCRIPTION",
+        secret
+      );
+    }
+    const requiredFields = [
+      { field: "subscriptionName", message: "Subscription name missing." },
+      { field: "noOfDevice", message: " Number of devices missing." },
+      { field: "noOfCameras", message: "Number of Cameras missing." },
+      {
+        field: "AdditionalCameraCharges",
+        message: "Additional Camera charges missing.",
+      },
+      { field: "amount", message: "Subscription amount missing." },
+      {
+        field: "productDescription",
+        message: "Product description missing.",
+      },
+      { field: "subId", message: "Subscription ID missing." },
+    ];
+
+    for (const { field, message } of requiredFields) {
+      if (!querydata.hasOwnProperty(field)) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          message,
+          "UPDATE SUBSCRIPTION",
+          secret
+        );
+      }
+    }
+    sql = await db.query1(
+      `UPDATE subscriptionmaster
+         SET
+           Subscription_Name = ?,
+           No_of_Devices = ?,
+           No_of_Cameras = ?,
+           Addl_cameras = ?,
+           Amount = ?,
+           product_desc = ?,
+           Created_by = ?
+         WHERE Subscription_ID = ?`,
+      [
+        querydata.subscriptionName,
+        querydata.noOfDevice,
+        querydata.noOfCameras,
+        querydata.AdditionalCameraCharges,
+        querydata.amount,
+        querydata.productDescription,
+        userid,
+        querydata.subId,
+      ]
+    );
+
+    if (sql.affectedRows > 0) {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Subscription updated Successfully",
+        sql,
+        secret
+      );
+    } else {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Error in updating subscription",
+        sql,
+        secret
+      );
+    }
+  } catch (er) {
+    console.log(JSON.stringify(er));
+    if (er.code == "ER_DUP_ENTRY") {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Package name already exists",
+        sql,
+        secret
+      );
+    }
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal error. Please contact Administration",
+      er.message,
+      secret
+    );
+  }
+}
+
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+async function DeleteSubscription(admin) {
+  try {
+    // Check if the session token exists
+    if (!admin.hasOwnProperty("STOKEN")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken missing. Please provide the Login sessiontoken",
+        "DELETE SUBSCRIPTION",
+        ""
+      );
+    }
+    var secret = admin.STOKEN.substring(0, 16);
+    var querydata;
+
+    // Validate session token length
+    if (admin.STOKEN.length > 50 || admin.STOKEN.length < 30) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login session token size invalid. Please provide the valid Session token",
+        "DELETE SUBSCRIPTION",
+        secret
+      );
+    }
+
+    // Validate session token
+    const [result] = await db.spcall(
+      "CALL SP_STOKEN_CHECK(?,@result); SELECT @result;",
+      [admin.STOKEN]
+    );
+    const objectvalue = result[1][0];
+    const userid = objectvalue["@result"];
+
+    if (userid == null) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+        "DELETE SUBSCRIPTION",
+        secret
+      );
+    }
+
+    if (!admin.hasOwnProperty("querystring") && admin.querystring == "") {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring missing. Please provide the querystring",
+        "DELETE SUBSCRIPTION",
+        admin.Secret
+      );
+    }
+    try {
+      querydata = await helper.decrypt(admin.querystring, secret);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring Invalid error. Please provide the valid querystring.",
+        "DELETE SUBSCRIPTION",
+        secret
+      );
+    }
+
+    // Parse the decrypted querystring
+    try {
+      querydata = JSON.parse(querydata);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring JSON error. Please provide valid JSON",
+        "DELETE SUBSCRIPTION",
+        secret
+      );
+    }
+
+    // Validate required fields
+    if (!querydata.hasOwnProperty("subId") || !querydata.subId) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Subscription ID(s) missing. Please provide a valid ID or array of IDs.",
+        "DELETE SUBSCRIPTIONS",
+        secret
+      );
+    }
+
+    // Ensure subId is always an array, even if a single ID is provided
+    const subIdArray = Array.isArray(querydata.subId)
+      ? querydata.subId
+      : [querydata.subId];
+
+    // Format list of IDs for SQL query
+    const subIdList = subIdArray.map((id) => `'${id}'`).join(",");
+
+    const sql = await db.query1(
+      `DELETE FROM subscriptionmaster WHERE Subscription_ID IN (${subIdList})`
+    );
+
+    if (sql.affectedRows > 0) {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Subscription deleted Successfully",
+        sql,
+        secret
+      );
+    } else {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Invalid subscription ID",
+        sql,
+        secret
+      );
+    }
+  } catch (er) {
+    console.log(JSON.stringify(er));
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal error. Please contact Administration",
+      er.message,
+      secret
+    );
+  }
+}
+
 module.exports = {
   GetCustomerDetails,
   Login,
@@ -3450,7 +3955,9 @@ module.exports = {
   OrganizationList,
   OrgList,
   CompanyList,
+  GetCompany,
   BranchList,
+  GetBranchList,
   UploadLogo,
   CreateSubscription,
   GetSubscription,
@@ -3458,4 +3965,6 @@ module.exports = {
   UpdateOrganization,
   UpdateBranch,
   SendPdf,
+  UpdateSubscription,
+  DeleteSubscription,
 };

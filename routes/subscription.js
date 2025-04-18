@@ -161,6 +161,15 @@ router.post("/getcustompdf", async function (req, res, next) {
   }
 });
 
+router.post("/getpdfdata", async function (req, res, next) {
+  try {
+    res.json(await subscription.GetPDFData(req.body));
+  } catch (er) {
+    console.log(`Error while fetching the custom pdf : ${er}`);
+    next(er);
+  }
+});
+
 router.post("/getsubscripioncustomer", async function (req, res, next) {
   try {
     res.json(await subscription.getSubscriptionCustomer(req.body));

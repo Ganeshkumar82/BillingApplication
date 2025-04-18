@@ -296,6 +296,15 @@ router.post("/getbinaryfile", async function (req, res, next) {
   }
 });
 
+router.post("/getcustombinaryfile", async function (req, res, next) {
+  try {
+    res.json(await sales.getCustomBinaryfile(req.body));
+  } catch (er) {
+    console.log(`Error while getting the binary file : ${er}`);
+    next(er);
+  }
+});
+
 router.post("/deleteprocess", async function (req, res, next) {
   try {
     res.json(await sales.DeleteProcess(req.body));

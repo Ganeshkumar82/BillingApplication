@@ -3363,21 +3363,21 @@ async function GetCustomPDF(subscription) {
     );
     var data;
     if (sql.length >= 0) {
-      for (let i = 0; i < sql.length; i++) {
-        // Ensure file exists
-        if (!fs.existsSync(sql[i].pdf_data)) {
-          return helper.getErrorResponse(
-            false,
-            "error",
-            "File does not exist",
-            "GET BINARY DATA FOR PDF",
-            secret
-          );
-        }
-        // for (let i = 0; i < sql.length; i++) {
-        binarydata = await helper.convertFileToBinary(sql[i].pdf_data);
-        sql[i].pdf_data = binarydata;
-      }
+      // for (let i = 0; i < sql.length; i++) {
+      //   // Ensure file exists
+      //   if (!fs.existsSync(sql[i].pdf_data)) {
+      //     return helper.getErrorResponse(
+      //       false,
+      //       "error",
+      //       "File does not exist",
+      //       "GET BINARY DATA FOR PDF",
+      //       secret
+      //     );
+      //   }
+      //   // for (let i = 0; i < sql.length; i++) {
+      //   binarydata = await helper.convertFileToBinary(sql[i].pdf_data);
+      //   sql[i].pdf_data = binarydata;
+      // }
 
       return helper.getSuccessResponse(
         true,
@@ -3406,6 +3406,147 @@ async function GetCustomPDF(subscription) {
   }
 }
 
+//#########################################################################################################################################################################################
+//############################################################################################################################################################################################
+//#############################################################################################################################################################################################
+//############################################################################################################################################################################################
+
+async function GetPDFData(subscription) {
+  try {
+    // Check if the session token exists
+    if (!subscription.hasOwnProperty("STOKEN")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken missing. Please provide the Login sessiontoken",
+        "GET BINARY DATA FOR PDF",
+        ""
+      );
+    }
+    var secret = subscription.STOKEN.substring(0, 16);
+    var querydata;
+    // Validate session token length
+    if (subscription.STOKEN.length > 50 || subscription.STOKEN.length < 30) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
+        "GET BINARY DATA FOR PDF",
+        secret
+      );
+    }
+
+    // Validate session token
+    const [result] = await db.spcall(
+      `CALL SP_STOKEN_CHECK(?,@result); SELECT @result;`,
+      [subscription.STOKEN]
+    );
+    const objectvalue = result[1][0];
+    const userid = objectvalue["@result"];
+
+    if (userid == null) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+        "GET BINARY DATA FOR PDF",
+        secret
+      );
+    }
+
+    // Check if querystring is provided
+    if (!subscription.hasOwnProperty("querystring")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring missing. Please provide the querystring",
+        "GET BINARY DATA FOR PDF",
+        secret
+      );
+    }
+
+    // Decrypt querystring
+    try {
+      querydata = await helper.decrypt(subscription.querystring, secret);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring Invalid error. Please provide the valid querystring.",
+        "GET BINARY DATA FOR PDF",
+        secret
+      );
+    }
+
+    // Parse the decrypted querystring
+    try {
+      querydata = JSON.parse(querydata);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring JSON error. Please provide valid JSON",
+        "GET BINARY DATA FOR PDF",
+        secret
+      );
+    }
+
+    // Validate required fields
+    if (
+      !querydata.hasOwnProperty("custombillid") ||
+      querydata.custombillid == ""
+    ) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Customer bill id missing. Please provide the custom bill id",
+        "GET BINARY DATA FOR PDF",
+        secret
+      );
+    }
+    const sql = await db.query(
+      `select pdf_path from customsubscriptionbillgenerated where subscription_generatedid = ?`,
+      [querydata.eventid]
+    );
+    var data;
+    if (sql[0]) {
+      // Ensure file exists
+      if (!fs.existsSync(sql[0].pdf_path)) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "File does not exist",
+          "GET BINARY DATA FOR PDF",
+          secret
+        );
+      }
+      binarydata = await helper.convertFileToBinary(sql[0].pdf_path);
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "File Binary Fetched Successfully",
+        binarydata,
+        secret
+      );
+    } else {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "File Binary Fetched Successfully",
+        sql,
+        secret
+      );
+    }
+  } catch (er) {
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal Error. Please contact Administration",
+      er.message,
+      secret
+    );
+  }
+}
 //###############################################################################################################################################################################################
 //###############################################################################################################################################################################################
 //###############################################################################################################################################################################################
@@ -3742,15 +3883,15 @@ async function getGlobalSubscription(subscription) {
       sm.Addl_cameras, 
       sm.Amount, 
       sm.product_desc, 
-      COALESCE(
-          JSON_ARRAYAGG(
-              JSON_OBJECT(
-                  'siteid', bm.branch_id,
-                  'sitename', bm.Branch_name
-              )
-          ), 
-          '[]'
-      ) AS sitedetails
+      CASE
+        WHEN COUNT(bm.branch_id) = 0 THEN '[]'
+        ELSE JSON_ARRAYAGG(
+            JSON_OBJECT(
+                'siteid', bm.branch_id,
+                'sitename', bm.Branch_name
+            )
+        )
+      END AS sitedetails
   FROM 
       subscriptionmaster sm
   LEFT JOIN 
@@ -3758,7 +3899,7 @@ async function getGlobalSubscription(subscription) {
   LEFT JOIN 
       branchmaster bm ON bm.branch_id = sct.branch_id
   WHERE 
-      sm.subscription_type = 1
+      sm.subscription_type = 1 and sm.status =1 and sm.deleted_flag = 0
   GROUP BY 
       sm.Subscription_id;
   `
@@ -3875,26 +4016,26 @@ async function getClientDetails(subscription) {
     }
 
     // Validate required fields
-    if (!querydata.hasOwnProperty("siteids")) {
+    if (!querydata.hasOwnProperty("processid")) {
       return helper.getErrorResponse(
         false,
         "error",
-        "Site id missing. Please provide the Site id.",
+        "Process id missing. Please provide the process id.",
         "GET THE CLIENT DETAILS FROM THE CUSTOMER",
         secret
       );
     }
-    if (!querydata.hasOwnProperty("subscriptionbillid")) {
+    if (!querydata.hasOwnProperty("clientname")) {
       return helper.getErrorResponse(
         false,
         "error",
-        "Subscription bill id missing. Please provide the Subscription bill id",
+        "Client name missing. Please provide the Client name.",
         "GET THE CLIENT DETAILS FROM THE CUSTOMER",
         secret
       );
     }
     if (
-      !querydata.hasOwnProperty("clientaddressname") ||
+      !querydata.hasOwnProperty("clientaddress_name") ||
       querydata.clientaddressname == ""
     ) {
       return helper.getErrorResponse(
@@ -3919,7 +4060,7 @@ async function getClientDetails(subscription) {
     }
 
     if (
-      !querydata.hasOwnProperty("billingaddressname") ||
+      !querydata.hasOwnProperty("billingaddress_name") ||
       querydata.billingaddressname == ""
     ) {
       return helper.getErrorResponse(
@@ -3943,11 +4084,11 @@ async function getClientDetails(subscription) {
       );
     }
 
-    if (!querydata.hasOwnProperty("planname") || querydata.product == "") {
+    if (!querydata.hasOwnProperty("gst_number") || querydata.gst_number == "") {
       return helper.getErrorResponse(
         false,
         "error",
-        "Product Details missing. Please provide the Product Details.",
+        "Gst number missing. Please provide the Gst number.",
         "GET THE CLIENT DETAILS FROM THE CUSTOMER",
         secret
       );
@@ -3961,33 +4102,33 @@ async function getClientDetails(subscription) {
         secret
       );
     }
-    if (!querydata.hasOwnProperty("ccemail")) {
+    if (!querydata.hasOwnProperty("cin_number")) {
       return helper.getErrorResponse(
         false,
         "error",
-        "CC Email id missing. Please provide the CC Email id",
+        "Cin number missing. Please provide the cin number",
         "GET THE CLIENT DETAILS FROM THE CUSTOMER",
         secret
       );
     }
 
-    if (!querydata.hasOwnProperty("phoneno") || querydata.phoneno == "") {
+    if (!querydata.hasOwnProperty("pan_number") || querydata.pan_number == "") {
       return helper.getErrorResponse(
         false,
         "error",
-        "Contact number missing. Please provide the contact number.",
+        "Pan number missing. Please provide the pan number.",
         "GET THE CLIENT DETAILS FROM THE CUSTOMER",
         secret
       );
     }
     if (
-      !querydata.hasOwnProperty("totalamount") ||
-      querydata.totalamount == ""
+      !querydata.hasOwnProperty("contactpersonname") ||
+      querydata.contactpersonname == ""
     ) {
       return helper.getErrorResponse(
         false,
         "error",
-        "Total amount missing. Please provide the total amount.",
+        "Contact person name missing. Please provide the contact person name.",
         "GET THE CLIENT DETAILS FROM THE CUSTOMER",
         secret
       );
@@ -4475,11 +4616,11 @@ async function UploadSubscription(subscription) {
     if (!Array.isArray(querydata)) querydata = [querydata];
 
     const requiredFields = [
-      { field: "organizationname", message: "Organization missing." },
-      { field: "companyname", message: "Company name missing." },
+      { field: "organizationid", message: "Organization id missing." },
+      { field: "companyid", message: "Company id missing." },
       { field: "billtype", message: "Bill Type missing." },
-      { field: "sitename", message: "Site name missing." },
-      { field: "subscriptionplan", message: "Subscription plan missing" },
+      { field: "siteid", message: "Site id missing." },
+      { field: "subscriptionid", message: "Subscription id missing" },
       { field: "subscriptionamount", message: "Subscription amount missing." },
       { field: "billmode", message: "Billing mode missing" },
       { field: "contactpersonname", message: "Contact person name missing" },
@@ -4510,6 +4651,10 @@ async function UploadSubscription(subscription) {
         field: "emergencycontactnumber2",
         message: "Emergency contact number two missing.",
       },
+      {
+        field: "consolidate_email",
+        message: "Consolidate email missing.",
+      },
     ];
 
     const results = [];
@@ -4518,15 +4663,12 @@ async function UploadSubscription(subscription) {
       let hasError = false;
       for (const { field, message } of requiredFields) {
         if (!item.hasOwnProperty(field) || item[field] === "") {
-          results.push(
-            await helper.getErrorResponse(
-              false,
-              "error",
-              message,
-              "UPLOAD THE SUBSCRIPTION DETAILS",
-              secret
-            )
-          );
+          results.push({
+            code: false,
+            status: "error",
+            message: message,
+            error: "UPLOAD THE SUBSCRIPTION DETAILS",
+          });
           hasError = true;
           break;
         }
@@ -4535,39 +4677,13 @@ async function UploadSubscription(subscription) {
       if (hasError) continue;
 
       try {
-        const siteData = await db.query1(
-          `SELECT customer_id, branch_id FROM branchmaster WHERE branch_name = ?`,
-          [item.sitename]
-        );
-        const subscriptionData = await db.query1(
-          `SELECT subscription_id FROM subscriptionmaster WHERE Subscription_name = ?`,
-          [item.subscriptionplan]
-        );
-
-        if (siteData.length === 0 || subscriptionData.length === 0) {
-          results.push(
-            await helper.getErrorResponse(
-              false,
-              "error",
-              `Site or Subscription not found for ${item.sitename}`,
-              "UPLOAD THE SUBSCRIPTION DETAILS",
-              secret
-            )
-          );
-          continue;
-        }
-
-        const branchid = siteData[0].branch_id;
-        const customerid = siteData[0].customer_id;
-        const subscriptionid = subscriptionData[0].subscription_id;
-
         const [result] = await db.spcall1(
-          `CALL SP_SUBSCRIPTION_UPSERT(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@subscription_trans_id); SELECT @subscription_trans_id`,
+          `CALL SP_SUBSCRIPTION_UPSERT(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@subscription_trans_id); SELECT @subscription_trans_id`,
           [
-            subscriptionid,
-            customerid,
+            item.subscriptionid,
+            item.companyid,
             item.relationshipid,
-            branchid,
+            item.siteid,
             item.cameraquantity,
             1,
             1,
@@ -4584,83 +4700,52 @@ async function UploadSubscription(subscription) {
             item.emailid,
             item.phoneno,
             item.contactpersonname,
+            item.consolidate_email,
           ]
         );
 
         const objectvalue = result[1][0];
         const usubscriptionid = objectvalue["@subscription_trans_id"];
-        // const insert = await db.query1(
-        //   `INSERT INTO subscriptioncustomertrans (Subscription_ID, Customer_ID, Relationship_id, branch_id, No_of_Analytics,No_of_devices ,billingperiod, billing_plan, Bill_mode, bill_type, Amount, hsncode, customer_address, billing_address, billing_gst, branchcode, customer_type, emailid, Phoneno, Contactperson_name)
-        //    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?, ?, ?)`,
-        //   [
-        //     subscriptionid,
-        //     customerid,
-        //     item.relationshipid,
-        //     branchid,
-        //     item.cameraquantity,
-        //     1,
-        //     1,
-        //     item.billtype,
-        //     item.billmode,
-        //     item.plantype,
-        //     item.subscriptionamount,
-        //     item.hsncode,
-        //     item.clientaddress,
-        //     item.billingaddress,
-        //     item.billinggst,
-        //     item.branchcode,
-        //     item.customertype,
-        //     item.emailid,
-        //     item.phoneno,
-        //     item.contactpersonname,
-        //   ]
-        // );
-
         if (usubscriptionid != 0) {
-          results.push(
-            await helper.getSuccessResponse(
-              true,
-              "success",
-              `Subscription uploaded successfully for ${item.sitename}`,
-              usubscriptionid,
-              secret
-            )
-          );
+          results.push({
+            code: true,
+            status: "success",
+            message: `Subscription uploaded successfully for ${item.siteid}`,
+            subscriptionid: usubscriptionid,
+          });
         } else {
-          results.push(
-            await helper.getErrorResponse(
-              false,
-              "error",
-              `Insert failed for ${item.sitename}`,
-              "UPLOAD THE SUBSCRIPTION DETAILS",
-              secret
-            )
-          );
+          results.push({
+            code: false,
+            status: "error",
+            message: `Insert failed for ${item.siteid}`,
+            error: "UPLOAD THE SUBSCRIPTION DETAILS",
+          });
         }
       } catch (e) {
-        results.push(
-          await helper.getErrorResponse(
-            false,
-            "error",
-            `DB error for ${item.sitename}`,
-            e.message,
-            secret
-          )
-        );
+        results.push({
+          code: false,
+          status: "error",
+          message: `DB error for ${item.siteid}`,
+          error: e.message,
+        });
       }
     }
 
-    return results;
+    return await helper.getSuccessResponse(
+      true,
+      "success",
+      "Uploaded Successfully",
+      results,
+      secret
+    );
   } catch (er) {
-    return [
-      helper.getErrorResponse(
-        false,
-        "error",
-        "Internal error. Please contact Administration",
-        er.message,
-        secret
-      ),
-    ];
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal error. Please contact Administration",
+      er.message,
+      secret
+    );
   }
 }
 
@@ -4687,4 +4772,5 @@ module.exports = {
   getGlobalSubscription,
   getClientDetails,
   UploadSubscription,
+  GetPDFData,
 };

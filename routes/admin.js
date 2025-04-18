@@ -99,9 +99,27 @@ router.post("/companylist", async function (req, res, next) {
   }
 });
 
+router.post("/company", async function (req, res, next) {
+  try {
+    res.json(await admin.GetCompany(req.body));
+  } catch (er) {
+    console.error(`Error while Getting the Company list -> ${er.message}`);
+    next(er);
+  }
+});
+
 router.post("/sitelist", async function (req, res, next) {
   try {
     res.json(await admin.BranchList(req.body));
+  } catch (er) {
+    console.error(`Error while Getting the Branch list -> ${er.message}`);
+    next(er);
+  }
+});
+
+router.post("/branchlist", async function (req, res, next) {
+  try {
+    res.json(await admin.GetBranchList(req.body));
   } catch (er) {
     console.error(`Error while Getting the Branch list -> ${er.message}`);
     next(er);
@@ -134,6 +152,28 @@ router.post("/createsubscription", async function (req, res, next) {
   } catch (er) {
     console.error(
       `Error while Creating the Subscription Package -> ${er.message}`
+    );
+    next(er);
+  }
+});
+
+router.post("/updatesubscription", async function (req, res, next) {
+  try {
+    res.json(await admin.UpdateSubscription(req.body));
+  } catch (er) {
+    console.error(
+      `Error while Updating the Subscription Package -> ${er.message}`
+    );
+    next(er);
+  }
+});
+
+router.post("/deletesubscription", async function (req, res, next) {
+  try {
+    res.json(await admin.DeleteSubscription(req.body));
+  } catch (er) {
+    console.error(
+      `Error while Deleting the Subscription Package -> ${er.message}`
     );
     next(er);
   }
