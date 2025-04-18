@@ -444,7 +444,7 @@ const maxSize9 = 2 * 1024 * 1024;
 let uploadFile9 = multer({
   storage: storage9,
   limits: { fileSize: maxSize9 },
-}).array("file", 10);
+}).single("file", 10);
 
 let uploadrecurringinvoicepdf = util.promisify(uploadFile9);
 

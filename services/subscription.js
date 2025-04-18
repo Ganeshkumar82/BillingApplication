@@ -2886,15 +2886,57 @@ async function AddQuotation(req, res) {
 
 async function addCustomInvoice(req, res) {
   try {
-    var secret;
+    var secret, subscription, querydata, userid;
     try {
       await uploadFile.uploadrecurringinvoicepdf(req, res);
+      subscription = req.body;
+      // Check if the session token exists
+      if (!subscription.STOKEN) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Login session token missing. Please provide the Login session token",
+          "ADD RECURRING INVOICE",
+          ""
+        );
+      }
+      secret = subscription.STOKEN.substring(0, 16);
+
+      // Validate session token length
+      if (subscription.STOKEN.length > 50 || subscription.STOKEN.length < 30) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Login session token size invalid. Please provide the valid Session token",
+          "ADD RECURRING INVOICE",
+          secret
+        );
+      }
+
+      // Validate session token
+      const [result] = await db.spcall(
+        "CALL SP_STOKEN_CHECK(?,@result); SELECT @result;",
+        [subscription.STOKEN]
+      );
+      const objectvalue = result[1][0];
+      userid = objectvalue["@result"];
+
+      if (userid == null) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+          "ADD RECURRING INVOICE",
+          secret
+        );
+      }
       if (!req.file) {
         return helper.getErrorResponse(
           false,
           "error",
           "Please upload a file!",
-          "ADD RECURRING INVOICE"
+          "ADD RECURRING INVOICE",
+          secret
         );
       }
     } catch (er) {
@@ -2903,48 +2945,6 @@ async function addCustomInvoice(req, res) {
         "error",
         `Could not upload the file. ${er.message}`,
         er.message,
-        ""
-      );
-    }
-    const subscription = req.body;
-    // Check if the session token exists
-    if (!subscription.STOKEN) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login session token missing. Please provide the Login session token",
-        "ADD RECURRING INVOICE",
-        ""
-      );
-    }
-    secret = subscription.STOKEN.substring(0, 16);
-    var querydata;
-
-    // Validate session token length
-    if (subscription.STOKEN.length > 50 || subscription.STOKEN.length < 30) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login session token size invalid. Please provide the valid Session token",
-        "ADD RECURRING INVOICE",
-        secret
-      );
-    }
-
-    // Validate session token
-    const [result] = await db.spcall(
-      "CALL SP_STOKEN_CHECK(?,@result); SELECT @result;",
-      [subscription.STOKEN]
-    );
-    const objectvalue = result[1][0];
-    const userid = objectvalue["@result"];
-
-    if (userid == null) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
-        "ADD RECURRING INVOICE",
         secret
       );
     }
@@ -3064,7 +3064,7 @@ async function addCustomInvoice(req, res) {
         secret
       );
     }
-    if (!querydata.hasOwnProperty("emailid") || querydata.emailid == "") {
+    if (!querydata.hasOwnProperty("emailid")) {
       return helper.getErrorResponse(
         false,
         "error",
@@ -3083,7 +3083,7 @@ async function addCustomInvoice(req, res) {
       );
     }
 
-    if (!querydata.hasOwnProperty("phoneno") || querydata.phoneno == "") {
+    if (!querydata.hasOwnProperty("phoneno")) {
       return helper.getErrorResponse(
         false,
         "error",
@@ -3180,33 +3180,33 @@ async function addCustomInvoice(req, res) {
     const invoiceid = objectvalue2["@sprocessid"];
     var Quoteid;
 
-    if (querydata.messagetype == 1 || querydata.messagetype == 3) {
-      EmailSent = await mailer.sendInvoice(
-        querydata.clientaddressname,
-        querydata.emailid,
-        "Your invoice from Sporada Secure India Private Limited",
-        "invoicepdf.html",
-        ``,
-        "INVOICE_PDF_SEND",
-        req.file.path,
-        querydata.invoicegenid,
-        querydata.date,
-        querydata.totalamount,
-        querydata.ccemail,
-        querydata.feedback
-      );
-    } else if (querydata.messagetype == 2 || querydata.messagetype == 3) {
-      WhatsappSent = await axios.post(`${config.whatsappip}/billing/sendpdf`, {
-        phoneno: querydata.phoneno,
-        feedback: querydata.feedback,
-        pdfpath: req.file.path,
-      });
-      if (WhatsappSent.data.code == true) {
-        WhatsappSent = WhatsappSent.data.code;
-      } else {
-        WhatsappSent = WhatsappSent.data.code;
-      }
-    }
+    // if (querydata.messagetype == 1) {
+    //   EmailSent = await mailer.sendInvoice(
+    //     querydata.clientaddressname,
+    //     querydata.emailid,
+    //     "Your invoice from Sporada Secure India Private Limited",
+    //     "invoicepdf.html",
+    //     ``,
+    //     "INVOICE_PDF_SEND",
+    //     req.file.path,
+    //     querydata.invoicegenid,
+    //     querydata.date,
+    //     querydata.totalamount,
+    //     querydata.ccemail,
+    //     querydata.feedback
+    //   );
+    // } else if (querydata.messagetype == 2 ) {
+    //   WhatsappSent = await axios.post(`${config.whatsappip}/billing/sendpdf`, {
+    //     phoneno: querydata.phoneno,
+    //     feedback: querydata.feedback,
+    //     pdfpath: req.file.path,
+    //   });
+    //   if (WhatsappSent.data.code == true) {
+    //     WhatsappSent = WhatsappSent.data.code;
+    //   } else {
+    //     WhatsappSent = WhatsappSent.data.code;
+    //   }
+    // }
     const promises = [];
     const phoneNumbers = querydata.phoneno
       ? querydata.phoneno
@@ -3257,6 +3257,7 @@ async function addCustomInvoice(req, res) {
           querydata.clientaddressname,
           querydata.emailid,
           "Your invoice from Sporada Secure India Private Limited",
+
           "invoicepdf.html",
           ``,
           "INVOICE_PDF_SEND",
@@ -3292,15 +3293,14 @@ async function addCustomInvoice(req, res) {
 
       // Run both requests in parallel and wait for completion
       [EmailSent] = await Promise.all(promises);
-
-      return helper.getSuccessResponse(
-        true,
-        "success",
-        "Subscription Invoice added Successfully",
-        { EmailSent: EmailSent, WhatsappSent: WhatsappSent },
-        secret
-      );
     }
+    return helper.getSuccessResponse(
+      true,
+      "success",
+      "Subscription Invoice added Successfully",
+      { EmailSent: EmailSent, WhatsappSent: WhatsappSent },
+      secret
+    );
   } catch (er) {
     return helper.getErrorResponse(
       false,

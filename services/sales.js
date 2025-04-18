@@ -1377,33 +1377,33 @@ async function addInvoice(req, res) {
     );
 
     // Send Email or WhatsApp Message
-    if (querydata.messagetype == 1) {
-      EmailSent = await mailer.sendInvoice(
-        querydata.clientaddressname,
-        querydata.emailid,
-        "Your invoice from Sporada Secure India Private Limited",
-        "invoicepdf.html",
-        ``,
-        "INVOICE_PDF_SEND",
-        req.file.path,
-        querydata.invoicegenid,
-        querydata.date,
-        querydata.invoice_amount,
-        querydata.ccemail,
-        querydata.feedback
-      );
-    } else if (querydata.messagetype == 2) {
-      WhatsappSent = await axios.post(`${config.whatsappip}/billing/sendpdf`, {
-        phoneno: querydata.phoneno,
-        feedback: querydata.feedback,
-        pdfpath: req.file.path,
-      });
-      if (WhatsappSent.data.code == true) {
-        WhatsappSent = WhatsappSent.data.code;
-      } else {
-        WhatsappSent = WhatsappSent.data.code;
-      }
-    }
+    // if (querydata.messagetype == 1) {
+    //   EmailSent = await mailer.sendInvoice(
+    //     querydata.clientaddressname,
+    //     querydata.emailid,
+    //     "Your invoice from Sporada Secure India Private Limited",
+    //     "invoicepdf.html",
+    //     ``,
+    //     "INVOICE_PDF_SEND",
+    //     req.file.path,
+    //     querydata.invoicegenid,
+    //     querydata.date,
+    //     querydata.invoice_amount,
+    //     querydata.ccemail,
+    //     querydata.feedback
+    //   );
+    // } else if (querydata.messagetype == 2) {
+    //   WhatsappSent = await axios.post(`${config.whatsappip}/billing/sendpdf`, {
+    //     phoneno: querydata.phoneno,
+    //     feedback: querydata.feedback,
+    //     pdfpath: req.file.path,
+    //   });
+    //   if (WhatsappSent.data.code == true) {
+    //     WhatsappSent = WhatsappSent.data.code;
+    //   } else {
+    //     WhatsappSent = WhatsappSent.data.code;
+    //   }
+    // }
     const promises = [];
     const phoneNumbers = querydata.phoneno
       ? querydata.phoneno
@@ -1673,32 +1673,32 @@ async function addCustomInvoice(req, res) {
     let Quoteid;
 
     // Send Email or WhatsApp Message
-    if (querydata.messagetype == 1 || querydata.messagetype == 3) {
-      EmailSent = await mailer.sendInvoice(
-        querydata.clientaddressname,
-        querydata.emailid,
-        "Your invoice from Sporada Secure India Private Limited",
-        "invoicepdf.html",
-        ``,
-        "INVOICE_PDF_SEND",
-        req.file.path,
-        querydata.invoicegenid,
-        querydata.date,
-        querydata.invoice_amount,
-        querydata.ccemail
-      );
-    } else if (querydata.messagetype == 2 || querydata.messagetype == 3) {
-      WhatsappSent = await axios.post(`${config.whatsappip}/billing/sendpdf`, {
-        phoneno: querydata.phoneno,
-        feedback: `We hope you're doing well. Please find attached your invoice with Sporada Secure.`,
-        pdfpath: req.file.path,
-      });
-      if (WhatsappSent.data.code == true) {
-        WhatsappSent = WhatsappSent.data.code;
-      } else {
-        WhatsappSent = WhatsappSent.data.code;
-      }
-    }
+    // if (querydata.messagetype == 1 || querydata.messagetype == 3) {
+    //   EmailSent = await mailer.sendInvoice(
+    //     querydata.clientaddressname,
+    //     querydata.emailid,
+    //     "Your invoice from Sporada Secure India Private Limited",
+    //     "invoicepdf.html",
+    //     ``,
+    //     "INVOICE_PDF_SEND",
+    //     req.file.path,
+    //     querydata.invoicegenid,
+    //     querydata.date,
+    //     querydata.invoice_amount,
+    //     querydata.ccemail
+    //   );
+    // } else if (querydata.messagetype == 2 || querydata.messagetype == 3) {
+    //   WhatsappSent = await axios.post(`${config.whatsappip}/billing/sendpdf`, {
+    //     phoneno: querydata.phoneno,
+    //     feedback: `We hope you're doing well. Please find attached your invoice with Sporada Secure.`,
+    //     pdfpath: req.file.path,
+    //   });
+    //   if (WhatsappSent.data.code == true) {
+    //     WhatsappSent = WhatsappSent.data.code;
+    //   } else {
+    //     WhatsappSent = WhatsappSent.data.code;
+    //   }
+    // }
     const promises = [];
     const phoneNumbers = querydata.phoneno
       ? querydata.phoneno
@@ -5014,15 +5014,57 @@ async function addQuotation(req, res) {
 
 async function addCustomQuotation(req, res) {
   try {
-    var secret;
+    var secret, sales, querydata, userid;
     try {
       await uploadFile.uploadQuotationp(req, res);
+      sales = req.body;
+      // Check if the session token exists
+      if (!sales.STOKEN) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Login session token missing. Please provide the Login session token",
+          "ADD CUSTOM QUOTATION",
+          ""
+        );
+      }
+      secret = sales.STOKEN.substring(0, 16);
+
+      // Validate session token length
+      if (sales.STOKEN.length > 50 || sales.STOKEN.length < 30) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Login session token size invalid. Please provide the valid Session token",
+          "ADD CUSTOM QUOTATION",
+          secret
+        );
+      }
+
+      // Validate session token
+      const [result] = await db.spcall(
+        "CALL SP_STOKEN_CHECK(?,@result); SELECT @result;",
+        [sales.STOKEN]
+      );
+      const objectvalue = result[1][0];
+      userid = objectvalue["@result"];
+
+      if (userid == null) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+          "ADD CUSTOM QUOTATION",
+          secret
+        );
+      }
       if (!req.file) {
         return helper.getErrorResponse(
           false,
           "error",
           "Please upload a file!",
-          "ADD CUSTOM QUOTATION"
+          "ADD CUSTOM QUOTATION",
+          secret
         );
       }
     } catch (er) {
@@ -5031,49 +5073,6 @@ async function addCustomQuotation(req, res) {
         "error",
         `Could not upload the file. ${er.message}`,
         er.message,
-        ""
-      );
-    }
-
-    const sales = req.body;
-    // Check if the session token exists
-    if (!sales.STOKEN) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login session token missing. Please provide the Login session token",
-        "ADD CUSTOM QUOTATION",
-        ""
-      );
-    }
-    secret = sales.STOKEN.substring(0, 16);
-    var querydata;
-
-    // Validate session token length
-    if (sales.STOKEN.length > 50 || sales.STOKEN.length < 30) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login session token size invalid. Please provide the valid Session token",
-        "ADD CUSTOM QUOTATION",
-        secret
-      );
-    }
-
-    // Validate session token
-    const [result] = await db.spcall(
-      "CALL SP_STOKEN_CHECK(?,@result); SELECT @result;",
-      [sales.STOKEN]
-    );
-    const objectvalue = result[1][0];
-    const userid = objectvalue["@result"];
-
-    if (userid == null) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
-        "ADD CUSTOM QUOTATION",
         secret
       );
     }
