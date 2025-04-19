@@ -1177,17 +1177,39 @@ async function uploadMor(req, res) {
 //###############################################################################################################################################################################################
 
 async function addInvoice(req, res) {
-  let secret;
+  let secret, querydata, sales;
   try {
     // Upload File Handling
     try {
       await uploadFile.uploadFileInvoice(req, res);
+      sales = req.body;
+
+      // Validate STOKEN
+      if (!sales.STOKEN) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Login session token missing. Please provide the login session token.",
+          "Upload Invoice"
+        );
+      }
+      if (sales.STOKEN.length > 50 || sales.STOKEN.length < 30) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Login session token size invalid. Please provide a valid session token.",
+          "Upload Invoice"
+        );
+      }
+
+      secret = sales.STOKEN.substring(0, 16);
       if (!req.file) {
         return helper.getErrorResponse(
           false,
           "error",
           "Please upload a file!",
-          "ADD INVOICE"
+          "ADD INVOICE",
+          secret
         );
       }
     } catch (err) {
@@ -1195,31 +1217,10 @@ async function addInvoice(req, res) {
         false,
         "error",
         `Could not upload the file. ${err.message}`,
-        err.message
+        err.message,
+        secret
       );
     }
-
-    const sales = req.body;
-
-    // Validate STOKEN
-    if (!sales.STOKEN) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login session token missing. Please provide the login session token.",
-        "Upload Invoice"
-      );
-    }
-    if (sales.STOKEN.length > 50 || sales.STOKEN.length < 30) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login session token size invalid. Please provide a valid session token.",
-        "Upload Invoice"
-      );
-    }
-
-    secret = sales.STOKEN.substring(0, 16);
 
     // Validate session token
     const [result] = await db.spcall(
@@ -1496,7 +1497,14 @@ async function addInvoice(req, res) {
     //   `INSERT INTO morupload (MOR_path, Created_by, Email_sent) VALUES (?, ?, ?)`,
     //   [req.file.path, userid, WhatsappSent]
     // );
-
+    await mqttclient.publishMqttMessage(
+      "Notification",
+      "Invoice sent Successfully for " + querydata.clientaddressname
+    );
+    await mqttclient.publishMqttMessage(
+      "refresh",
+      "Invoice sent Successfully for " + querydata.clientaddressname
+    );
     return helper.getSuccessResponse(
       true,
       "success",
@@ -3301,7 +3309,7 @@ async function FetchIdforEvents(sales) {
             `,
             [querydata.eventid]
           );
-          if (product.lenght == 0) {
+          if (product.length == 0) {
             return helper.getErrorResponse(
               false,
               "error",
@@ -3439,7 +3447,7 @@ async function FetchIdforEvents(sales) {
             `,
             [querydata.eventid]
           );
-          if (product.lenght == 0) {
+          if (product.length == 0) {
             return helper.getErrorResponse(
               false,
               "error",
@@ -4601,15 +4609,40 @@ async function getCusReq(sales) {
 
 async function addQuotation(req, res) {
   try {
-    var secret;
+    var secret, sales, querydata;
     try {
       await uploadFile.uploadQuotationp(req, res);
+      sales = req.body;
+      // Check if the session token exists
+      if (!sales.STOKEN) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Login session token missing. Please provide the Login session token",
+          "ADD QUOTATION",
+          ""
+        );
+      }
+      secret = sales.STOKEN.substring(0, 16);
+      querydata;
+
+      // Validate session token length
+      if (sales.STOKEN.length > 50 || sales.STOKEN.length < 30) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Login session token size invalid. Please provide the valid Session token",
+          "ADD QUOTATION",
+          secret
+        );
+      }
       if (!req.file) {
         return helper.getErrorResponse(
           false,
           "error",
           "Please upload a file!",
-          "ADD QUOTATION"
+          "ADD QUOTATION",
+          secret
         );
       }
     } catch (er) {
@@ -4618,31 +4651,6 @@ async function addQuotation(req, res) {
         "error",
         `Could not upload the file. ${er.message}`,
         er.message,
-        ""
-      );
-    }
-
-    const sales = req.body;
-    // Check if the session token exists
-    if (!sales.STOKEN) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login session token missing. Please provide the Login session token",
-        "ADD QUOTATION",
-        ""
-      );
-    }
-    secret = sales.STOKEN.substring(0, 16);
-    var querydata;
-
-    // Validate session token length
-    if (sales.STOKEN.length > 50 || sales.STOKEN.length < 30) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login session token size invalid. Please provide the valid Session token",
-        "ADD QUOTATION",
         secret
       );
     }
@@ -4953,7 +4961,7 @@ async function addQuotation(req, res) {
           ]
         );
         await mqttclient.publishMqttMessage(
-          "Notification",
+          "refresh",
           "Quotation sent successfully to the Administrator for eventid" +
             quatationid +
             ". Please contact Administrator for further action."
@@ -5975,9 +5983,11 @@ async function addDeliveryChallan(req, res) {
           // Quoteid = objectvalue3["@quoteid"];
         }
       }
-      const sql2 = await db.query(
-        `Update salesprocesslist set feedback = '${querydata.productfeedback}' where cprocess_gene_id IN('${querydata.dcgenid}')`
-      );
+      if (querydata.productfeedback != null && querydata.productfeedback != 0) {
+        const sql2 = await db.query(
+          `Update salesprocesslist set feedback = '${querydata.productfeedback}' where cprocess_gene_id IN('${querydata.dcgenid}')`
+        );
+      }
       const sql = await db.query(
         `Update generatedeliverychallanid set status = 0 where dc_id IN('${querydata.dcgenid}')`
       );
@@ -6062,6 +6072,14 @@ async function addDeliveryChallan(req, res) {
         // Run both requests in parallel and wait for completion
         [EmailSent] = await Promise.all(promises);
       }
+      await mqttclient.publishMqttMessage(
+        "Notification",
+        "Delivery challan sent Successfully for " + querydata.clientaddressname
+      );
+      await mqttclient.publishMqttMessage(
+        "refresh",
+        "Delivery challan sent Successfully for " + querydata.clientaddressname
+      );
       return helper.getSuccessResponse(
         true,
         "success",
