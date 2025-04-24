@@ -15,660 +15,361 @@ const mqttclient = require("../mqttclient");
 //###############################################################################################################################################################################################
 //##################################################################################################################################################################################################
 
-// async function addRecurringInvoice(req, res) {
-//   try {
-//     var secret, querydata, subscription;
-//     try {
-//       await uploadFile.uploadrecurringinvoicepdf(req, res);
-//       const subscription = req.body;
-//       // Check if the session token exists
-//       if (!subscription.STOKEN) {
-//         return helper.getErrorResponse(
-//           false,
-//           "error",
-//           "Login session token missing. Please provide the Login session token",
-//           "ADD RECURRING INVOICE",
-//           ""
-//         );
-//       }
-//       secret = subscription.STOKEN.substring(0, 16);
-//       var querydata;
-
-//       // Validate session token length
-//       if (subscription.STOKEN.length > 50 || subscription.STOKEN.length < 10) {
-//         return helper.getErrorResponse(
-//           false,
-//           "error",
-//           "Login session token size invalid. Please provide the valid Session token",
-//           "ADD RECURRING INVOICE",
-//           secret
-//         );
-//       }
-//       if (!req.files) {
-//         return helper.getErrorResponse(
-//           false,
-//           "error",
-//           "Please upload a file!",
-//           "ADD RECURRING INVOICE",
-//           secret
-//         );
-//       }
-//     } catch (er) {
-//       console.log(JSON.stringify(er));
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         `Could not upload the file. ${er.message}`,
-//         er.message,
-//         secret
-//       );
-//     }
-
-//     // Validate session token
-//     const result = await db.query(`select secret from apikey where secret =?`, [
-//       subscription.STOKEN,
-//     ]);
-
-//     if (result.length == 0) {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Login sessiontoken Invalid. Please provide the valid sessiontoken",
-//         "ADD RECURRING INVOICE",
-//         secret
-//       );
-//     }
-
-//     // Check if querystring is provided
-//     if (!subscription.querystring) {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Querystring missing. Please provide the querystring",
-//         "ADD RECURRING INVOICE",
-//         secret
-//       );
-//     }
-
-//     // Decrypt querystring
-//     try {
-//       querydata = await helper.decrypt(subscription.querystring, secret);
-//     } catch (ex) {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Querystring Invalid error. Please provide the valid querystring.",
-//         "ADD RECURRING INVOICE",
-//         secret
-//       );
-//     }
-
-//     // Parse the decrypted querystring
-//     try {
-//       querydata = JSON.parse(querydata);
-//     } catch (ex) {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Querystring JSON error. Please provide valid JSON",
-//         "ADD RECURRING INVOICE",
-//         secret
-//       );
-//     }
-
-//     // Validate required fields
-//     if (!querydata.hasOwnProperty("siteids") || querydata.siteids == "") {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Site id missing. Please provide the Site id.",
-//         "ADD RECURRING INVOICE",
-//         secret
-//       );
-//     }
-//     if (
-//       !querydata.hasOwnProperty("subscriptionbillid") ||
-//       querydata.subscriptionbillid == ""
-//     ) {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Subscription bill id missing. Please provide the Subscription bill id",
-//         "ADD RECURRING INVOICE",
-//         secret
-//       );
-//     }
-//     if (
-//       !querydata.hasOwnProperty("clientaddressname") ||
-//       querydata.clientaddressname == ""
-//     ) {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Client address name missing. Please provide the Client address name missing",
-//         "ADD RECURRING INVOICE",
-//         secret
-//       );
-//     }
-//     if (
-//       !querydata.hasOwnProperty("clientaddress") ||
-//       querydata.clientaddress == ""
-//     ) {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Client address missing. Please provide the Client address",
-//         "ADD RECURRING INVOICE",
-//         secret
-//       );
-//     }
-
-//     if (
-//       !querydata.hasOwnProperty("billingaddressname") ||
-//       querydata.billingaddressname == ""
-//     ) {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Billing address name missing. Please provide the Billing Address name",
-//         "ADD RECURRING INVOICE",
-//         secret
-//       );
-//     }
-//     if (
-//       !querydata.hasOwnProperty("billingaddress") ||
-//       querydata.billingaddress == ""
-//     ) {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Billing address missing. Please provide the Billing address.",
-//         "ADD RECURRING INVOICE",
-//         secret
-//       );
-//     }
-
-//     if (!querydata.hasOwnProperty("planname") || querydata.product == "") {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Product Details missing. Please provide the Product Details.",
-//         "ADD RECURRING INVOICE",
-//         secret
-//       );
-//     }
-//     if (!querydata.hasOwnProperty("emailid") || querydata.emailid == "") {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Email id missing. Please provide the Email id",
-//         "ADD RECURRING INVOICE",
-//         secret
-//       );
-//     }
-//     if (!querydata.hasOwnProperty("ccemail")) {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "CC Email id missing. Please provide the CC Email id",
-//         "ADD RECURRING INVOICE",
-//         secret
-//       );
-//     }
-
-//     if (!querydata.hasOwnProperty("phoneno") || querydata.phoneno == "") {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Contact number missing. Please provide the contact number.",
-//         "ADD RECURRING INVOICE",
-//         secret
-//       );
-//     }
-//     if (
-//       !querydata.hasOwnProperty("totalamount") ||
-//       querydata.totalamount == ""
-//     ) {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Total amount missing. Please provide the total amount.",
-//         "ADD RECURRING INVOICE",
-//         secret
-//       );
-//     }
-//     if (
-//       !querydata.hasOwnProperty("invoicegenid") ||
-//       querydata.invoicegenid == ""
-//     ) {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Invoice Generated id missing. Please provide the invoice generated id.",
-//         "ADD RECURRING INVOICE",
-//         secret
-//       );
-//     }
-//     if (!querydata.hasOwnProperty("date") || querydata.date == "") {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Invoice date missing. Please provide the invoice date.",
-//         "ADD RECURRING INVOICE",
-//         secret
-//       );
-//     }
-//     if (
-//       !querydata.hasOwnProperty("messagetype") ||
-//       querydata.messagetype == ""
-//     ) {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Message type missing. Please provide the message type.",
-//         "ADD RECURRING INVOICE",
-//         secret
-//       );
-//     }
-//     if (!querydata.hasOwnProperty("feedback")) {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Feedback missing. Please provide the feedback",
-//         "ADD RECURRING INVOICE",
-//         secret
-//       );
-//     }
-//     if (!querydata.hasOwnProperty("customerid")) {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Customer id missing. Please provide the Customer id",
-//         "ADD RECURRING INVOICE",
-//         secret
-//       );
-//     }
-//     var WhatsappSent, EmailSent;
-//     const [sql1] = await db.spcall(
-//       `CALL SP_ADD_RECURRING_INVOICE(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@sprocessid); select @sprocessid;`,
-//       [
-//         querydata.subscriptionbillid,
-//         JSON.stringify(querydata.siteids),
-//         querydata.clientaddressname,
-//         querydata.clientaddress,
-//         querydata.billingaddress,
-//         querydata.billingaddressname,
-//         req.files[0]?.path || "",
-//         req.files[1]?.path || "",
-//         querydata.invoicegenid,
-//         querydata.totalamount,
-//         2,
-//         querydata.emailid,
-//         querydata.phoneno,
-//         querydata.ccemail,
-//         querydata.customerid,
-//       ]
-//     );
-//     const objectvalue2 = sql1[1][0];
-//     const invoiceid = objectvalue2["@sprocessid"];
-//     var Quoteid;
-//     const filePaths = req.files?.map((file) => file.path) || [];
-//     const formattedDate = new Date(querydata.date).toISOString().split("T")[0];
-
-//     const sql = await db.query(
-//       `Update Generatesubinvoiceid set status = 0 where subinvoice_id IN('${querydata.invoicegenid}')`
-//     );
-//     if (querydata.messagetype == 1) {
-//       EmailSent = await mailer.sendInvoice(
-//         querydata.clientaddressname,
-//         querydata.emailid,
-//         "Your invoice from Sporada Secure India Private Limited",
-//         "invoicepdf.html",
-//         ``,
-//         "INVOICE_PDF_SEND",
-//         filePaths,
-//         querydata.invoicegenid,
-//         formattedDate,
-//         querydata.totalamount,
-//         querydata.ccemail,
-//         querydata.feedback
-//       );
-//     } else if (querydata.messagetype == 2) {
-//       WhatsappSent = await axios.post(`${config.whatsappip}/billing/sendpdf`, {
-//         phoneno: querydata.phoneno,
-//         feedback: querydata.feedback,
-//         pdfpath: filePaths,
-//       });
-//       if (WhatsappSent.data.code == true) {
-//         WhatsappSent = WhatsappSent.data.code;
-//       } else {
-//         WhatsappSent = WhatsappSent.data.code;
-//       }
-//     }
-//     const promises = [];
-//     const phoneNumbers = querydata.phoneno
-//       ? querydata.phoneno
-//           .split(",")
-//           .map((num) => num.trim())
-//           .filter((num) => num !== "") // Removes empty values
-//       : [];
-//     // Send Email or WhatsApp Message
-//     if (querydata.messagetype === 1) {
-//       // Send only email
-//       EmailSent = await mailer.sendInvoice(
-//         querydata.clientaddressname,
-//         querydata.emailid,
-//         "Your invoice from Sporada Secure India Private Limited",
-//         "invoicepdf.html",
-//         ``,
-//         "INVOICE_PDF_SEND",
-//         filePaths,
-//         querydata.invoicegenid,
-//         formattedDate,
-//         querydata.totalamount,
-//         querydata.ccemail,
-//         querydata.feedback
-//       );
-//     } else if (querydata.messagetype === 2) {
-//       WhatsappSent = await Promise.all(
-//         phoneNumbers.map(async (number) => {
-//           try {
-//             const response = await axios.post(
-//               `${config.whatsappip}/billing/sendpdf`,
-//               {
-//                 phoneno: number,
-//                 feedback: querydata.feedback,
-//                 pdfpath: filePaths,
-//               }
-//             );
-//             return response.data.code;
-//           } catch (error) {
-//             console.error(`WhatsApp Error for ${number}:`, error.message);
-//             return false;
-//           }
-//         })
-//       );
-//     } else if (querydata.messagetype === 3) {
-//       // Send both email & WhatsApp in parallel
-//       promises.push(
-//         mailer.sendInvoice(
-//           querydata.clientaddressname,
-//           querydata.emailid,
-//           "Your invoice from Sporada Secure India Private Limited",
-//           "invoicepdf.html",
-//           ``,
-//           "INVOICE_PDF_SEND",
-//           filePaths,
-//           querydata.invoicegenid,
-//           formattedDate,
-//           querydata.totalamount,
-//           querydata.ccemail,
-//           querydata.feedback
-//         )
-//       );
-
-//       promises.push(
-//         Promise.all(
-//           phoneNumbers.map(async (number) => {
-//             try {
-//               const response = await axios.post(
-//                 `${config.whatsappip}/billing/sendpdf`,
-//                 {
-//                   phoneno: number,
-//                   feedback: querydata.feedback,
-//                   pdfpath: filePaths,
-//                 }
-//               );
-//               return response.data.code;
-//             } catch (error) {
-//               console.error(`WhatsApp Error for ${number}:`, error.message);
-//               return false;
-//             }
-//           })
-//         ).then((results) => (WhatsappSent = results))
-//       );
-
-//       // Run both requests in parallel and wait for completion
-//       [EmailSent] = await Promise.all(promises);
-//       await mqttclient.publishMqttMessage("refresh", "Invoice created");
-//       await mqttclient.publishMqttMessage(
-//         "Notification",
-//         "Recurring invoice created for ." + querydata.clientaddressname
-//       );
-//       return helper.getSuccessResponse(
-//         true,
-//         "success",
-//         "Subscription Invoice added Successfully",
-//         { EmailSent: EmailSent, WhatsappSent: WhatsappSent },
-//         secret
-//       );
-//     }
-//   } catch (er) {
-//     return helper.getErrorResponse(
-//       false,
-//       "error",
-//       "Internal error. Please contact Administration",
-//       er.message,
-//       secret
-//     );
-//   }
-// }
-
 async function addRecurringInvoice(req, res) {
-  let secret = "";
   try {
-    let subscription, querydata1;
-
+    var secret, querydata, subscription;
     try {
       await uploadFile.uploadrecurringinvoicepdf(req, res);
-      subscription = req.body;
-
+      const subscription = req.body;
+      // Check if the session token exists
       if (!subscription.STOKEN) {
         return helper.getErrorResponse(
           false,
           "error",
-          "Login session token missing.",
+          "Login session token missing. Please provide the Login session token",
           "ADD RECURRING INVOICE",
           ""
         );
       }
-
       secret = subscription.STOKEN.substring(0, 16);
+      var querydata;
 
+      // Validate session token length
       if (subscription.STOKEN.length > 50 || subscription.STOKEN.length < 10) {
         return helper.getErrorResponse(
           false,
           "error",
-          "Invalid session token size.",
+          "Login session token size invalid. Please provide the valid Session token",
           "ADD RECURRING INVOICE",
           secret
         );
       }
-
-      if (!req.files || req.files.length === 0) {
+      if (!req.files) {
         return helper.getErrorResponse(
           false,
           "error",
-          "Please upload at least one PDF file!",
+          "Please upload a file!",
           "ADD RECURRING INVOICE",
           secret
         );
       }
     } catch (er) {
-      console.log("Upload error:", er);
+      console.log(JSON.stringify(er));
       return helper.getErrorResponse(
         false,
         "error",
         `Could not upload the file. ${er.message}`,
-        "ADD RECURRING INVOICE",
+        er.message,
         secret
       );
     }
 
-    const result = await db.query(
-      `select secret from apikey where secret = ?`,
-      [subscription.STOKEN]
-    );
-    if (result.length === 0) {
+    // Validate session token
+    const result = await db.query(`select secret from apikey where secret =?`, [
+      subscription.STOKEN,
+    ]);
+
+    if (result.length == 0) {
       return helper.getErrorResponse(
         false,
         "error",
-        "Invalid session token.",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
         "ADD RECURRING INVOICE",
         secret
       );
     }
 
+    // Check if querystring is provided
     if (!subscription.querystring) {
       return helper.getErrorResponse(
         false,
         "error",
-        "Missing querystring.",
+        "Querystring missing. Please provide the querystring",
         "ADD RECURRING INVOICE",
         secret
       );
     }
 
+    // Decrypt querystring
     try {
-      querydata1 = await helper.decrypt(subscription.querystring, secret);
+      querydata = await helper.decrypt(subscription.querystring, secret);
     } catch (ex) {
       return helper.getErrorResponse(
         false,
         "error",
-        "Querystring decryption failed.",
+        "Querystring Invalid error. Please provide the valid querystring.",
         "ADD RECURRING INVOICE",
         secret
       );
     }
 
+    // Parse the decrypted querystring
     try {
-      querydata1 = JSON.parse(querydata1);
+      querydata = JSON.parse(querydata);
     } catch (ex) {
       return helper.getErrorResponse(
         false,
         "error",
-        "Querystring JSON parsing error.",
+        "Querystring JSON error. Please provide valid JSON",
         "ADD RECURRING INVOICE",
         secret
       );
     }
 
-    const querydataArray = Array.isArray(querydata1)
-      ? querydata1
-      : [querydata1];
-    const fileList = req.files || [];
-    const firstEntry = querydataArray[0];
-
-    for (let i = 0; i < querydataArray.length; i++) {
-      const querydata = querydataArray[i];
-
-      const requiredFields = [
-        "siteids",
-        "subscriptionbillid",
-        "clientaddressname",
-        "clientaddress",
-        "billingaddressname",
-        "billingaddress",
-        "planname",
-        "emailid",
-        "ccemail",
-        "phoneno",
-        "totalamount",
-        "invoicegenid",
-        "date",
-        "messagetype",
-        "feedback",
-        "customerid",
-      ];
-
-      for (let field of requiredFields) {
-        if (!querydata.hasOwnProperty(field)) {
-          return helper.getErrorResponse(
-            false,
-            "error",
-            `${field} missing in entry ${i + 1}`,
-            "ADD RECURRING INVOICE",
-            secret
-          );
-        }
-      }
-
-      // Call DB stored procedure
-      const [sql1] = await db.spcall(
-        `CALL SP_ADD_RECURRING_INVOICE(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@sprocessid); select @sprocessid;`,
-        [
-          querydata.subscriptionbillid,
-          JSON.stringify(querydata.siteids),
-          querydata.clientaddressname,
-          querydata.clientaddress,
-          querydata.billingaddress,
-          querydata.billingaddressname,
-          fileList[i]?.path || "",
-          fileList[i + 1]?.path || "", // optional second file
-          querydata.invoicegenid,
-          querydata.totalamount,
-          2,
-          querydata.emailid,
-          querydata.phoneno,
-          querydata.ccemail,
-          querydata.customerid,
-        ]
+    // Validate required fields
+    if (!querydata.hasOwnProperty("siteids") || querydata.siteids == "") {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Site id missing. Please provide the Site id.",
+        "ADD RECURRING INVOICE",
+        secret
       );
-
-      await db.query(
-        `Update Generatesubinvoiceid set status = 0 where subinvoice_id IN('${querydata.invoicegenid}')`
+    }
+    if (
+      !querydata.hasOwnProperty("subscriptionbillid") ||
+      querydata.subscriptionbillid == ""
+    ) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Subscription bill id missing. Please provide the Subscription bill id",
+        "ADD RECURRING INVOICE",
+        secret
       );
-      const sql4 = await db.query(
-        `Update subscriptionbillmaster set Email_sent = 1 where subscription_billid = ${querydata.subscriptionbillid}`
+    }
+    if (
+      !querydata.hasOwnProperty("clientaddressname") ||
+      querydata.clientaddressname == ""
+    ) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Client address name missing. Please provide the Client address name missing",
+        "ADD RECURRING INVOICE",
+        secret
+      );
+    }
+    if (
+      !querydata.hasOwnProperty("clientaddress") ||
+      querydata.clientaddress == ""
+    ) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Client address missing. Please provide the Client address",
+        "ADD RECURRING INVOICE",
+        secret
       );
     }
 
-    // Extract details from the first entry
-    const {
-      clientaddressname,
-      emailid,
-      ccemail,
-      phoneno,
-      feedback,
-      invoicegenid,
-      date,
-      totalamount,
-      messagetype,
-    } = firstEntry;
+    if (
+      !querydata.hasOwnProperty("billingaddressname") ||
+      querydata.billingaddressname == ""
+    ) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Billing address name missing. Please provide the Billing Address name",
+        "ADD RECURRING INVOICE",
+        secret
+      );
+    }
+    if (
+      !querydata.hasOwnProperty("billingaddress") ||
+      querydata.billingaddress == ""
+    ) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Billing address missing. Please provide the Billing address.",
+        "ADD RECURRING INVOICE",
+        secret
+      );
+    }
 
-    const formattedDate = new Date(date).toISOString().split("T")[0];
-    const phoneNumbers = phoneno
-      .split(",")
-      .map((num) => num.trim())
-      .filter((n) => n !== "");
+    if (!querydata.hasOwnProperty("planname") || querydata.product == "") {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Product Details missing. Please provide the Product Details.",
+        "ADD RECURRING INVOICE",
+        secret
+      );
+    }
+    if (!querydata.hasOwnProperty("emailid") || querydata.emailid == "") {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Email id missing. Please provide the Email id",
+        "ADD RECURRING INVOICE",
+        secret
+      );
+    }
+    if (!querydata.hasOwnProperty("ccemail")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "CC Email id missing. Please provide the CC Email id",
+        "ADD RECURRING INVOICE",
+        secret
+      );
+    }
 
-    const pdfPaths = fileList
-      .map((file) => (typeof file === "string" ? file : file.path))
-      .filter((p) => p) // removes empty/undefined/null paths
-      .join(",");
-    let EmailSent = null;
-    let WhatsappSent = [];
+    if (!querydata.hasOwnProperty("phoneno") || querydata.phoneno == "") {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Contact number missing. Please provide the contact number.",
+        "ADD RECURRING INVOICE",
+        secret
+      );
+    }
+    if (
+      !querydata.hasOwnProperty("totalamount") ||
+      querydata.totalamount == ""
+    ) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Total amount missing. Please provide the total amount.",
+        "ADD RECURRING INVOICE",
+        secret
+      );
+    }
+    if (
+      !querydata.hasOwnProperty("invoicegenid") ||
+      querydata.invoicegenid == ""
+    ) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Invoice Generated id missing. Please provide the invoice generated id.",
+        "ADD RECURRING INVOICE",
+        secret
+      );
+    }
+    if (!querydata.hasOwnProperty("date") || querydata.date == "") {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Invoice date missing. Please provide the invoice date.",
+        "ADD RECURRING INVOICE",
+        secret
+      );
+    }
+    if (
+      !querydata.hasOwnProperty("messagetype") ||
+      querydata.messagetype == ""
+    ) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Message type missing. Please provide the message type.",
+        "ADD RECURRING INVOICE",
+        secret
+      );
+    }
+    if (!querydata.hasOwnProperty("feedback")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Feedback missing. Please provide the feedback",
+        "ADD RECURRING INVOICE",
+        secret
+      );
+    }
+    if (!querydata.hasOwnProperty("customerid")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Customer id missing. Please provide the Customer id",
+        "ADD RECURRING INVOICE",
+        secret
+      );
+    }
+    var WhatsappSent, EmailSent;
+    const [sql1] = await db.spcall(
+      `CALL SP_ADD_RECURRING_INVOICE(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@sprocessid); select @sprocessid;`,
+      [
+        querydata.subscriptionbillid,
+        JSON.stringify(querydata.siteids),
+        querydata.clientaddressname,
+        querydata.clientaddress,
+        querydata.billingaddress,
+        querydata.billingaddressname,
+        req.files[0]?.path || "",
+        req.files[1]?.path || "",
+        querydata.invoicegenid,
+        querydata.totalamount,
+        2,
+        querydata.emailid,
+        querydata.phoneno,
+        querydata.ccemail,
+        querydata.customerid,
+      ]
+    );
+    const objectvalue2 = sql1[1][0];
+    const invoiceid = objectvalue2["@sprocessid"];
+    var Quoteid;
+    const filePaths = req.files?.map((file) => file.path) || [];
+    const formattedDate = new Date(querydata.date).toISOString().split("T")[0];
 
-    if (messagetype === 1 || messagetype === 3) {
-      // Email or Both
+    const sql = await db.query(
+      `Update Generatesubinvoiceid set status = 0 where subinvoice_id IN('${querydata.invoicegenid}')`
+    );
+    if (querydata.messagetype == 1) {
       EmailSent = await mailer.sendInvoice(
-        clientaddressname,
-        emailid,
+        querydata.clientaddressname,
+        querydata.emailid,
         "Your invoice from Sporada Secure India Private Limited",
         "invoicepdf.html",
-        "",
+        ``,
         "INVOICE_PDF_SEND",
-        pdfPaths,
-        invoicegenid,
+        filePaths,
+        querydata.invoicegenid,
         formattedDate,
-        totalamount,
-        ccemail,
-        feedback
+        querydata.totalamount,
+        querydata.ccemail,
+        querydata.feedback
       );
+    } else if (querydata.messagetype == 2) {
+      WhatsappSent = await axios.post(`${config.whatsappip}/billing/sendpdf`, {
+        phoneno: querydata.phoneno,
+        feedback: querydata.feedback,
+        pdfpath: filePaths,
+      });
+      if (WhatsappSent.data.code == true) {
+        WhatsappSent = WhatsappSent.data.code;
+      } else {
+        WhatsappSent = WhatsappSent.data.code;
+      }
     }
-
-    if (messagetype === 2 || messagetype === 3) {
-      // WhatsApp or Both
+    const promises = [];
+    const phoneNumbers = querydata.phoneno
+      ? querydata.phoneno
+          .split(",")
+          .map((num) => num.trim())
+          .filter((num) => num !== "") // Removes empty values
+      : [];
+    // Send Email or WhatsApp Message
+    if (querydata.messagetype === 1) {
+      // Send only email
+      EmailSent = await mailer.sendInvoice(
+        querydata.clientaddressname,
+        querydata.emailid,
+        "Your invoice from Sporada Secure India Private Limited",
+        "invoicepdf.html",
+        ``,
+        "INVOICE_PDF_SEND",
+        filePaths,
+        querydata.invoicegenid,
+        formattedDate,
+        querydata.totalamount,
+        querydata.ccemail,
+        querydata.feedback
+      );
+    } else if (querydata.messagetype === 2) {
       WhatsappSent = await Promise.all(
         phoneNumbers.map(async (number) => {
           try {
@@ -676,39 +377,78 @@ async function addRecurringInvoice(req, res) {
               `${config.whatsappip}/billing/sendpdf`,
               {
                 phoneno: number,
-                feedback,
-                pdfpath: pdfPaths,
+                feedback: querydata.feedback,
+                pdfpath: filePaths,
               }
             );
             return response.data.code;
           } catch (error) {
-            console.error("WhatsApp error:", error.message);
+            console.error(`WhatsApp Error for ${number}:`, error.message);
             return false;
           }
         })
       );
+    } else if (querydata.messagetype === 3) {
+      // Send both email & WhatsApp in parallel
+      promises.push(
+        mailer.sendInvoice(
+          querydata.clientaddressname,
+          querydata.emailid,
+          "Your invoice from Sporada Secure India Private Limited",
+          "invoicepdf.html",
+          ``,
+          "INVOICE_PDF_SEND",
+          filePaths,
+          querydata.invoicegenid,
+          formattedDate,
+          querydata.totalamount,
+          querydata.ccemail,
+          querydata.feedback
+        )
+      );
+
+      promises.push(
+        Promise.all(
+          phoneNumbers.map(async (number) => {
+            try {
+              const response = await axios.post(
+                `${config.whatsappip}/billing/sendpdf`,
+                {
+                  phoneno: number,
+                  feedback: querydata.feedback,
+                  pdfpath: filePaths,
+                }
+              );
+              return response.data.code;
+            } catch (error) {
+              console.error(`WhatsApp Error for ${number}:`, error.message);
+              return false;
+            }
+          })
+        ).then((results) => (WhatsappSent = results))
+      );
+
+      // Run both requests in parallel and wait for completion
+      [EmailSent] = await Promise.all(promises);
+      await mqttclient.publishMqttMessage("refresh", "Invoice created");
+      await mqttclient.publishMqttMessage(
+        "Notification",
+        "Recurring invoice created for ." + querydata.clientaddressname
+      );
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Subscription Invoice added Successfully",
+        { EmailSent: EmailSent, WhatsappSent: WhatsappSent },
+        secret
+      );
     }
-
-    // await mqttclient.publishMqttMessage("refresh", "Invoice created");
-    await mqttclient.publishMqttMessage(
-      "Notification",
-      `Recurring invoice created for ${clientaddressname}`
-    );
-
-    return helper.getSuccessResponse(
-      true,
-      "success",
-      "Recurring Invoices added and sent successfully",
-      { EmailSent, WhatsappSent },
-      secret
-    );
   } catch (er) {
-    console.error("Final error:", er);
     return helper.getErrorResponse(
       false,
       "error",
-      "Something went wrong: " + er.message,
-      "ADD RECURRING INVOICE",
+      "Internal error. Please contact Administration",
+      er.message,
       secret
     );
   }
@@ -766,7 +506,7 @@ async function GetRecurredInvoice(subscription) {
     // Check if querystring is provided
     if (!subscription.querystring) {
       sql = await db.query(
-        `select subscription_generatedid recurredbillid,subscription_billid,site_Ids,client_addressname,client_address,billing_addressname,billing_address,pdf_path pdf_data,pdf_path pdfpath,Invoice_no,TotalAmount,email_id,phone_no,ccemail,Row_updated_date date from subscriptionbillgenerated where status = 1`
+        `select subscription_generatedid,subscription_billid,site_Ids,client_addressname,client_address,billing_addressname,billing_address,pdf_path pdf_data,pdf_path pdfpath,Invoice_no,TotalAmount,email_id,phone_no,ccemail,Row_updated_date date from subscriptionbillgenerated where status = 1`
       );
     } else {
       // Decrypt querystring
@@ -804,7 +544,7 @@ async function GetRecurredInvoice(subscription) {
         );
       }
       sql = await db.query(
-        `select subscription_generatedid recurredbillid,subscription_billid,site_Ids,client_addressname,client_address,billing_addressname,billing_address,pdf_path pdf_data,pdf_path pdfpath,Invoice_no,TotalAmount,email_id,phone_no,ccemail,Row_updated_date date from subscriptionbillgenerated where status = 1 and customer_id = ?`,
+        `select subscription_generatedid,subscription_billid,site_Ids,client_addressname,client_address,billing_addressname,billing_address,pdf_path pdf_data,pdf_path pdfpath,Invoice_no,TotalAmount,email_id,phone_no,ccemail,Row_updated_date date from subscriptionbillgenerated where status = 1 and customer_id = ?`,
         [querydata.customerid]
       );
     }
@@ -1347,8 +1087,8 @@ async function GetProcessCustomer(subscription) {
     }
 
     const sql =
-      await db.query(`select scustomer_id customer_id, scustomer_name customer_name,scustomer_phoneno customer_phoneno,scustomer_gstno customer_gstno from enquirysubscriptionmaster where 
-         scustomer_id In (select customer_id from subscriptionprocessmaster where status = 1 and active_status = 1 and deleted_flag = 0);`);
+      await db.query(`select scustomer_id customer_id, scustomer_name customer_name,scustomer_phoneno customer_phoneno,scustomer_gstno customer_gstno from enquirysubscriptionmaster where scustomer_id In
+      (select customer_id from subscriptionprocessmaster where status = 1 and active_status = 1 and deleted_flag = 0);`);
     if (sql[0]) {
       return helper.getSuccessResponse(
         true,
@@ -1362,84 +1102,6 @@ async function GetProcessCustomer(subscription) {
         true,
         "success",
         "Process customer Fetched Successfully",
-        sql,
-        secret
-      );
-    }
-  } catch (er) {
-    return helper.getErrorResponse(
-      false,
-      "error",
-      "Internal Error. Please contact Administration",
-      er.message,
-      secret
-    );
-  }
-}
-
-//#########################################################################################################################################################################################
-//#########################################################################################################################################################################################
-//#########################################################################################################################################################################################
-//#########################################################################################################################################################################################
-
-async function GetRecurredCustomer(subscription) {
-  try {
-    // Check if the session token exists
-    if (!subscription.hasOwnProperty("STOKEN")) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login sessiontoken missing. Please provide the Login sessiontoken",
-        "GET PROCESS CUSTOMER",
-        ""
-      );
-    }
-    var secret = subscription.STOKEN.substring(0, 16);
-    // Validate session token length
-    if (subscription.STOKEN.length > 50 || subscription.STOKEN.length < 30) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
-        "GET PROCESS CUSTOMER",
-        secret
-      );
-    }
-
-    // Validate session token
-    const [result] = await db.spcall(
-      "CALL SP_STOKEN_CHECK(?,@result); SELECT @result;",
-      [subscription.STOKEN]
-    );
-    const objectvalue = result[1][0];
-    const userid = objectvalue["@result"];
-
-    if (userid == null) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
-        "GET PROCESS CUSTOMER",
-        secret
-      );
-    }
-
-    const sql = await db.query(
-      `select sbg.customer_id,sbg.Client_addressname customer_name,sbg.phone_no customer_phoneno,sbm.customer_GST customer_gstno from subscriptionbillgenerated sbg JOIN subscriptionbillmaster sbm ON sbg.customer_id = sbm.customer_id where sbg.status =1 Group by customer_id`
-    );
-    if (sql[0]) {
-      return helper.getSuccessResponse(
-        true,
-        "success",
-        "Recurred customer Fetched Successfully",
-        sql,
-        secret
-      );
-    } else {
-      return helper.getErrorResponse(
-        true,
-        "success",
-        "Recurred customer Fetched Successfully",
         sql,
         secret
       );
@@ -2274,31 +1936,17 @@ async function uploadMor(req, res) {
 
 async function addSubscriptionCustomerreq(req, res) {
   try {
-    var secret, subscription;
+    var secret;
     // Upload file handling
     try {
       await uploadFile.uploadSubCustomerrequ(req, res);
-      subscription = req.body;
 
-      // Validate Login Session Token
-      if (!subscription.STOKEN) {
-        return helper.getErrorResponse(
-          false,
-          "error",
-          "Login session token missing. Please provide the Login session token",
-          "ADD SUBSCRIPTION CUSTOMER REQUIREMENT",
-          ""
-        );
-      }
-
-      secret = subscription.STOKEN.substring(0, 16);
       if (!req.file) {
         return helper.getErrorResponse(
           false,
           "error",
           "Please upload a file!",
-          "ADD SUBSCRIPTION CUSTOMER REQUIREMENT",
-          secret
+          "ADD SUBSCRIPTION CUSTOMER REQUIREMENT"
         );
       }
     } catch (er) {
@@ -2307,10 +1955,24 @@ async function addSubscriptionCustomerreq(req, res) {
         "error",
         `Could not upload the file. ${er.message}`,
         er.message,
-        secret
+        ""
       );
     }
 
+    const subscription = req.body;
+
+    // Validate Login Session Token
+    if (!subscription.STOKEN) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login session token missing. Please provide the Login session token",
+        "ADD SUBSCRIPTION CUSTOMER REQUIREMENT",
+        ""
+      );
+    }
+
+    secret = subscription.STOKEN.substring(0, 16);
     let querydata;
     // Validate session token length
     if (subscription.STOKEN.length > 50 || subscription.STOKEN.length < 30) {
@@ -2527,15 +2189,7 @@ async function addSubscriptionCustomerreq(req, res) {
             `INSERT INTO morupload(MOR_path, Created_by) VALUES(?,?)`,
             [req.file.path, userid]
           );
-          // await mqttclient.publishMqttMessage(
-          //   "Notification",
-          //   "Request for quotation sent Successfully for " + querydata.vendorname
-          // );
-          await mqttclient.publishMqttMessage(
-            "refresh",
-            "Client Requirement has been added for the Subscription Customer " +
-              querydata.name
-          );
+
           return helper.getSuccessResponse(
             true,
             "success",
@@ -2948,289 +2602,6 @@ async function detailsPreLoader(subscription) {
 //###############################################################################################################################################################################################
 //###############################################################################################################################################################################################
 
-// async function AddQuotation(req, res) {
-//   try {
-//     var secret;
-//     try {
-//       await uploadFile.uploadSubQuotationp(req, res);
-//       if (!req.file) {
-//         return helper.getErrorResponse(
-//           false,
-//           "error",
-//           "Please upload a file!",
-//           "ADD QUOTATION"
-//         );
-//       }
-//     } catch (er) {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         `Could not upload the file. ${er.message}`,
-//         er.message,
-//         ""
-//       );
-//     }
-
-//     const subscription = req.body;
-//     // Check if the session token exists
-//     if (!subscription.hasOwnProperty("STOKEN")) {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Login sessiontoken missing. Please provide the Login sessiontoken",
-//         "ADD QUOTATION",
-//         ""
-//       );
-//     }
-//     var secret = subscription.STOKEN.substring(0, 16);
-//     var querydata;
-//     // Validate session token length
-//     if (subscription.STOKEN.length > 50 || subscription.STOKEN.length < 15) {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
-//         "ADD QUOTATION",
-//         secret
-//       );
-//     }
-
-//     // Validate session token
-//     const [result] = await db.spcall(
-//       "CALL SP_STOKEN_CHECK(?,@result); SELECT @result;",
-//       [subscription.STOKEN]
-//     );
-//     const objectvalue = result[1][0];
-//     const userid = objectvalue["@result"];
-
-//     if (userid == null) {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Login sessiontoken Invalid. Please provide the valid sessiontoken",
-//         "ADD QUOTATION",
-//         secret
-//       );
-//     }
-//     // Check if querystring is provided
-//     if (!subscription.hasOwnProperty("querystring")) {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Querystring missing. Please provide the querystring",
-//         "ADD QUOTATION",
-//         secret
-//       );
-//     }
-
-//     // Decrypt querystring
-//     try {
-//       querydata = await helper.decrypt(subscription.querystring, secret);
-//     } catch (ex) {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Querystring Invalid error. Please provide the valid querystring.",
-//         "ADD QUOTATION",
-//         secret
-//       );
-//     }
-
-//     // Parse the decrypted querystring
-//     try {
-//       querydata = JSON.parse(querydata);
-//     } catch (ex) {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Querystring JSON error. Please provide valid JSON",
-//         "ADD QUOTATION",
-//         secret
-//       );
-//     }
-//     const requiredFields = [
-//       { field: "processid", message: "Process id missing" },
-//       { field: "clientaddressname", message: "Client address name missing" },
-//       { field: "clientaddress", message: "Client address missing." },
-//       { field: "billingaddress", message: "billing address missing." },
-//       { field: "billingaddressname", message: "Billing address name missing." },
-//       { field: "sitelist", message: "Subscription details missing." },
-//       { field: "packagedetails", message: "Package details missing." },
-//       { field: "addressdetails", message: "Address details missing." },
-//       { field: "notes", message: "Noted missing" },
-//       { field: "emailid", message: "Email id missing." },
-//       { field: "phoneno", message: "Phone number missing." },
-//       { field: "ccemail", message: "CC email missing." },
-//       { field: "date", message: "Date missing" },
-//       { field: "quotationgenid", message: "Quotation id missing." },
-//       { field: "messagetype", message: "Message type missing." },
-//       { field: "gstpercent", message: "GST Percentage missing." },
-//       { field: "gst_number", message: "Gst number missing." },
-//       {
-//         field: "feedback",
-//         message: "Feedback missing. Please provide the feedback.",
-//       },
-//     ];
-//     for (const { field, message } of requiredFields) {
-//       if (!querydata.hasOwnProperty(field)) {
-//         return helper.getErrorResponse(
-//           false,
-//           "error",
-//           message,
-//           "ADD QUOTATION",
-//           secret
-//         );
-//       }
-//     }
-//     var WhatsappSent, EmailSent;
-//     const [sql1] = await db.spcall(
-//       `CALL SP_ADD_SUB_QUOTATION_PROCESS(?,?,?,?,?,?,?,?,?,?,@prolistid); select @prolistid;`,
-//       [
-//         querydata.clientaddressname,
-//         userid,
-//         querydata.processid,
-//         querydata.quotationgenid,
-//         2,
-//         req.file.path,
-//         querydata.clientaddress,
-//         querydata.billingaddress,
-//         querydata.billingaddressname,
-//         querydata.clientaddressname,
-//       ]
-//     );
-//     const objectvalue2 = sql1[1][0];
-//     const quatationid = objectvalue2["@prolistid"];
-//     var Quoteid;
-//     if (quatationid != null && quatationid != 0) {
-//       for (const subscription of querydata.packagedetails) {
-//         if (
-//           !subscription.hasOwnProperty("sitename") ||
-//           !subscription.hasOwnProperty("cameraquantity") ||
-//           !subscription.hasOwnProperty("siteaddress") ||
-//           !subscription.hasOwnProperty("packageprice") ||
-//           !subscription.hasOwnProperty("specialprice") ||
-//           !subscription.hasOwnProperty("")
-//         ) {
-//           return helper.getErrorResponse(
-//             false,
-//             "error",
-//             "Product details are incomplete. Please provide sitename ,cameraquantity, siteaddress, packageprice and specialprice.",
-//             "ADD QUATATION",
-//             secret
-//           );
-//         } else {
-//           const [sql2] = await db.spcall(
-//             `CALL SP_SUB_QUOTATION_ADD(?,?,?,?,?,?,?,?,?,@quoteid); SELECT @quoteid;`,
-//             [
-//               subscription.sitename,
-//               subscription.cameraquantity,
-//               subscription.siteaddress,
-//               querydata.quotationgenid,
-//               JSON.stringify(querydata.notes),
-//               req.file.path,
-//               quatationid,
-//               subscription.packageprice,
-//               subscription.specialprice,
-//             ]
-//           );
-//           const objectvalue3 = sql2[1][0];
-//           Quoteid = objectvalue3["@quoteid"];
-//         }
-//       }
-//       const sql = await db.query(
-//         `Update generatesubquotationid set status = 0 where quotation_id IN('${querydata.quotationgenid}')`
-//       );
-//       const sql2 = await db.query(
-//         `select u.Email_id,a.secret from usermaster u CROSS JOIN apikey a where u.user_design = 'Administrator' and u.status = 1 and a.status = 1`
-//       );
-//       var emailid = "",
-//         secret = "15b97956-b296-11";
-//       if (sql2.length > 0) {
-//         emailid =
-//           sql2.length > 0 ? sql2.map((item) => item.Email_id).join(",") : "";
-//         secret = sql2[0].secret;
-//       } else {
-//         emailid = `support@sporadasecure.com,ceo@sporadasecure.com,subscription@sporadasecure.com`;
-//       }
-//       EmailSent = await mailer.sendapprovequotation(
-//         "Administrator",
-//         emailid,
-//         `Action Required!!! Received Quotation Approve Request for ${querydata.clientaddressname}`,
-//         "apporvequotation.html",
-//         `http://192.168.0.200:8081/subscription/intquoteapprove?quoteid=${quatationid}&STOKEN=${secret}&s=1&feedback='Apporved'`,
-//         "APPROVEQUOTATION_SEND",
-//         querydata.clientaddressname,
-//         "QUOTATION APPROVAL",
-//         `http://192.168.0.200:8081/subscription/intquoteapprove?quoteid=${quatationid}&STOKEN=${secret}&s=3`,
-//         req.file.path
-//       );
-//       if (EmailSent == true) {
-//         const sql = await db.query(
-//           `INSERT INTO quotation_mailbox(process_id,emailid,ccemail,phoneno,feedback,clientname,message_type,pdf_path)
-//         VALUES(?,?,?,?,?,?,?,?)`,
-//           [
-//             quatationid,
-//             querydata.emailid,
-//             querydata.ccemail,
-//             querydata.phoneno,
-//             querydata.feedback,
-//             querydata.clientaddressname,
-//             querydata.messagetype,
-//             req.file.path,
-//           ]
-//         );
-//         await mqttclient.publishMqttMessage(
-//           "Notification",
-//           "Email sent successfully to the Administrator for eventid" +
-//             quatationid +
-//             ". Please contact Administrator for further action."
-//         );
-//         return helper.getSuccessResponse(
-//           true,
-//           "success",
-//           "Email sent successfully to the Administrator. Please contact Administrator for further action.",
-//           { EmailSent: EmailSent },
-//           secret
-//         );
-//       } else {
-//         const sql = await db.query(
-//           `delete from subscriptionprocesslist where sprocess_id =?`,
-//           [quatationid]
-//         );
-//         await mqttclient.publishMqttMessage(
-//           "Notification",
-//           "Error sending the Email for eventid" +
-//             quatationid +
-//             ". Please try again"
-//         );
-//         return helper.getErrorResponse(
-//           false,
-//           "error",
-//           "Error sending the Email. Please try again",
-//           { EmailSent: EmailSent },
-//           secret
-//         );
-//       }
-//     } else {
-//       return helper.getErrorResponse(
-//         false,
-//         "error",
-//         "Error while adding the Quotation.",
-//         "ADD QUOTATION",
-//         secret
-//       );
-//     }
-//   } catch (er) {
-//     return helper.getErrorResponse(
-//       false,
-//       "error",
-//       "Internal Error. Please contact Administration",
-//       er.message,
-//       secret
-//     );
-//   }
-// }
-
 async function AddQuotation(req, res) {
   try {
     var secret;
@@ -3334,11 +2705,10 @@ async function AddQuotation(req, res) {
     const requiredFields = [
       { field: "processid", message: "Process id missing" },
       { field: "clientaddressname", message: "Client address name missing" },
-      { field: "clientaddress", message: "Client address missing." },
-      { field: "billingaddress", message: "billing address missing." },
-      { field: "billingaddressname", message: "Billing address name missing." },
-      { field: "packagedetails", message: "Package details missing." },
-      { field: "addressdetails", message: "Address details missing." },
+      { field: "clientaddress", message: "Client address missing" },
+      { field: "billingaddress", message: "billing address missing" },
+      { field: "billingaddressname", message: "Billing address name missing" },
+      { field: "sitelist", message: "Subscription details missing" },
       { field: "notes", message: "Noted missing" },
       { field: "emailid", message: "Email id missing." },
       { field: "phoneno", message: "Phone number missing." },
@@ -3346,12 +2716,11 @@ async function AddQuotation(req, res) {
       { field: "date", message: "Date missing" },
       { field: "quotationgenid", message: "Quotation id missing." },
       { field: "messagetype", message: "Message type missing." },
-      { field: "gstpercent", message: "GST Percentage missing." },
-      { field: "gst_number", message: "Gst number missing." },
       {
         field: "feedback",
         message: "Feedback missing. Please provide the feedback.",
       },
+      { field: "packageid", message: "Package id missing." },
     ];
     for (const { field, message } of requiredFields) {
       if (!querydata.hasOwnProperty(field)) {
@@ -3365,44 +2734,141 @@ async function AddQuotation(req, res) {
       }
     }
     var WhatsappSent, EmailSent;
-    for (const subscription of querydata.packagedetails) {
-      if (
-        !subscription.hasOwnProperty("name") ||
-        !subscription.hasOwnProperty("description") ||
-        !subscription.hasOwnProperty("cameracount") ||
-        !subscription.hasOwnProperty("amount") ||
-        !subscription.hasOwnProperty("additional_cameras") ||
-        !subscription.hasOwnProperty("subscriptiontype") ||
-        !subscription.hasOwnProperty("sites") ||
-        !subscription.hasOwnProperty("subscriptionid")
-      ) {
-        return helper.getErrorResponse(
-          false,
-          "error",
-          "Subscription details are incomplete. Please provide name,description,cameracount,amount,additional_cameras,subscriptiontype,sites and Subscription id",
-          "ADD QUATATION",
+    const [sql1] = await db.spcall(
+      `CALL SP_ADD_SUB_QUOTATION_PROCESS(?,?,?,?,?,?,?,?,?,?,@prolistid); select @prolistid;`,
+      [
+        querydata.clientaddressname,
+        userid,
+        querydata.processid,
+        querydata.quotationgenid,
+        2,
+        req.file.path,
+        querydata.clientaddress,
+        querydata.billingaddress,
+        querydata.billingaddressname,
+        querydata.clientaddressname,
+      ]
+    );
+    const objectvalue2 = sql1[1][0];
+    const quatationid = objectvalue2["@prolistid"];
+    var Quoteid;
+    if (quatationid != null && quatationid != 0) {
+      for (const subscription of querydata.sitelist) {
+        if (
+          !subscription.hasOwnProperty("sitename") ||
+          !subscription.hasOwnProperty("cameraquantity") ||
+          !subscription.hasOwnProperty("siteaddress") ||
+          !subscription.hasOwnProperty("packageprice") ||
+          !subscription.hasOwnProperty("specialprice")
+        ) {
+          return helper.getErrorResponse(
+            false,
+            "error",
+            "Product details are incomplete. Please provide sitename ,cameraquantity, siteaddress, packageprice and specialprice.",
+            "ADD QUATATION",
+            secret
+          );
+        } else {
+          const [sql2] = await db.spcall(
+            `CALL SP_SUB_QUOTATION_ADD(?,?,?,?,?,?,?,?,?,@quoteid); SELECT @quoteid;`,
+            [
+              subscription.sitename,
+              subscription.cameraquantity,
+              subscription.siteaddress,
+              querydata.quotationgenid,
+              JSON.stringify(querydata.notes),
+              req.file.path,
+              quatationid,
+              subscription.packageprice,
+              subscription.specialprice,
+            ]
+          );
+          const objectvalue3 = sql2[1][0];
+          Quoteid = objectvalue3["@quoteid"];
+        }
+      }
+      const sql = await db.query(
+        `Update generatesubquotationid set status = 0 where quotation_id IN('${querydata.quotationgenid}')`
+      );
+      const sql2 = await db.query(
+        `select u.Email_id,a.secret from usermaster u CROSS JOIN apikey a where u.user_design = 'Administrator' and u.status = 1 and a.status = 1`
+      );
+      var emailid = "",
+        secret = "15b97956-b296-11";
+      if (sql2.length > 0) {
+        emailid =
+          sql2.length > 0 ? sql2.map((item) => item.Email_id).join(",") : "";
+        secret = sql2[0].secret;
+      } else {
+        emailid = `support@sporadasecure.com,ceo@sporadasecure.com,subscription@sporadasecure.com`;
+      }
+      EmailSent = await mailer.sendapprovequotation(
+        "Administrator",
+        emailid,
+        `Action Required!!! Received Quotation Approve Request for ${querydata.clientaddressname}`,
+        "apporvequotation.html",
+        `http://192.168.0.200:8081/subscription/intquoteapprove?quoteid=${quatationid}&STOKEN=${secret}&s=1&feedback='Apporved'`,
+        "APPROVEQUOTATION_SEND",
+        querydata.clientaddressname,
+        "QUOTATION APPROVAL",
+        `http://192.168.0.200:8081/subscription/intquoteapprove?quoteid=${quatationid}&STOKEN=${secret}&s=3`,
+        req.file.path
+      );
+      if (EmailSent == true) {
+        const sql = await db.query(
+          `INSERT INTO quotation_mailbox(process_id,emailid,ccemail,phoneno,feedback,clientname,message_type,pdf_path)
+        VALUES(?,?,?,?,?,?,?,?)`,
+          [
+            quatationid,
+            querydata.emailid,
+            querydata.ccemail,
+            querydata.phoneno,
+            querydata.feedback,
+            querydata.clientaddressname,
+            querydata.messagetype,
+            req.file.path,
+          ]
+        );
+        await mqttclient.publishMqttMessage(
+          "Notification",
+          "Email sent successfully to the Administrator for eventid" +
+            quatationid +
+            ". Please contact Administrator for further action."
+        );
+        return helper.getSuccessResponse(
+          true,
+          "success",
+          "Email sent successfully to the Administrator. Please contact Administrator for further action.",
+          { EmailSent: EmailSent },
           secret
         );
       } else {
-        if (subscription.subscriptionid == 0) {
-          const sql = await db.query1("INSERT INTO subscriptionmaster");
-        }
-      }
-      if (
-        !subscription.hasOwnProperty("sitename") ||
-        !subscription.hasOwnProperty("cameraquantity") ||
-        !subscription.hasOwnProperty("siteaddress") ||
-        !subscription.hasOwnProperty("packageprice") ||
-        !subscription.hasOwnProperty("specialprice")
-      ) {
+        const sql = await db.query(
+          `delete from subscriptionprocesslist where sprocess_id =?`,
+          [quatationid]
+        );
+        await mqttclient.publishMqttMessage(
+          "Notification",
+          "Error sending the Email for eventid" +
+            quatationid +
+            ". Please try again"
+        );
         return helper.getErrorResponse(
           false,
           "error",
-          "Product details are incomplete. Please provide sitename ,cameraquantity, siteaddress, packageprice and specialprice.",
-          "ADD QUATATION",
+          "Error sending the Email. Please try again",
+          { EmailSent: EmailSent },
           secret
         );
       }
+    } else {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Error while adding the Quotation.",
+        "ADD QUOTATION",
+        secret
+      );
     }
   } catch (er) {
     return helper.getErrorResponse(
@@ -3414,10 +2880,10 @@ async function AddQuotation(req, res) {
     );
   }
 }
-//########################################################################################################################################################################################
-//########################################################################################################################################################################################
-//########################################################################################################################################################################################
-//########################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
 
 async function addCustomInvoice(req, res) {
   try {
@@ -3894,7 +3360,7 @@ async function GetCustomPDF(subscription) {
       );
     }
     const sql = await db.query(
-      `select Subscription_generatedid custompdfid,Client_addressname,client_address,Billing_addressname,Billing_address,Email_id customer_mailid,Phone_no customer_phoneno,Row_updated_date date,gstnumber,subscription_billid,TotalAmount,pdf_path pdf_data,pdf_path pdfpath from customsubscriptionbillgenerated where status = 1`
+      `select Client_addressname,client_address,Billing_addressname,Billing_address,Email_id customer_mailid,Phone_no customer_phoneno,Row_updated_date date,gstnumber,subscription_billid,TotalAmount,pdf_path pdf_data,pdf_path pdfpath from customsubscriptionbillgenerated where status = 1`
     );
     var data;
     if (sql.length >= 0) {
@@ -3946,7 +3412,7 @@ async function GetCustomPDF(subscription) {
 //#############################################################################################################################################################################################
 //############################################################################################################################################################################################
 
-async function getCustomBinaryfile(subscription) {
+async function GetPDFData(subscription) {
   try {
     // Check if the session token exists
     if (!subscription.hasOwnProperty("STOKEN")) {
@@ -4028,8 +3494,8 @@ async function getCustomBinaryfile(subscription) {
 
     // Validate required fields
     if (
-      !querydata.hasOwnProperty("custompdfid") ||
-      querydata.custompdfid == ""
+      !querydata.hasOwnProperty("custombillid") ||
+      querydata.custombillid == ""
     ) {
       return helper.getErrorResponse(
         false,
@@ -4041,149 +3507,7 @@ async function getCustomBinaryfile(subscription) {
     }
     const sql = await db.query(
       `select pdf_path from customsubscriptionbillgenerated where subscription_generatedid = ?`,
-      [querydata.custompdfid]
-    );
-    var data;
-    if (sql[0]) {
-      // Ensure file exists
-      if (!fs.existsSync(sql[0].pdf_path)) {
-        return helper.getErrorResponse(
-          false,
-          "error",
-          "File does not exist",
-          "GET BINARY DATA FOR PDF",
-          secret
-        );
-      }
-      binarydata = await helper.convertFileToBinary(sql[0].pdf_path);
-      return helper.getSuccessResponse(
-        true,
-        "success",
-        "File Binary Fetched Successfully",
-        binarydata,
-        secret
-      );
-    } else {
-      return helper.getSuccessResponse(
-        true,
-        "success",
-        "File Binary Fetched Successfully",
-        sql,
-        secret
-      );
-    }
-  } catch (er) {
-    return helper.getErrorResponse(
-      false,
-      "error",
-      "Internal Error. Please contact Administration",
-      er.message,
-      secret
-    );
-  }
-}
-
-//#########################################################################################################################################################################################
-//############################################################################################################################################################################################
-//#############################################################################################################################################################################################
-//############################################################################################################################################################################################
-
-async function getRecurredBinaryfile(subscription) {
-  try {
-    // Check if the session token exists
-    if (!subscription.hasOwnProperty("STOKEN")) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login sessiontoken missing. Please provide the Login sessiontoken",
-        "GET BINARY DATA FOR PDF",
-        ""
-      );
-    }
-    var secret = subscription.STOKEN.substring(0, 16);
-    var querydata;
-    // Validate session token length
-    if (subscription.STOKEN.length > 50 || subscription.STOKEN.length < 30) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
-        "GET BINARY DATA FOR PDF",
-        secret
-      );
-    }
-
-    // Validate session token
-    const [result] = await db.spcall(
-      `CALL SP_STOKEN_CHECK(?,@result); SELECT @result;`,
-      [subscription.STOKEN]
-    );
-    const objectvalue = result[1][0];
-    const userid = objectvalue["@result"];
-
-    if (userid == null) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
-        "GET BINARY DATA FOR PDF",
-        secret
-      );
-    }
-
-    // Check if querystring is provided
-    if (!subscription.hasOwnProperty("querystring")) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Querystring missing. Please provide the querystring",
-        "GET BINARY DATA FOR PDF",
-        secret
-      );
-    }
-
-    // Decrypt querystring
-    try {
-      querydata = await helper.decrypt(subscription.querystring, secret);
-    } catch (ex) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Querystring Invalid error. Please provide the valid querystring.",
-        "GET BINARY DATA FOR PDF",
-        secret
-      );
-    }
-
-    // Parse the decrypted querystring
-    try {
-      querydata = JSON.parse(querydata);
-    } catch (ex) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Querystring JSON error. Please provide valid JSON",
-        "GET BINARY DATA FOR PDF",
-        secret
-      );
-    }
-
-    // Validate required fields
-    if (
-      !querydata.hasOwnProperty("recurredbillid") ||
-      querydata.recurredbillid == ""
-    ) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Reccurred invoice bill id missing. Please provide the recurred invoice bill id",
-        "GET BINARY DATA FOR PDF",
-        secret
-      );
-    }
-    const sql = await db.query(
-      `select pdf_path from subscriptionbillgenerated where subscription_generatedid = ?`,
-      [querydata.recurredbillid]
+      [querydata.eventid]
     );
     var data;
     if (sql[0]) {
@@ -5432,7 +4756,6 @@ module.exports = {
   GetProcessList,
   addFeedback,
   GetProcessCustomer,
-  GetRecurredCustomer,
   getBinaryFile,
   DeleteProcess,
   ArchiveProcess,
@@ -5450,6 +4773,5 @@ module.exports = {
   getGlobalSubscription,
   getClientDetails,
   UploadSubscription,
-  getCustomBinaryfile,
-  getRecurredBinaryfile,
+  GetPDFData,
 };

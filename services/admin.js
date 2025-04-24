@@ -2823,7 +2823,19 @@ async function GetSubscription(admin) {
       if (querydata.siteid != 0) {
         sql = await db.query(
           `SELECT DISTINCT Subscription_ID,Subscription_Name, No_of_Devices, No_of_Cameras, Addl_cameras, Addl_patrol, 
-         Patrol_hours, Valid_Months, Valid_Years, Valid_Days, No_of_Analytics,Cloud_Storage, Amount, product_desc FROM subscriptionmaster WHERE Subscription_type = 1 OR (organization_id = ? AND organization_id != 0) OR (site_id = ? AND site_id != 0) and status =1 and deleted_flag = 0;`,
+         Patrol_hours, Valid_Months, Valid_Years, Valid_Days, No_of_Analytics,Cloud_Storage, Amount, product_desc FROM subscriptionmaster WHERE Subscription_type = 1 OR (site_id = ? AND site_id != 0) and status =1 and deleted_flag = 0;`,
+          [querydata.siteid]
+        );
+      } else if (querydata.companyid != 0) {
+        sql = await db.query(
+          `SELECT DISTINCT Subscription_ID,Subscription_Name, No_of_Devices, No_of_Cameras, Addl_cameras, Addl_patrol, 
+         Patrol_hours, Valid_Months, Valid_Years, Valid_Days, No_of_Analytics,Cloud_Storage, Amount, product_desc FROM subscriptionmaster WHERE Subscription_type = 1 OR (customerbased_id = ? AND organization_id != 0)  and status =1 and deleted_flag = 0;`,
+          [querydata.siteid]
+        );
+      } else if (querydata.organizationid != 0) {
+        sql = await db.query(
+          `SELECT DISTINCT Subscription_ID,Subscription_Name, No_of_Devices, No_of_Cameras, Addl_cameras, Addl_patrol, 
+         Patrol_hours, Valid_Months, Valid_Years, Valid_Days, No_of_Analytics,Cloud_Storage, Amount, product_desc FROM subscriptionmaster WHERE Subscription_type = 1 OR (organization_id = ? AND organization_id != 0) and status =1 and deleted_flag = 0;`,
           [querydata.siteid]
         );
       } else {

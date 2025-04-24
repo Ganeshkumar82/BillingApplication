@@ -143,7 +143,7 @@ router.post("/updatesalesprocess", async function (req, res, next) {
 
 router.post("/detailspreloader", async function (req, res, next) {
   try {
-    res.json(await sales.FetchIdforEvents(req.body));
+    res.json(await sales.detailsPreLoader(req.body));
   } catch (er) {
     console.log(
       `Error while fetching the auto generated id for the events: ${er}`

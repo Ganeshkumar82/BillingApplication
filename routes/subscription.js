@@ -49,6 +49,15 @@ router.post("/getprocesscustomer", async function (req, res, next) {
   }
 });
 
+router.post("/getrecurredcustomer", async function (req, res, next) {
+  try {
+    res.json(await subscription.GetRecurredCustomer(req.body));
+  } catch (er) {
+    console.log(`Error while fetching the recurred customer: ${er}`);
+    next(er);
+  }
+});
+
 router.post("/getbinaryfile", async function (req, res, next) {
   try {
     res.json(await subscription.getBinaryFile(req.body));
@@ -161,11 +170,20 @@ router.post("/getcustompdf", async function (req, res, next) {
   }
 });
 
-router.post("/getpdfdata", async function (req, res, next) {
+router.post("/getcustombinaryfile", async function (req, res, next) {
   try {
-    res.json(await subscription.GetPDFData(req.body));
+    res.json(await subscription.getCustomBinaryfile(req.body));
   } catch (er) {
     console.log(`Error while fetching the custom pdf : ${er}`);
+    next(er);
+  }
+});
+
+router.post("/getrecurredbinaryfile", async function (req, res, next) {
+  try {
+    res.json(await subscription.getRecurredBinaryfile(req.body));
+  } catch (er) {
+    console.log(`Error while fetching the Recurred invoice pdf : ${er}`);
     next(er);
   }
 });

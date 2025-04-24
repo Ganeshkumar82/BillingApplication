@@ -725,7 +725,7 @@ async function addsale(req, res) {
           );
           await mqttclient.publishMqttMessage(
             "refresh",
-            "Sales Quotation approved for the process id "
+            "Client Requirement Creted Successfully"
           );
           return helper.getSuccessResponse(
             true,
@@ -1791,7 +1791,14 @@ async function addCustomInvoice(req, res) {
       // Run both requests in parallel and wait for completion
       [EmailSent] = await Promise.all(promises);
     }
-
+    await mqttclient.publishMqttMessage(
+      "Notification",
+      "Custom Invoice sent Successfully for " + querydata.clientaddressname
+    );
+    await mqttclient.publishMqttMessage(
+      "refresh",
+      "Custom Invoice sent Successfully for " + querydata.clientaddressname
+    );
     return helper.getSuccessResponse(
       true,
       "success",
@@ -3132,7 +3139,7 @@ async function UpdateSalesProcess(sales) {
 //###############################################################################################################################################################################################
 //###############################################################################################################################################################################################
 
-async function FetchIdforEvents(sales) {
+async function detailsPreLoader(sales) {
   try {
     // Check if the session token exists
     if (!sales.hasOwnProperty("STOKEN")) {
@@ -3245,6 +3252,7 @@ async function FetchIdforEvents(sales) {
       branchid,
       gstno,
       emailid,
+      invoice_number = null,
       contact_number,
       customer_name,
       billing_address,
@@ -3269,7 +3277,10 @@ async function FetchIdforEvents(sales) {
       if (customertype == 1) {
         if (querydata.eventtype == "invoice") {
           product = await db.query(
-            `select product_name productname,product_quantity productquantity,product_hsn producthsn, product_price productprice,product_gst productgst,product_sno productsno, product_total producttotal from quotation_productmaster where process_id IN(select cprocess_id from salesprocesslist where processid In(select processid from salesprocesslist where cprocess_id in(?) and approved_status = 1 and process_type IN (2,3)))`,
+            `select product_name productname,product_quantity productquantity,product_hsn producthsn, product_price productprice,product_gst productgst,product_sno productsno,
+            product_total producttotal from quotation_productmaster where process_id IN(select cprocess_id from salesprocesslist where processid In(select processid from salesprocesslist 
+            where cprocess_id in(select cprocess_id from salesprocesslist where Approved_status = 1 and Processid in (select processid from salesprocesslist where cprocess_id = ?) order by cprocess_id DESC ) and 
+            process_type IN (2,3)))`,
             [querydata.eventid]
           );
           if (product.length == 0) {
@@ -3281,7 +3292,7 @@ async function FetchIdforEvents(sales) {
               secret
             );
           }
-          customercode = "SSIPL-ENQINV";
+          customercode = "SSIPL";
           const [result1] = await db.spcall(
             `CALL Generate_invoiceid(?,?,@p_invoice_id); select @p_invoice_id`,
             [userid, customercode]
@@ -3289,7 +3300,7 @@ async function FetchIdforEvents(sales) {
           const objectValue = result1[1][0];
           eventnumber = objectValue["@p_invoice_id"];
         } else if (querydata.eventtype == "quotation") {
-          customercode = "SSIPL-ENQQ";
+          customercode = "SSIPL";
           const [result1] = await db.spcall(
             `CALL Generate_quotationid(?,?,@p_quotation_id); select @p_quotation_id`,
             [userid, customercode]
@@ -3300,7 +3311,7 @@ async function FetchIdforEvents(sales) {
           var ccode;
           product = await db.query(
             `SELECT * FROM (
-              SELECT ipm.inv_productid AS productid, ipm.product_name AS productname, ipm.product_quantity AS invoice_quantity, ipm.product_hsn AS producthsn, ipm.product_price 
+              SELECT ipm.inv_productid AS productid,ipm.invoice_id invoice_number, ipm.product_name AS productname, ipm.product_quantity AS invoice_quantity, ipm.product_hsn AS producthsn, ipm.product_price 
               AS productprice, ipm.product_gst AS productgst, ipm.product_sno AS productsno, COALESCE(delivered.total_delivered, 0) AS delivered_quantity, 
               (ipm.product_quantity - COALESCE(delivered.total_delivered, 0)) AS productquantity, ipm.process_id FROM invoice_productmaster ipm LEFT JOIN 
               (SELECT inv_productid, SUM(product_quantity) AS total_delivered FROM dc_productmaster GROUP BY inv_productid) delivered ON ipm.inv_productid = delivered.inv_productid
@@ -3325,6 +3336,8 @@ async function FetchIdforEvents(sales) {
           );
           if (sql[0]) {
             ccode = sql[0].cprocess_gene_id;
+          } else {
+            ccode = "SSIPL-DC/";
           }
           const [result1] = await db.spcall(
             `CALL GenerateDeliverychId(?,?,@p_deliverychallan_id); select @p_deliverychallan_id`,
@@ -3332,6 +3345,7 @@ async function FetchIdforEvents(sales) {
           );
           const objectValue = result1[1][0];
           eventnumber = objectValue["@p_deliverychallan_id"];
+          invoice_number = product[0].invoice_number;
         } else if (querydata.eventtype == "requestforquotation") {
           const [result1] = await db.spcall(
             `CALL Generate_rfq(?,@p_rfq_id); select @p_rfq_id`,
@@ -3381,39 +3395,49 @@ async function FetchIdforEvents(sales) {
           }
         }
       } else if (customertype == 2) {
-        if (customerid != 0 && customerid != "") {
-          sql1 = await db.query1(
-            `select ccode from customermaster where customer_id IN (?)`,
-            [customerid]
-          );
-        } else {
-          sql2 = await db.query1(
-            `select branch_code from branchmaster where branch_id in(?)`,
-            branchid
-          );
-        }
-        if (sql1.length > 0) {
-          customercode = sql1[0].ccode || "SSIPL-CUS";
-        } else if (sql2.length > 0) {
-          customercode = sql2[0].branch_code || "SSIPL-BRANCH";
-        } else {
-          return helper.getErrorResponse(
-            false,
-            "error",
-            "Company or branch id not found",
-            "GET THE EVENT NUMBER",
-            secret
-          );
-        }
+        // if (customerid != 0 && customerid != "") {
+        //   sql1 = await db.query1(
+        //     `select ccode from customermaster where customer_id IN (?)`,
+        //     [customerid]
+        //   );
+        // } else {
+        //   sql2 = await db.query1(
+        //     `select branch_code from branchmaster where branch_id in(?)`,
+        //     branchid
+        //   );
+        // }
+        // if (sql1.length > 0) {
+        //   customercode = sql1[0].ccode || "SSIPL";
+        // } else if (sql2.length > 0) {
+        customercode = "SSIPL";
+        // } else {
+        //   return helper.getErrorResponse(
+        //     false,
+        //     "error",
+        //     "Company or branch id not found",
+        //     "GET THE EVENT NUMBER",
+        //     secret
+        //   );
+        // }
         if (querydata.eventtype == "invoice") {
+          if (customercode == "null") {
+            customercode = "SSIPL";
+          }
           const [result1] = await db.spcall(
             `CALL Generate_invoiceid(?,?,@p_invoice_id); select @p_invoice_id`,
             [userid, customercode]
           );
           const objectValue = result1[1][0];
           eventnumber = objectValue["@p_invoice_id"];
+          // product = await db.query(
+          //   `select product_name productname,product_quantity productquantity,product_hsn producthsn, product_price productprice,product_gst productgst,product_sno productsno, product_total producttotal from quotation_productmaster where process_id IN(select cprocess_id from salesprocesslist where processid In(select processid from salesprocesslist where cprocess_id in(?) and approved_status = 1 and process_type IN (2,3)))`,
+          //   [querydata.eventid]
+          // );
           product = await db.query(
-            `select product_name productname,product_quantity productquantity,product_hsn producthsn, product_price productprice,product_gst productgst,product_sno productsno, product_total producttotal from quotation_productmaster where process_id IN(select cprocess_id from salesprocesslist where processid In(select processid from salesprocesslist where cprocess_id in(?) and approved_status = 1 and process_type IN (2,3)))`,
+            `select product_name productname,product_quantity productquantity,product_hsn producthsn, product_price productprice,product_gst productgst,product_sno productsno,
+            product_total producttotal from quotation_productmaster where process_id IN(select cprocess_id from salesprocesslist where processid In(select processid from salesprocesslist 
+            where cprocess_id in (select cprocess_id from salesprocesslist where Approved_status = 1 and Processid in (select processid from salesprocesslist where cprocess_id = ?) order by cprocess_id DESC) and 
+            process_type IN (2,3)))`,
             [querydata.eventid]
           );
           if (product.length == 0) {
@@ -3426,8 +3450,7 @@ async function FetchIdforEvents(sales) {
             );
           }
         } else if (querydata.eventtype == "quotation") {
-          if (customercode == null) {
-          }
+          customercode = "SSIPL";
           const [result1] = await db.spcall(
             `CALL Generate_quotationid(?,?,@p_quotation_id); select @p_quotation_id`,
             [userid, customercode]
@@ -3438,7 +3461,8 @@ async function FetchIdforEvents(sales) {
           var ccode;
           product = await db.query(
             `SELECT * FROM (
-              SELECT ipm.inv_productid AS productid, ipm.product_name AS productname, ipm.product_quantity AS invoice_quantity, ipm.product_hsn AS producthsn, ipm.product_price 
+              SELECT ipm.inv_productid AS productid,ipm.invoice_id invoice_number, ipm.product_name AS productname, ipm.product_quantity AS invoice_quantity, ipm.product_hsn AS 
+              producthsn, ipm.product_price 
               AS productprice, ipm.product_gst AS productgst, ipm.product_sno AS productsno, COALESCE(delivered.total_delivered, 0) AS delivered_quantity, 
               (ipm.product_quantity - COALESCE(delivered.total_delivered, 0)) AS productquantity, ipm.process_id FROM invoice_productmaster ipm LEFT JOIN 
               (SELECT inv_productid, SUM(product_quantity) AS total_delivered FROM dc_productmaster GROUP BY inv_productid) delivered ON ipm.inv_productid = delivered.inv_productid
@@ -3465,7 +3489,7 @@ async function FetchIdforEvents(sales) {
           if (sql[0]) {
             ccode = sql[0].cprocess_gene_id;
           } else {
-            ccode = "ssipl-dc/";
+            ccode = "SSIPL-DC/";
           }
           const [result1] = await db.spcall(
             `CALL GenerateDeliverychId(?,?,@p_deliverychallan_id); select @p_deliverychallan_id`,
@@ -3473,6 +3497,7 @@ async function FetchIdforEvents(sales) {
           );
           const objectValue = result1[1][0];
           eventnumber = objectValue["@p_deliverychallan_id"];
+          invoice_number = product[0].invoice_number;
         } else if (querydata.eventtype == "requestforquotation") {
           const [result1] = await db.spcall(
             `CALL Generate_rfq(?,@p_rfq_id); select @p_rfq_id`,
@@ -3547,6 +3572,7 @@ async function FetchIdforEvents(sales) {
           client_address: client_address,
           client_addressname: client_addressname,
           product: product,
+          invoice_number: invoice_number,
         },
         secret
       );
@@ -5355,6 +5381,14 @@ async function addCustomQuotation(req, res) {
       // Run both requests in parallel and wait for completion
       [EmailSent] = await Promise.all(promises);
     }
+    await mqttclient.publishMqttMessage(
+      "Notification",
+      "Custom Quotation sent Successfully for " + querydata.clientaddressname
+    );
+    await mqttclient.publishMqttMessage(
+      "refresh",
+      "Custom Quotation sent Successfully for " + querydata.clientaddressname
+    );
     return helper.getSuccessResponse(
       true,
       "success",
@@ -7488,6 +7522,14 @@ async function addRFQ(req, res) {
           WhatsappSent = WhatsappSent.data.code;
         }
       }
+      await mqttclient.publishMqttMessage(
+        "Notification",
+        "Request for quotation sent Successfully for " + querydata.vendorname
+      );
+      await mqttclient.publishMqttMessage(
+        "refresh",
+        "Request for quotation sent Successfully for " + querydata.vendorname
+      );
       return helper.getSuccessResponse(
         true,
         "success",
@@ -9324,8 +9366,25 @@ async function approveQuotation(sales) {
     }
 
     const sql = await db.query(
-      `Update salesprocesslist set Approved_status =1,user_ip= ?,Timestamp=? where cprocess_id = ?`,
-      [querydata.user_ip, querydata.timestamp, querydata.eventid]
+      `
+  UPDATE salesprocesslist
+  JOIN (
+    SELECT processid FROM salesprocesslist WHERE cprocess_id = ?
+  ) AS sp ON (
+    salesprocesslist.processid = sp.processid
+    AND salesprocesslist.process_type NOT IN (2, 3)
+  ) OR salesprocesslist.cprocess_id = ?
+  SET 
+    Approved_status = 1,
+    user_ip = ?,
+    Timestamp = ?
+`,
+      [
+        querydata.eventid,
+        querydata.eventid,
+        querydata.user_ip,
+        querydata.timestamp,
+      ]
     );
     if (sql.affectedRows > 0) {
       await mqttclient.publishMqttMessage(
@@ -9464,10 +9523,28 @@ async function rejectQuotation(sales) {
     }
 
     const sql = await db.query(
-      `Update salesprocesslist set Approved_status =3,Rejected_reason = ? where cprocess_id = ?`,
-      [querydata.reason, querydata.eventid]
+      `UPDATE salesprocesslist
+       JOIN (
+         SELECT processid FROM salesprocesslist WHERE cprocess_id = ?
+       ) AS sp ON (
+         salesprocesslist.processid = sp.processid AND salesprocesslist.process_type NOT IN (2, 3)
+       )
+       OR salesprocesslist.cprocess_id = ?
+       SET 
+         Approved_status = 3,
+         Rejected_reason = ?`,
+      [querydata.eventid, querydata.eventid, querydata.reason]
     );
+
     if (sql.affectedRows > 0) {
+      await mqttclient.publishMqttMessage(
+        "refresh",
+        "Sales Quotation Rejected for the process id " + querydata.eventid
+      );
+      await mqttclient.publishMqttMessage(
+        "Notification",
+        "Sales Quotation Rejected for the process id " + querydata.eventid
+      );
       return helper.getSuccessResponse(
         true,
         "success",
@@ -9800,15 +9877,23 @@ async function IntQuotationApproval(req, res) {
     }
 
     var sql1;
+    const sql3 = await db.query(
+      `select cprocess_id from salesprocesslist where status = 1 and cprocess_id = ? and cprocess_id  = (select cprocess_id from salesprocesslist where process_type IN(2,3) and
+      processid = (select processid from salesprocesslist where cprocess_id = ? Order by processid) Order by cprocess_id DESC LIMIT 1)`,
+      [sales.quoteid, sales.quoteid]
+    );
+    if (sql3.length == 0) {
+      return res.sendFile(path.join(htmlPath, "quotation_invalid.html"));
+    }
     // Update the database
     if (sales.s == 1) {
       sql1 = await db.query(
-        `UPDATE salesprocesslist SET Internal_approval = ?,Approved_status = ? WHERE cprocess_id = ?`,
+        `UPDATE salesprocesslist SET Internal_approval = ?,Approved_status = ? WHERE cprocess_id = ? and Internal_approval = 2`,
         [sales.s, 2, sales.quoteid]
       );
     } else {
       sql1 = await db.query(
-        `UPDATE salesprocesslist SET Internal_approval = ? WHERE cprocess_id = ?`,
+        `UPDATE salesprocesslist SET Internal_approval = ? WHERE cprocess_id = ? and Internal_approval = 2`,
         [sales.s, sales.quoteid]
       );
     }
@@ -10208,9 +10293,11 @@ async function getQuotationDetails(sales) {
       );
     }
     const sql = await db.query(
-      `select custsales_name,salesprocess_path pdfpath,DATE_FORMAT(salesprocess_date, '%Y-%m-%d %H:%i:%s') AS salesprocess_date,salesprocess_path pdf_path,cprocess_gene_id quotation_id, 'Sporada Secure India Private Limited' AS mailed_by,'alerts@sporadasecure.com' AS mail_from
-       from salesprocesslist where status = 1 and cprocess_id = ?`,
-      [querydata.eventid]
+      `select custsales_name,salesprocess_path pdfpath,DATE_FORMAT(salesprocess_date, '%Y-%m-%d %H:%i:%s') AS salesprocess_date,salesprocess_path pdf_path,
+      cprocess_gene_id quotation_id, 'Sporada Secure India Private Limited' AS mailed_by,'alerts@sporadasecure.com' AS mail_from
+      from salesprocesslist where status = 1 and cprocess_id = ? and cprocess_id = (select cprocess_id from salesprocesslist where process_type IN(2,3) and
+      processid = (select processid from salesprocesslist where cprocess_id = ? Order by processid) Order by cprocess_id DESC LIMIT 1)`,
+      [querydata.eventid, querydata.eventid]
     );
     var data;
     if (sql.length >= 0) {
@@ -10239,9 +10326,9 @@ async function getQuotationDetails(sales) {
       );
     } else {
       return helper.getSuccessResponse(
-        true,
-        "success",
-        "Quotation Details Fetched Successfully",
+        false,
+        "error",
+        "Session expired.",
         sql,
         secret
       );
@@ -10519,7 +10606,7 @@ module.exports = {
   GetProcessList,
   UpdateSalesProcess,
   UpdateProcessList,
-  FetchIdforEvents,
+  detailsPreLoader,
   GetProcessShow,
   GetProcessCustomer,
   GetCustomerList,

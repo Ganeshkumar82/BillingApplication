@@ -398,17 +398,28 @@ async function sendInvoice(
       viewPath: path.resolve("./views/"),
     };
 
-    const attachments = Array.isArray(filepaths)
-      ? filepaths.map((filepath) => ({
-          filename: path.basename(filepath),
-          path: path.resolve(filepath), // For multiple files, map to attachment objects
-        }))
-      : [
-          {
-            filename: path.basename(filepaths),
-            path: path.resolve(filepaths), // For a single file, create a single attachment object
-          },
-        ];
+    const normalizeFilePaths = (filepaths) => {
+      if (Array.isArray(filepaths)) {
+        return filepaths;
+      }
+
+      if (typeof filepaths === "string") {
+        // Handle comma-separated strings
+        if (filepaths.includes(",")) {
+          return filepaths.split(",").map((p) => p.trim());
+        }
+        return [filepaths.trim()];
+      }
+
+      return []; // fallback if filepaths is undefined or not in expected format
+    };
+
+    const normalizedPaths = normalizeFilePaths(filepaths);
+
+    const attachments = normalizedPaths.map((filepath) => ({
+      filename: path.basename(filepath),
+      path: path.resolve(filepath),
+    }));
     // use a template file with nodemailer
     transporter.use("compile", hbs(handlebarOptions));
 
