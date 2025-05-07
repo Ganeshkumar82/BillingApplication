@@ -143,11 +143,20 @@ router.post("/detailspreloader", async function (req, res, next) {
   }
 });
 
-router.post("addquotation", async function (req, res, next) {
+router.post("/addquotation", async function (req, res, next) {
   try {
-    res.json(await subscription.AddQuotation(req.body));
+    res.json(await subscription.AddQuotation(req, res));
   } catch (er) {
     console.log(`Error while adding the quotation : ${er}`);
+    next(er);
+  }
+});
+
+router.post("/addrevisedquotation", async function (req, res, next) {
+  try {
+    res.json(await subscription.AddRevisedQuotation(req, res));
+  } catch (er) {
+    console.log(`Error while adding the revised quotation : ${er}`);
     next(er);
   }
 });
@@ -220,6 +229,15 @@ router.post("/uploadsubscription", async function (req, res, next) {
     res.json(await subscription.UploadSubscription(req.body));
   } catch (er) {
     console.log(`Error while Uploading the Subscription Details : ${er}`);
+    next(er);
+  }
+});
+
+router.get("/intquoteapprove", async function (req, res, next) {
+  try {
+    await subscription.IntQuotationApproval(req, res, next);
+  } catch (er) {
+    console.log(`Error while approving the quotation internally: ${er}`);
     next(er);
   }
 });

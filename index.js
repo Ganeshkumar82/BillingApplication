@@ -56,3 +56,10 @@ server.headersTimeout = 65 * 1000; // Ensure this is slightly larger than keepAl
 server.listen(port, async () => {
   console.log(`App is listening at the port http://localhost:${port}`);
 });
+
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`Port ${port} is already in use.`);
+    process.exit(1); // Exit the process to avoid multiple instances
+  }
+});

@@ -15,6 +15,19 @@ async function decrypt(encrypted, secret) {
   return decrypted + decipher.final("utf8");
 }
 
+async function getFinancialYear(date = new Date()) {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1; // 0-based in JS
+
+  if (month >= 4) {
+    // April to December
+    return `${year}-${year + 1}`;
+  } else {
+    // January to March
+    return `${year - 1}-${year}`;
+  }
+}
+
 async function getSuccessResponse(code, status, message, data, secret) {
   try {
     if (secret != null && secret != "") {
@@ -82,13 +95,13 @@ async function getServerSetting(moduletag) {
       [moduletag]
     );
 
-    console.log("helper->getServerSetting->", result[0]?.setting_value);
+    // console.log("helper->getServerSetting->", result[0]?.setting_value);
 
     if (result[0]) {
       const SettingValueStr = result[0].setting_value;
 
       const SettingValue = await decrypt(SettingValueStr, "SporadaSecure@23");
-      console.log("SettingValue after decrypt =>", SettingValue);
+      // console.log("SettingValue after decrypt =>", SettingValue);
 
       return { SettingValue };
     } else {
@@ -138,4 +151,5 @@ module.exports = {
   phonenumber,
   convertFileToBinary,
   formatDateToSQL,
+  getFinancialYear,
 };

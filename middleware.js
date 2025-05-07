@@ -433,8 +433,8 @@ let storage9 = multer.diskStorage({
     }
   },
   filename: (req, file, cb) => {
-    const timestamp = Date.now();
-    cb(null, `${timestamp}_${file.originalname}`); // Use timestamp to avoid duplicate filenames
+    const cleanedFileName = file.originalname.replace(/\s+/g, ""); // Remove all spaces
+    cb(null, `SSIPL-${cleanedFileName}`);
   },
 });
 
@@ -447,6 +447,52 @@ let uploadFile9 = multer({
 }).array("files", 100);
 
 let uploadrecurringinvoicepdf = util.promisify(uploadFile9);
+
+//#############################################################################################################################################################################################
+//#############################################################################################################################################################################################
+//#############################################################################################################################################################################################
+//#############################################################################################################################################################################################
+
+// Dynamically set the storage path
+let storage12 = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    try {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.toLocaleString("default", { month: "long" }); // e.g., December
+      const day = now.getDate();
+      let folder = config.filestorage; // Default folder
+
+      folder = `${folder}/${year}/${month}/${day}/Subscription/CustomInvoice`;
+
+      // Ensure the folder exists
+      await fs.ensureDir(folder);
+
+      cb(null, folder);
+    } catch (err) {
+      cb(err);
+    }
+  },
+  filename: (req, file, cb) => {
+    const timestamp = Date.now();
+    const date = new Date(timestamp);
+    const YYYYMMDD =
+      date.getFullYear().toString() +
+      (date.getMonth() + 1).toString().padStart(2, "0") +
+      date.getDate().toString().padStart(2, "0");
+    cb(null, `${timestamp}_${file.originalname}`); // Use timestamp to avoid duplicate filenames
+  },
+});
+
+// Set max file size to 2MB
+const maxSize12 = 2 * 1024 * 1024;
+
+let uploadFile12 = multer({
+  storage: storage12,
+  limits: { fileSize: maxSize12 },
+}).single("file");
+
+let uploadcustominvoicepdf = util.promisify(uploadFile12);
 
 //#############################################################################################################################################################################################
 //#############################################################################################################################################################################################
@@ -550,4 +596,5 @@ module.exports = {
   uploadrecurringinvoicepdf,
   uploadSubCustomerrequ,
   uploadSubQuotationp,
+  uploadcustominvoicepdf,
 };

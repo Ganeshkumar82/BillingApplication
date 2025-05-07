@@ -3,11 +3,13 @@ const helper = require("../helper");
 const config = require("../config");
 const multer = require("multer");
 const uploadFile = require("../middleware");
-const fs = require("fs");
+const fs = require("fs-extra");
 const mailer = require("../mailer");
+const moment = require("moment");
 const axios = require("axios");
 const path = require("path");
 const mqttclient = require("../mqttclient");
+const { Console } = require("console");
 // const { OrganizationList, CompanyList } = require("./admin");
 // const { addFeedback } = require("./subscription");
 //###############################################################################################################################################################################################
@@ -564,6 +566,7 @@ async function addRecurringInvoice(req, res) {
 
       const requiredFields = [
         "siteids",
+        "sitenames",
         "subscriptionbillid",
         "clientaddressname",
         "clientaddress",
@@ -579,6 +582,10 @@ async function addRecurringInvoice(req, res) {
         "messagetype",
         "feedback",
         "customerid",
+        "billmode",
+        "plantype",
+        "duedate",
+        "billperiod",
       ];
 
       for (let field of requiredFields) {
@@ -592,6 +599,76 @@ async function addRecurringInvoice(req, res) {
           );
         }
       }
+      var SiteName, cleanSiteName;
+      if (
+        Array.isArray(querydata.sitenames) &&
+        querydata.sitenames.length === 1
+      ) {
+        SiteName = querydata.sitenames[0] || "UnknownCompany";
+        cleanSiteName = SiteName.replace(/[^a-z0-9]/gi, "_").toLowerCase();
+      }
+
+      const year = await helper.getFinancialYear();
+      const sql3 = await db.query1(
+        `select o.organization_name,c.customer_name from customermaster c LEFT JOIN organizations o ON o.organization_id = c.organization_id  where customer_id = ${querydata.customerid}`
+      );
+      var companyName = querydata.clientaddressname || "UnknownCompany";
+      var cleanCompanyName = companyName
+        .replace(/[^a-z0-9]/gi, "_")
+        .toLowerCase();
+
+      var targetFolder;
+      if (cleanSiteName == cleanCompanyName) {
+        if (sql3.length > 0) {
+          companyName = sql3[0].customer_name || "UnknownCompany";
+          const organizationname = sql3[0].organization_name || null;
+          cleanCompanyName = companyName
+            .replace(/[^a-z0-9]/gi, "_")
+            .toLowerCase();
+          if (organizationname == null) {
+            targetFolder = `${config.filestorage}/invoices/${cleanCompanyName}/SurvillenceInvoice/${year}`;
+          } else {
+            targetFolder = `${config.filestorage}/invoices/${organizationname}/${cleanCompanyName}/SurvillenceInvoice/${year}`;
+          }
+        } else {
+          targetFolder = `${config.filestorage}/invoices/${cleanCompanyName}/SurvillenceInvoice/${year}`;
+        }
+      } else {
+        if (sql3.length > 0) {
+          companyName = sql3[0].customer_name || "UnknownCompany";
+          const organizationname = sql3[0].organization_name || null;
+          cleanCompanyName = companyName
+            .replace(/[^a-z0-9]/gi, "_")
+            .toLowerCase();
+          if (organizationname == null) {
+            targetFolder = `${config.filestorage}/invoices/${cleanCompanyName}/SurvillenceInvoice/${cleanSiteName}/${year}`;
+          } else {
+            targetFolder = `${config.filestorage}/invoices/${organizationname}/${cleanCompanyName}/SurvillenceInvoice/${cleanSiteName}/${year}`;
+          }
+        } else {
+          targetFolder = `${config.filestorage}/invoices/${cleanCompanyName}/SurvillenceInvoice/${cleanSiteName}/${year}`;
+        }
+      }
+      await fs.ensureDir(targetFolder);
+
+      // Move each uploaded file
+      await Promise.all(
+        req.files.map(async (file) => {
+          const newFilePath = path.join(targetFolder, file.filename);
+          if (querydata.billmode == "Printed") {
+            const newFilePath1 = path.join(config.printpath, file.filename);
+            await fs.copy(file.path, newFilePath1, { overwrite: true });
+          }
+          if (file.path !== newFilePath) {
+            await fs.move(file.path, newFilePath, { overwrite: true });
+            file.path = newFilePath; // Update file path if moved
+          } else {
+            console.log(
+              `Skipping move for ${file.filename}: source and destination are the same.`
+            );
+          }
+        })
+      );
 
       // Call DB stored procedure
       const [sql1] = await db.spcall(
@@ -626,6 +703,7 @@ async function addRecurringInvoice(req, res) {
     // Extract details from the first entry
     const {
       clientaddressname,
+      billingaddressname,
       emailid,
       ccemail,
       phoneno,
@@ -634,6 +712,9 @@ async function addRecurringInvoice(req, res) {
       date,
       totalamount,
       messagetype,
+      plantype,
+      duedate,
+      billperiod,
     } = firstEntry;
 
     const formattedDate = new Date(date).toISOString().split("T")[0];
@@ -641,6 +722,17 @@ async function addRecurringInvoice(req, res) {
       .split(",")
       .map((num) => num.trim())
       .filter((n) => n !== "");
+    console.log("billmode:", plantype);
+    let invoiceMonth;
+    if (plantype === "Prepaid") {
+      invoiceMonth = moment(); // current month
+    } else if (plantype === "Postpaid") {
+      invoiceMonth = moment().add(1, "month"); // next month
+    }
+
+    const subject = `Sporada Secure - Invoice for the Month of ${invoiceMonth.format(
+      "MMMM"
+    )} ${invoiceMonth.format("YYYY")}`;
 
     const pdfPaths = fileList
       .map((file) => (typeof file === "string" ? file : file.path))
@@ -651,19 +743,21 @@ async function addRecurringInvoice(req, res) {
 
     if (messagetype === 1 || messagetype === 3) {
       // Email or Both
-      EmailSent = await mailer.sendInvoice(
+      EmailSent = await mailer.sendRecurredInvoice(
         clientaddressname,
         emailid,
-        "Your invoice from Sporada Secure India Private Limited",
-        "invoicepdf.html",
+        subject,
+        "recurredinvoicepdf.html",
         "",
-        "INVOICE_PDF_SEND",
+        "RECURRED_INVOICE_PDF_SEND",
         pdfPaths,
         invoicegenid,
         formattedDate,
         totalamount,
         ccemail,
-        feedback
+        feedback,
+        billperiod,
+        duedate
       );
     }
 
@@ -692,7 +786,7 @@ async function addRecurringInvoice(req, res) {
     // await mqttclient.publishMqttMessage("refresh", "Invoice created");
     await mqttclient.publishMqttMessage(
       "Notification",
-      `Recurring invoice created for ${clientaddressname}`
+      `Recurring invoice created for ${billingaddressname}`
     );
 
     return helper.getSuccessResponse(
@@ -1960,7 +2054,7 @@ async function clientProfile(subscription) {
     let startDate;
     sql = await db.query(
       `SELECT scustomer_name customer_name, scustomer_mailid customer_mailid, scustomer_phoneno customer_phoneno, scustomer_gstno customer_gstno, 
-      Address, Billing_address, billingadddress_name, Customer_type,
+      Address, Billing_address, billingadddress_name, Customer_type,Exist_customerid
       (SELECT COUNT(*) FROM subscriptionprocessmaster WHERE customer_id = c.scustomer_id AND status = 1) AS total_process,
       (SELECT COUNT(*) FROM subscriptionprocessmaster WHERE customer_id = c.scustomer_id AND active_status = 1 AND status = 1) AS active_process,
       (SELECT COUNT(*) FROM subscriptionprocessmaster WHERE customer_id = c.scustomer_id AND active_status = 0 AND status = 1) AS inactive_process
@@ -1969,32 +2063,35 @@ WHERE scustomer_id = ? and status =1`,
       [querydata.customerid]
     );
     var customertype, companycount, sitecount;
-    if (sql[0]) {
+    if (sql.length > 0) {
       if (sql[0].Customer_type == 1) {
         customertype = "Enquiry";
         companycount = 0;
         sitecount = 0;
       } else {
         var sql1;
-        if (sql[0].exist_customerid != 0) {
+        if (sql[0].Exist_customerid != 0) {
           sql1 = await db.query1(
             `SELECT COUNT(*) AS companycount, Customer_type,(SELECT COUNT(*) FROM branchmaster WHERE customer_id = c.customer_id) AS branch_count
              FROM customermaster c WHERE customer_id = ?`,
-            [sql[0].exist_customerid]
-          );
-        } else if (sql[0].exist_branchid != 0) {
-          sql1 = await db.query1(
-            `SELECT COUNT(*) AS branch_count, c.Customer_type,(SELECT COUNT(*) FROM customermaster WHERE customer_id IN  (SELECT customer_id FROM branchmaster WHERE branch_id = b.branch_id))   AS companycount FROM branchmaster b JOIN customermaster c ON b.customer_id = c.customer_id WHERE b.branch_id = ?`,
-            [sql[0].exist_branchid]
+            [sql[0].Exist_customerid]
           );
         }
-        if (sql1[0].Customer_type == 1) {
-          customertype = "Company";
-        } else {
-          customertype = "Organization";
+        // else if (sql[0].exist_branchid != 0) {
+        //   sql1 = await db.query1(
+        //     `SELECT COUNT(*) AS branch_count, c.Customer_type,(SELECT COUNT(*) FROM customermaster WHERE customer_id IN  (SELECT customer_id FROM branchmaster WHERE branch_id = b.branch_id))   AS companycount FROM branchmaster b JOIN customermaster c ON b.customer_id = c.customer_id WHERE b.branch_id = ?`,
+        //     [sql[0].exist_branchid]
+        //   );
+        // }
+        if (sql1.length > 0) {
+          if (sql1[0].Customer_type == 1) {
+            customertype = "Company";
+          } else {
+            customertype = "Organization";
+          }
+          companycount = sql1[0].companycount;
+          sitecount = sql1[0].branch_count;
         }
-        companycount = sql1[0].companycount;
-        sitecount = sql1[0].branch_count;
       }
     }
     if (sql[0]) {
@@ -2273,6 +2370,7 @@ async function uploadMor(req, res) {
 //##########################################################################################################################################################################################
 
 async function addSubscriptionCustomerreq(req, res) {
+  var subscriptionid, processid;
   try {
     var secret, subscription;
     // Upload file handling
@@ -2421,6 +2519,10 @@ async function addSubscriptionCustomerreq(req, res) {
         field: "title",
         message: "Title missing. Please provide the Title",
       },
+      {
+        field: "companyid",
+        message: "Company id missing. Please provide the Company id",
+      },
     ];
 
     for (const { field, message } of requiredFields) {
@@ -2442,26 +2544,50 @@ async function addSubscriptionCustomerreq(req, res) {
     const objectValue = result1[1][0];
     requirementid = objectValue["@p_customerreq_id"];
     // Insert subscription data into the database
-    const [sql] = await db.spcall(
-      `CALL SP_ADD_SUBSCRIPTION(?,?,?,?,?,?,?,?,?,?,?,?,@subscriptionid); select @subscriptionid;`,
-      [
-        querydata.name,
-        querydata.emailid,
-        querydata.phoneno,
-        querydata.gst,
-        querydata.address,
-        querydata.billingaddressname,
-        querydata.billingaddress,
-        querydata.modeofrequest,
-        querydata.MORreference,
-        userid,
-        req.file.path,
-        querydata.title,
-      ]
-    );
-
+    var sql;
+    if (querydata.customerid == null) {
+      [sql] = await db.spcall(
+        `CALL SP_ADD_SUBSCRIPTION(?,?,?,?,?,?,?,?,?,?,?,?,?,?,@subscriptionid); select @subscriptionid;`,
+        [
+          querydata.name,
+          querydata.emailid,
+          querydata.phoneno,
+          querydata.gst,
+          querydata.address,
+          querydata.billingaddressname,
+          querydata.billingaddress,
+          querydata.modeofrequest,
+          querydata.MORreference,
+          userid,
+          req.file.path,
+          querydata.title,
+          1,
+          querydata.customerid,
+        ]
+      );
+    } else {
+      [sql] = await db.spcall(
+        `CALL SP_ADD_SUBSCRIPTION(?,?,?,?,?,?,?,?,?,?,?,?,?,?,@subscriptionid); select @subscriptionid;`,
+        [
+          querydata.name,
+          querydata.emailid,
+          querydata.phoneno,
+          querydata.gst,
+          querydata.address,
+          querydata.billingaddressname,
+          querydata.billingaddress,
+          querydata.modeofrequest,
+          querydata.MORreference,
+          userid,
+          req.file.path,
+          querydata.title,
+          2,
+          querydata.customerid,
+        ]
+      );
+    }
     const objectvalue1 = sql[1][0];
-    const subscriptionid = objectvalue1["@subscriptionid"];
+    subscriptionid = objectvalue1["@subscriptionid"];
 
     if (subscriptionid) {
       const [processSql] = await db.spcall(
@@ -2469,7 +2595,7 @@ async function addSubscriptionCustomerreq(req, res) {
         [subscriptionid, userid, querydata.name]
       );
       const objectvalue2 = processSql[1][0];
-      const processid = objectvalue2["@processid"];
+      processid = objectvalue2["@processid"];
 
       if (processid) {
         const [proListSql] = await db.spcall(
@@ -2509,7 +2635,7 @@ async function addSubscriptionCustomerreq(req, res) {
                 site.cameraquantity,
                 site.address,
                 prolistid,
-                querydata.notes,
+                JSON.stringify(querydata.notes),
               ]
             );
           });
@@ -2557,6 +2683,18 @@ async function addSubscriptionCustomerreq(req, res) {
       );
     }
   } catch (er) {
+    if (subscriptionid != null && subscriptionid != undefined) {
+      const sql = await db.query(
+        `delete from enquirysubscriptionmaster where scustmer_id =?`,
+        [subscriptionid]
+      );
+    }
+    if (processid != null && processid != undefined) {
+      const sql = await db.query(
+        `delete from subscriptionprocesslist where sprocess_id =?`,
+        [processid]
+      );
+    }
     return helper.getErrorResponse(
       false,
       "error",
@@ -2835,12 +2973,13 @@ async function detailsPreLoader(subscription) {
     }
 
     const sql = await db.query(
-      `select scustomer_id customer_id,scustomer_name customer_name,scustomer_phoneno customer_phoneno,scustomer_mailid customer_mailid,scustomer_gstno customer_gstno,billing_address,address,billingadddress_name billingadd9ress_name,Process_titile from enquirysubscriptionmaster where scustomer_id IN(select customer_id from subscriptionprocessmaster where sub_processid In(select processid from subscriptionprocesslist where sprocess_id in(?)))`,
+      `select scustomer_id customer_id,scustomer_name customer_name,scustomer_phoneno customer_phoneno,scustomer_mailid customer_mailid,scustomer_gstno customer_gstno,billing_address,address,billingadddress_name billingaddress_name,Process_titile,Exist_customerid companyid from enquirysubscriptionmaster where scustomer_id IN(select customer_id from subscriptionprocessmaster where sub_processid In(select processid from subscriptionprocesslist where sprocess_id in(?)))`,
       [querydata.eventid]
     );
     var eventnumber,
       title,
       customerid,
+      companyid,
       gstno,
       emailid,
       contact_number,
@@ -2850,13 +2989,14 @@ async function detailsPreLoader(subscription) {
       client_address,
       client_addressname,
       customercode = "",
-      subscription;
+      packagedetails;
     if (sql.length > 0) {
       customerid = sql[0].customer_id || 0;
+      companyid = sql[0].companyid || 0;
       title = sql[0].Process_titile || "";
-      gstno = sql[0].scustomer_gstno || "";
-      contact_number = sql[0].scustomer_phoneno || "";
-      customer_name = sql[0].scustomer_name || "";
+      gstno = sql[0].customer_gstno || "";
+      contact_number = sql[0].customer_phoneno || "";
+      customer_name = sql[0].customer_name || "";
       billing_address = sql[0].billing_address || "";
       billingaddress_name = sql[0].billingaddress_name || "";
       client_address = sql[0].address || "";
@@ -2865,7 +3005,7 @@ async function detailsPreLoader(subscription) {
     }
 
     if (querydata.eventtype == "quotation") {
-      customercode = "SSIPL-ENQQ";
+      customercode = "SSIPL-QUOTE";
       const [result1] = await db.spcall(
         `CALL GenerateSub_quotationid(?,?,@p_quotation_id); select @p_quotation_id`,
         [userid, customercode]
@@ -2878,27 +3018,33 @@ async function detailsPreLoader(subscription) {
       );
     } else if (querydata.eventtype == "revisedquotation") {
       const sql = await db.query(
-        `select sprocess_gene_id from subscriptionprocesslist where sprocess_id In(?)`,
+        `select sprocess_gene_id,package_details from subscriptionprocesslist where processid IN ( SELECT processid FROM subscriptionprocesslist WHERE sprocess_id = ?) 
+        AND process_type IN(2,3) ORDER BY sprocess_id DESC LIMIT 1`,
         [querydata.eventid]
       );
       if (sql.length > 0) {
-        const ccode = sql[0].cprocess_gene_id;
+        const ccode = sql[0].sprocess_gene_id;
         const [result] = await db.spcall(
           `CALL Generate_revisedquotation(?,?,@p_quotation_id); select @p_quotation_id`,
           [userid, ccode]
         );
         const objectValue = result[1][0];
         eventnumber = objectValue["@p_quotation_id"];
-        subscription = await db.query(
-          `select requirement_id,sitename,camera_quantity,Address,Notes from subscriptioncustomerrequirements where sprocess_id IN(?)`,
-          [querydata.eventid]
+        packagedetails = sql[0].package_details;
+      } else {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Event id not found",
+          "GET THE EVENT NUMBER",
+          secret
         );
       }
     } else {
       return helper.getErrorResponse(
         false,
         "error",
-        "Event id not found",
+        "Quotation not found",
         "GET THE EVENT NUMBER",
         secret
       );
@@ -2912,13 +3058,14 @@ async function detailsPreLoader(subscription) {
           eventnumber: eventnumber,
           title: title,
           gstnumber: gstno,
+          companyid: companyid,
           emailid: emailid,
           contact_number: contact_number,
           billing_address: billing_address,
           billingaddress_name: billingaddress_name,
           client_address: client_address,
           client_addressname: client_addressname,
-          subscription: subscription,
+          packagedetails: packagedetails,
         },
         secret
       );
@@ -3231,17 +3378,32 @@ async function detailsPreLoader(subscription) {
 //   }
 // }
 
-async function AddQuotation(req, res) {
+async function AddRevisedQuotation(req, res) {
+  var quotationid, subscription;
   try {
     var secret;
     try {
       await uploadFile.uploadSubQuotationp(req, res);
+      subscription = req.body;
+
+      // Check if the session token exists
+      if (!subscription.STOKEN) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Login sessiontoken missing. Please provide the Login sessiontoken",
+          "ADD QUOTATION",
+          ""
+        );
+      }
+      var secret = subscription.STOKEN.substring(0, 16);
       if (!req.file) {
         return helper.getErrorResponse(
           false,
           "error",
           "Please upload a file!",
-          "ADD QUOTATION"
+          "ADD QUOTATION",
+          secret
         );
       }
     } catch (er) {
@@ -3250,22 +3412,10 @@ async function AddQuotation(req, res) {
         "error",
         `Could not upload the file. ${er.message}`,
         er.message,
-        ""
+        secret
       );
     }
 
-    const subscription = req.body;
-    // Check if the session token exists
-    if (!subscription.hasOwnProperty("STOKEN")) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login sessiontoken missing. Please provide the Login sessiontoken",
-        "ADD QUOTATION",
-        ""
-      );
-    }
-    var secret = subscription.STOKEN.substring(0, 16);
     var querydata;
     // Validate session token length
     if (subscription.STOKEN.length > 50 || subscription.STOKEN.length < 15) {
@@ -3296,7 +3446,7 @@ async function AddQuotation(req, res) {
       );
     }
     // Check if querystring is provided
-    if (!subscription.hasOwnProperty("querystring")) {
+    if (!subscription.querystring) {
       return helper.getErrorResponse(
         false,
         "error",
@@ -3338,7 +3488,7 @@ async function AddQuotation(req, res) {
       { field: "billingaddress", message: "billing address missing." },
       { field: "billingaddressname", message: "Billing address name missing." },
       { field: "packagedetails", message: "Package details missing." },
-      { field: "addressdetails", message: "Address details missing." },
+      { field: "companyid", message: "Company id missing." },
       { field: "notes", message: "Noted missing" },
       { field: "emailid", message: "Email id missing." },
       { field: "phoneno", message: "Phone number missing." },
@@ -3365,46 +3515,213 @@ async function AddQuotation(req, res) {
       }
     }
     var WhatsappSent, EmailSent;
-    for (const subscription of querydata.packagedetails) {
+    const [sql1] = await db.spcall(
+      `CALL SP_ADD_SUB_QUOTATION_PROCESS(?,?,?,?,?,?,?,?,?,?,?,@prolistid); select @prolistid;`,
+      [
+        querydata.clientaddressname,
+        userid,
+        querydata.processid,
+        querydata.quotationgenid,
+        3,
+        req.file.path,
+        querydata.clientaddress,
+        querydata.billingaddress,
+        querydata.billingaddressname,
+        querydata.clientaddressname,
+        JSON.stringify(querydata.packagedetails),
+      ]
+    );
+    const objectvalue2 = sql1[1][0];
+    quotationid = objectvalue2["@prolistid"];
+    console.log(quotationid);
+    for (const subscription1 of querydata.packagedetails) {
       if (
-        !subscription.hasOwnProperty("name") ||
-        !subscription.hasOwnProperty("description") ||
-        !subscription.hasOwnProperty("cameracount") ||
-        !subscription.hasOwnProperty("amount") ||
-        !subscription.hasOwnProperty("additional_cameras") ||
-        !subscription.hasOwnProperty("subscriptiontype") ||
-        !subscription.hasOwnProperty("sites") ||
-        !subscription.hasOwnProperty("subscriptionid")
+        !subscription1.name ||
+        !subscription1.description ||
+        !subscription1.cameracount ||
+        !subscription1.amount ||
+        !subscription1.subscriptiontype ||
+        !subscription1.sites ||
+        !subscription1.subscriptionid
       ) {
         return helper.getErrorResponse(
           false,
           "error",
-          "Subscription details are incomplete. Please provide name,description,cameracount,amount,additional_cameras,subscriptiontype,sites and Subscription id",
+          "Subscription details are incomplete. Please provide name,description,cameracount,amount,subscriptiontype,sites and Subscription id",
           "ADD QUATATION",
           secret
         );
       } else {
-        if (subscription.subscriptionid == 0) {
-          const sql = await db.query1("INSERT INTO subscriptionmaster");
+        var subscriptiontype = 0,
+          subscriptionid = 0;
+        if (subscription1.subscriptionid == 0) {
+          if (subscription1.subscriptiontype == "global") {
+            subscriptiontype = 1;
+          } else if (subscription1.subscriptionttype == "company") {
+            const [rows] = await db.spcall1(
+              ` CALL InsertSubscription(?, ?, ?, ?, ?, ?, ?,?, @subscriptionid);SELECT @subscriptionid;`,
+              [
+                subscriptiontype,
+                subscription1.name,
+                1,
+                subscription1.cameracount,
+                0,
+                subscription1.amount,
+                subscription1.description,
+                querydata.companyid,
+              ]
+            );
+            const objectvalue1 = rows[1][0];
+            subscriptionid = objectvalue1["@subscriptionid"];
+          } else if (subscription1.subscriptiontype == "current") {
+            const [rows] = await db.spcall1(
+              ` CALL InsertSubscription(?, ?, ?, ?, ?, ?, ?,?, @subscriptionid);SELECT @subscriptionid;`,
+              [
+                subscriptiontype,
+                subscription1.name,
+                1,
+                subscription1.cameracount,
+                0,
+                subscription1.amount,
+                subscription1.description,
+                0,
+              ]
+            );
+            const objectvalue1 = rows[1][0];
+            subscriptionid = objectvalue1["@subscriptionid"];
+          }
+        } else {
+          subscriptionid = subscription1.subscriptionid;
+        }
+        for (const sites of subscription1.sites) {
+          if (
+            !sites.sitename ||
+            !sites.cameraquantity ||
+            !sites.siteaddress ||
+            !sites.billType ||
+            !sites.mailType
+          ) {
+            return helper.getErrorResponse(
+              false,
+              "error",
+              "Product details are incomplete. Please provide sitename ,cameraquantity, siteaddress, billtype and consolidateemail.",
+              "ADD QUATATION",
+              secret
+            );
+          } else {
+            const [rows] = await db.spcall(
+              `CALL SP_SUB_QUOTATION_ADD(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, @quoteid); SELECT @quoteid as quoteid;`,
+              [
+                sites.sitename,
+                sites.cameraquantity,
+                sites.siteaddress,
+                subscriptionid,
+                quotationid,
+                sites.billType,
+                sites.mailType,
+                querydata.notes,
+                userid,
+                querydata.gstpercent,
+                querydata.gst_number,
+              ]
+            );
+          }
         }
       }
-      if (
-        !subscription.hasOwnProperty("sitename") ||
-        !subscription.hasOwnProperty("cameraquantity") ||
-        !subscription.hasOwnProperty("siteaddress") ||
-        !subscription.hasOwnProperty("packageprice") ||
-        !subscription.hasOwnProperty("specialprice")
-      ) {
-        return helper.getErrorResponse(
-          false,
-          "error",
-          "Product details are incomplete. Please provide sitename ,cameraquantity, siteaddress, packageprice and specialprice.",
-          "ADD QUATATION",
-          secret
-        );
-      }
+    }
+    const sql = await db.query(
+      `Update generatesubquotationid set status = 0 where quotation_id IN('${querydata.quotationgenid}')`
+    );
+    const sql2 = await db.query(
+      `select u.Email_id,a.secret from usermaster u CROSS JOIN apikey a where u.user_design = 'Administrator' and u.status = 1 and a.status = 1`
+    );
+    var emailid = "",
+      secret1 = "15b97956-b296-11";
+    if (sql2.length > 0) {
+      emailid =
+        sql2.length > 0 ? sql2.map((item) => item.Email_id).join(",") : "";
+      secret1 = sql2[0].secret;
+    } else {
+      emailid = `support@sporadasecure.com,ceo@sporadasecure.com,subscription@sporadasecure.com`;
+    }
+    EmailSent = await mailer.sendapprovequotation(
+      "Administrator",
+      emailid,
+      `Action Required!!! Received Quotation Approve Request for ${querydata.clientaddressname}`,
+      "apporvequotation.html",
+      `http://192.168.0.200:8081/subscription/intquoteapprove?quoteid=${quotationid}&STOKEN=${secret1}&s=1&feedback='Apporved'`,
+      "APPROVEQUOTATION_SEND",
+      querydata.clientaddressname,
+      "QUOTATION APPROVAL",
+      `http://192.168.0.200:8081/subscription/intquoteapprove?quoteid=${quotationid}&STOKEN=${secret1}&s=3`,
+      req.file.path
+    );
+    if (EmailSent == true) {
+      const sql = await db.query(
+        `INSERT INTO quotation_mailbox(process_id,emailid,ccemail,phoneno,feedback,clientname,message_type,pdf_path)
+              VALUES(?,?,?,?,?,?,?,?)`,
+        [
+          quotationid,
+          querydata.emailid,
+          querydata.ccemail,
+          querydata.phoneno,
+          querydata.feedback,
+          querydata.clientaddressname,
+          querydata.messagetype,
+          req.file.path,
+        ]
+      );
+      await mqttclient.publishMqttMessage(
+        "Notification",
+        "Revised Quotation sent successfully to the Administrator for " +
+          querydata.clientaddressname +
+          ". Please contact Administrator for further action."
+      );
+      await mqttclient.publishMqttMessage(
+        "refresh",
+        "Revised Quotation sent successfully to the Administrator for " +
+          querydata.clientaddressname +
+          ". Please contact Administrator for further action."
+      );
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Revised Quotation sent successfully to the Administrator. Please contact Administrator for further action.",
+        { EmailSent: EmailSent },
+        secret
+      );
+    } else {
+      const sql = await db.query(
+        `delete from subscriptionprocesslist where sprocess_id =?`,
+        [quotationid]
+      );
+      await mqttclient.publishMqttMessage(
+        "Notification",
+        "Error sending the Revised Quotation for " +
+          querydata.clientaddressname +
+          ". Please try again"
+      );
+      await mqttclient.publishMqttMessage(
+        "refresh",
+        "Error sending the Revised Quotation for " +
+          querydata.clientaddressname +
+          ". Please try again"
+      );
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Error sending the Quotation. Please try again",
+        { EmailSent: EmailSent },
+        secret
+      );
     }
   } catch (er) {
+    if (quotationid != 0 && quotationid != null) {
+      const sql = await db.query(
+        `DELETE FROM subscriptionprocesslist where sprocess_id = ?`,
+        [quotationid]
+      );
+    }
     return helper.getErrorResponse(
       false,
       "error",
@@ -3414,6 +3731,368 @@ async function AddQuotation(req, res) {
     );
   }
 }
+
+//########################################################################################################################################################################################
+//########################################################################################################################################################################################
+//########################################################################################################################################################################################
+//########################################################################################################################################################################################
+
+async function AddQuotation(req, res) {
+  var quotationid, subscription;
+  try {
+    var secret;
+    try {
+      await uploadFile.uploadSubQuotationp(req, res);
+      subscription = req.body;
+
+      // Check if the session token exists
+      if (!subscription.STOKEN) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Login sessiontoken missing. Please provide the Login sessiontoken",
+          "ADD QUOTATION",
+          ""
+        );
+      }
+      var secret = subscription.STOKEN.substring(0, 16);
+      if (!req.file) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Please upload a file!",
+          "ADD QUOTATION",
+          secret
+        );
+      }
+    } catch (er) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        `Could not upload the file. ${er.message}`,
+        er.message,
+        secret
+      );
+    }
+
+    var querydata;
+    // Validate session token length
+    if (subscription.STOKEN.length > 50 || subscription.STOKEN.length < 15) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
+        "ADD QUOTATION",
+        secret
+      );
+    }
+
+    // Validate session token
+    const [result] = await db.spcall(
+      "CALL SP_STOKEN_CHECK(?,@result); SELECT @result;",
+      [subscription.STOKEN]
+    );
+    const objectvalue = result[1][0];
+    const userid = objectvalue["@result"];
+
+    if (userid == null) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+        "ADD QUOTATION",
+        secret
+      );
+    }
+    // Check if querystring is provided
+    if (!subscription.querystring) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring missing. Please provide the querystring",
+        "ADD QUOTATION",
+        secret
+      );
+    }
+
+    // Decrypt querystring
+    try {
+      querydata = await helper.decrypt(subscription.querystring, secret);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring Invalid error. Please provide the valid querystring.",
+        "ADD QUOTATION",
+        secret
+      );
+    }
+
+    // Parse the decrypted querystring
+    try {
+      querydata = JSON.parse(querydata);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring JSON error. Please provide valid JSON",
+        "ADD QUOTATION",
+        secret
+      );
+    }
+    const requiredFields = [
+      { field: "processid", message: "Process id missing" },
+      { field: "clientaddressname", message: "Client address name missing" },
+      { field: "clientaddress", message: "Client address missing." },
+      { field: "billingaddress", message: "billing address missing." },
+      { field: "billingaddressname", message: "Billing address name missing." },
+      { field: "packagedetails", message: "Package details missing." },
+      { field: "companyid", message: "Company id missing." },
+      { field: "notes", message: "Noted missing" },
+      { field: "emailid", message: "Email id missing." },
+      { field: "phoneno", message: "Phone number missing." },
+      { field: "ccemail", message: "CC email missing." },
+      { field: "date", message: "Date missing" },
+      { field: "quotationgenid", message: "Quotation id missing." },
+      { field: "messagetype", message: "Message type missing." },
+      { field: "gstpercent", message: "GST Percentage missing." },
+      { field: "gst_number", message: "Gst number missing." },
+      {
+        field: "feedback",
+        message: "Feedback missing. Please provide the feedback.",
+      },
+    ];
+    for (const { field, message } of requiredFields) {
+      if (!querydata.hasOwnProperty(field)) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          message,
+          "ADD QUOTATION",
+          secret
+        );
+      }
+    }
+    var WhatsappSent, EmailSent;
+    const [sql1] = await db.spcall(
+      `CALL SP_ADD_SUB_QUOTATION_PROCESS(?,?,?,?,?,?,?,?,?,?,?,@prolistid); select @prolistid;`,
+      [
+        querydata.clientaddressname,
+        userid,
+        querydata.processid,
+        querydata.quotationgenid,
+        2,
+        req.file.path,
+        querydata.clientaddress,
+        querydata.billingaddress,
+        querydata.billingaddressname,
+        querydata.clientaddressname,
+        JSON.stringify(querydata.packagedetails),
+      ]
+    );
+    const objectvalue2 = sql1[1][0];
+    quotationid = objectvalue2["@prolistid"];
+    console.log(quotationid);
+    for (const subscription1 of querydata.packagedetails) {
+      if (
+        !subscription1.name ||
+        !subscription1.description ||
+        !subscription1.cameracount ||
+        !subscription1.amount ||
+        !subscription1.subscriptiontype ||
+        !subscription1.sites
+        // !subscription1.subscriptionid
+      ) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Subscription details are incomplete. Please provide name,description,cameracount,amount,subscriptiontype,sites and Subscription id",
+          "ADD QUATATION",
+          secret
+        );
+      } else {
+        var subscriptiontype = 0,
+          subscriptionid = 0;
+        if (subscription1.subscriptionid == 0) {
+          if (subscription1.subscriptiontype == "global") {
+            subscriptiontype = 1;
+          } else if (subscription1.subscriptionttype == "company") {
+            const [rows] = await db.spcall1(
+              ` CALL InsertSubscription(?, ?, ?, ?, ?, ?, ?,?,?, @subscriptionid);SELECT @subscriptionid;`,
+              [
+                subscriptiontype,
+                subscription1.name,
+                1,
+                subscription1.cameracount,
+                0,
+                subscription1.amount,
+                subscription1.description,
+                querydata.companyid,
+                userid,
+              ]
+            );
+            const objectvalue1 = rows[1][0];
+            subscriptionid = objectvalue1["@subscriptionid"];
+          } else if (subscription1.subscriptiontype == "current") {
+            const [rows] = await db.spcall1(
+              ` CALL InsertSubscription(?, ?, ?, ?, ?, ?, ?,?,?, @subscriptionid);SELECT @subscriptionid;`,
+              [
+                subscriptiontype,
+                subscription1.name,
+                1,
+                subscription1.cameracount,
+                0,
+                subscription1.amount,
+                subscription1.description,
+                0,
+                userid,
+              ]
+            );
+            const objectvalue1 = rows[1][0];
+            subscriptionid = objectvalue1["@subscriptionid"];
+          }
+        } else {
+          subscriptionid = subscription1.subscriptionid;
+        }
+        for (const sites of subscription1.sites) {
+          if (
+            !sites.sitename ||
+            !sites.cameraquantity ||
+            !sites.siteaddress ||
+            !sites.billType ||
+            !sites.mailType
+          ) {
+            return helper.getErrorResponse(
+              false,
+              "error",
+              "Product details are incomplete. Please provide sitename ,cameraquantity, siteaddress, billtype and consolidateemail.",
+              "ADD QUATATION",
+              secret
+            );
+          } else {
+            const [rows] = await db.spcall(
+              `CALL SP_SUB_QUOTATION_ADD(?,?,?,?,?,?,?,?,?,?,?, @quoteid); SELECT @quoteid as quoteid;`,
+              [
+                sites.sitename,
+                sites.cameraquantity,
+                sites.siteaddress,
+                subscriptionid,
+                quotationid,
+                sites.billType,
+                sites.mailType,
+                JSON.stringify(querydata.notes),
+                userid,
+                querydata.gstpercent,
+                querydata.gst_number,
+              ]
+            );
+          }
+        }
+      }
+    }
+    const sql = await db.query(
+      `Update generatesubquotationid set status = 0 where quotation_id IN('${querydata.quotationgenid}')`
+    );
+    const sql2 = await db.query(
+      `select u.Email_id,a.secret from usermaster u CROSS JOIN apikey a where u.user_design = 'Administrator' and u.status = 1 and a.status = 1`
+    );
+    var emailid = "",
+      secret1 = "15b97956-b296-11";
+    if (sql2.length > 0) {
+      emailid =
+        sql2.length > 0 ? sql2.map((item) => item.Email_id).join(",") : "";
+      secret1 = sql2[0].secret;
+    } else {
+      emailid = `support@sporadasecure.com,ceo@sporadasecure.com,subscription@sporadasecure.com`;
+    }
+    EmailSent = await mailer.sendapprovequotation(
+      "Administrator",
+      emailid,
+      `Action Required!!! Received Quotation Approve Request for ${querydata.clientaddressname}`,
+      "apporvequotation.html",
+      `http://192.168.0.200:8081/subscription/intquoteapprove?quoteid=${quotationid}&STOKEN=${secret1}&s=1&feedback='Apporved'`,
+      "APPROVEQUOTATION_SEND",
+      querydata.clientaddressname,
+      "QUOTATION APPROVAL",
+      `http://192.168.0.200:8081/subscription/intquoteapprove?quoteid=${quotationid}&STOKEN=${secret1}&s=3`,
+      req.file.path
+    );
+    if (EmailSent == true) {
+      const sql = await db.query(
+        `INSERT INTO quotation_mailbox(process_id,emailid,ccemail,phoneno,feedback,clientname,message_type,pdf_path)
+              VALUES(?,?,?,?,?,?,?,?)`,
+        [
+          quotationid,
+          querydata.emailid,
+          querydata.ccemail,
+          querydata.phoneno,
+          querydata.feedback,
+          querydata.clientaddressname,
+          querydata.messagetype,
+          req.file.path,
+        ]
+      );
+      await mqttclient.publishMqttMessage(
+        "Notification",
+        "Quotation sent successfully to the Administrator for eventid " +
+          querydata.clientaddressname +
+          ". Please contact Administrator for further action."
+      );
+      await mqttclient.publishMqttMessage(
+        "refresh",
+        "Quotation sent successfully to the Administrator for eventid " +
+          querydata.clientaddressname +
+          ". Please contact Administrator for further action."
+      );
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Quotation sent successfully to the Administrator. Please contact Administrator for further action.",
+        { EmailSent: EmailSent },
+        secret
+      );
+    } else {
+      const sql = await db.query(
+        `delete from subscriptionprocesslist where sprocess_id =?`,
+        [quotationid]
+      );
+      await mqttclient.publishMqttMessage(
+        "Notification",
+        "Error sending the Quotation for eventid " +
+          querydata.clientaddressname +
+          ". Please try again"
+      );
+      await mqttclient.publishMqttMessage(
+        "refresh",
+        "Error sending the Quotation for eventid " +
+          querydata.clientaddressname +
+          ". Please try again"
+      );
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Error sending the Quotation. Please try again",
+        { EmailSent: EmailSent },
+        secret
+      );
+    }
+  } catch (er) {
+    if (quotationid != 0 && quotationid != null) {
+      const sql = await db.query(
+        `DELETE FROM subscriptionprocesslist where sprocess_id = ?`,
+        [quotationid]
+      );
+    }
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal Error. Please contact Administration",
+      er.message,
+      secret
+    );
+  }
+}
+
 //########################################################################################################################################################################################
 //########################################################################################################################################################################################
 //########################################################################################################################################################################################
@@ -3423,7 +4102,7 @@ async function addCustomInvoice(req, res) {
   try {
     var secret, subscription, querydata, userid;
     try {
-      await uploadFile.uploadrecurringinvoicepdf(req, res);
+      await uploadFile.uploadcustominvoicepdf(req, res);
       subscription = req.body;
       // Check if the session token exists
       if (!subscription.STOKEN) {
@@ -3436,41 +4115,12 @@ async function addCustomInvoice(req, res) {
         );
       }
       secret = subscription.STOKEN.substring(0, 16);
-
-      // Validate session token length
-      if (subscription.STOKEN.length > 50 || subscription.STOKEN.length < 30) {
-        return helper.getErrorResponse(
-          false,
-          "error",
-          "Login session token size invalid. Please provide the valid Session token",
-          "ADD RECURRING INVOICE",
-          secret
-        );
-      }
-
-      // Validate session token
-      const [result] = await db.spcall(
-        "CALL SP_STOKEN_CHECK(?,@result); SELECT @result;",
-        [subscription.STOKEN]
-      );
-      const objectvalue = result[1][0];
-      userid = objectvalue["@result"];
-
-      if (userid == null) {
-        return helper.getErrorResponse(
-          false,
-          "error",
-          "Login sessiontoken Invalid. Please provide the valid sessiontoken",
-          "ADD RECURRING INVOICE",
-          secret
-        );
-      }
       if (!req.file) {
         return helper.getErrorResponse(
           false,
           "error",
           "Please upload a file!",
-          "ADD RECURRING INVOICE",
+          "ADD QUOTATION",
           secret
         );
       }
@@ -3480,6 +4130,35 @@ async function addCustomInvoice(req, res) {
         "error",
         `Could not upload the file. ${er.message}`,
         er.message,
+        secret
+      );
+    }
+
+    // Validate session token length
+    if (subscription.STOKEN.length > 50 || subscription.STOKEN.length < 30) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login session token size invalid. Please provide the valid Session token",
+        "ADD RECURRING INVOICE",
+        secret
+      );
+    }
+
+    // Validate session token
+    const [result] = await db.spcall(
+      "CALL SP_STOKEN_CHECK(?,@result); SELECT @result;",
+      [subscription.STOKEN]
+    );
+    const objectvalue = result[1][0];
+    userid = objectvalue["@result"];
+
+    if (userid == null) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+        "ADD RECURRING INVOICE",
         secret
       );
     }
@@ -3747,6 +4426,7 @@ async function addCustomInvoice(req, res) {
       ? querydata.phoneno
           .split(",")
           .map((num) => num.trim())
+
           .filter((num) => num !== "") // Removes empty values
       : [];
     // Send Email or WhatsApp Message
@@ -3829,6 +4509,15 @@ async function addCustomInvoice(req, res) {
       // Run both requests in parallel and wait for completion
       [EmailSent] = await Promise.all(promises);
     }
+    await mqttclient.publishMqttMessage(
+      "refresh",
+      "Custom Invoice has been Created "
+    );
+    // await mqttclient.publishMqttMessage(
+    //   "Notification",
+    //   "Quotation approved Internally for the process id " +
+    //     subscription.quoteid
+    // );
     return helper.getSuccessResponse(
       true,
       "success",
@@ -3894,7 +4583,7 @@ async function GetCustomPDF(subscription) {
       );
     }
     const sql = await db.query(
-      `select Subscription_generatedid custompdfid,Client_addressname,client_address,Billing_addressname,Billing_address,Email_id customer_mailid,Phone_no customer_phoneno,Row_updated_date date,gstnumber,subscription_billid,TotalAmount,pdf_path pdf_data,pdf_path pdfpath from customsubscriptionbillgenerated where status = 1`
+      `select Subscription_generatedid custompdfid,Client_addressname,client_address,Billing_addressname,Billing_address,Email_id customer_mailid,Phone_no customer_phoneno,Row_updated_date date,gstnumber,subscription_billid,TotalAmount,pdf_path pdf_data,pdf_path pdfpath from customsubscriptionbillgenerated where status = 1 Order By Row_updated_date DESC`
     );
     var data;
     if (sql.length >= 0) {
@@ -4269,23 +4958,24 @@ async function IntQuotationApproval(req, res) {
       return res.sendFile(path.join(htmlPath, "internal_error.html"));
     }
 
-    if (
-      !subscription.hasOwnProperty("feedback") ||
-      subscription.feedback == "" ||
-      subscription.feedback == undefined
-    ) {
-      return res.sendFile(path.join(htmlPath, "internal_error.html"));
-    }
     var sql1;
+    const sql3 = await db.query(
+      `select sprocess_id from subscriptionprocesslist where status = 1 and sprocess_id = ? and sprocess_id  = (select sprocess_id from subscriptionprocesslist where process_type IN(2,3) and
+      processid = (select processid from subscriptionprocesslist where sprocess_id = ? Order by processid) Order by sprocess_id DESC LIMIT 1)`,
+      [subscription.quoteid, subscription.quoteid]
+    );
+    if (sql3.length == 0) {
+      return res.sendFile(path.join(htmlPath, "quotation_invalid.html"));
+    }
     // Update the database
     if (subscription.s == 1) {
       sql1 = await db.query(
-        `UPDATE subscriptionprocesslist SET Internal_approval = ?,Approved_status = ? WHERE cprocess_id = ?`,
+        `UPDATE subscriptionprocesslist SET Internal_approval = ?,Approved_status = ? WHERE sprocess_id = ? and internal_approval = 2`,
         [subscription.s, 2, subscription.quoteid]
       );
     } else {
       sql1 = await db.query(
-        `UPDATE subscriptionprocesslist SET Internal_approval = ? WHERE cprocess_id = ?`,
+        `UPDATE subscriptionprocesslist SET Internal_approval = ? WHERE sprocess_id = ? and internal_approval = 2`,
         [subscription.s, subscription.quoteid]
       );
     }
@@ -4302,6 +4992,7 @@ async function IntQuotationApproval(req, res) {
         // const sql = await db.query(
         //   `select emailid,ccemail,clientname,phoneno,feedback,message_type,pdf_path from quotation_mailbox where status = 1 and process_id = ${subscription.quoteid} LIMIT 1 `
         // );
+
         if (sql[0]) {
           const promises = [];
           const phoneNumbers = sql[0].phoneno
@@ -4310,6 +5001,10 @@ async function IntQuotationApproval(req, res) {
                 .map((num) => num.trim())
                 .filter((num) => num !== "") // Removes empty values
             : [];
+          const link = `http://192.168.0.200:8081?eventid=${subscription.quoteid}&STOKEN=${sql[0].secret}&module=subscription`;
+          const feedbackMessage =
+            "If you want to proceed with the quotation, please click the following link: " +
+            link;
           // Send Email or WhatsApp Message
           if (sql[0].message_type === 1) {
             // Send only email
@@ -4323,8 +5018,8 @@ async function IntQuotationApproval(req, res) {
               sql[0].pdf_path,
               sql[0].feedback,
               sql[0].ccemail,
-              `http://192.168.0.200:8081?eventid==${subscription.quoteid}&STOKEN=${sql[0].secret}`,
-              `http://192.168.0.200:8081?eventid==${subscription.quoteid}&STOKEN=${sql[0].secret}`
+              `http://192.168.0.200:8081?eventid=${subscription.quoteid}&STOKEN=${sql[0].secret}&module=subscription`,
+              `http://192.168.0.200:8081?eventid=${subscription.quoteid}&STOKEN=${sql[0].secret}&module=subscription`
             );
           } else if (sql[0].message_type === 2) {
             // Send only WhatsApp
@@ -4335,7 +5030,7 @@ async function IntQuotationApproval(req, res) {
                     `${config.whatsappip}/billing/sendpdf`,
                     {
                       phoneno: number,
-                      feedback: sql[0].feedback,
+                      feedback: feedbackMessage,
                       pdfpath: sql[0].pdf_path,
                     }
                   );
@@ -4359,8 +5054,8 @@ async function IntQuotationApproval(req, res) {
                 sql[0].pdf_path,
                 sql[0].feedback,
                 sql[0].ccemail,
-                `http://192.168.0.200:8081?eventid==${subscription.quoteid}&STOKEN=${sql[0].secret}`,
-                `http://192.168.0.200:8081?eventid==${subscription.quoteid}&STOKEN=${sql[0].secret}`
+                `http://192.168.0.200:8081?eventid=${subscription.quoteid}&STOKEN=${sql[0].secret}&module=subscription`,
+                `http://192.168.0.200:8081?eventid=${subscription.quoteid}&STOKEN=${sql[0].secret}&module=subscription`
               )
             );
 
@@ -4372,7 +5067,7 @@ async function IntQuotationApproval(req, res) {
                       `${config.whatsappip}/billing/sendpdf`,
                       {
                         phoneno: number,
-                        feedback: sql[0].feedback,
+                        feedback: feedbackMessage,
                         pdfpath: sql[0].pdf_path,
                       }
                     );
@@ -5302,12 +5997,15 @@ async function UploadSubscription(subscription) {
       { field: "billmode", message: "Billing mode missing" },
       { field: "contactpersonname", message: "Contact person name missing" },
       { field: "emailid", message: "Emailid missing." },
+      { field: "ccmail", message: "CC Emailid missing." },
       { field: "branchcode", message: "Branch code missing." },
       { field: "customertype", message: "Customer type missing." },
       { field: "plantype", message: "Plan Type missing." },
       { field: "phoneno", message: "Phone number missing." },
       { field: "hsncode", message: "Hsn Code missing." },
       { field: "relationshipid", message: "Relationship id missing." },
+      { field: "clientaddressname", message: "Client address name misssing." },
+      { field: "billingaddressname", message: "Billing address name missing." },
       { field: "clientaddress", message: "Client address misssing." },
       { field: "billingaddress", message: "Billing address missing." },
       { field: "billinggst", message: "Billing GST number missing." },
@@ -5332,6 +6030,22 @@ async function UploadSubscription(subscription) {
         field: "consolidate_email",
         message: "Consolidate email missing.",
       },
+      {
+        field: "pendingpayments",
+        message: "Pending Payments missing",
+      },
+      {
+        field: "amountpaid",
+        message: "Amount paid missing",
+      },
+      {
+        field: "showpending",
+        message: "show pending missing",
+      },
+      {
+        field: "tdsdeductions",
+        message: "TDS Detection missing",
+      },
     ];
 
     const results = [];
@@ -5355,7 +6069,7 @@ async function UploadSubscription(subscription) {
 
       try {
         const [result] = await db.spcall1(
-          `CALL SP_SUBSCRIPTION_UPSERT(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@subscription_trans_id); SELECT @subscription_trans_id`,
+          `CALL SP_SUBSCRIPTION_UPSERT(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@subscription_trans_id); SELECT @subscription_trans_id`,
           [
             item.subscriptionid,
             item.companyid,
@@ -5378,6 +6092,13 @@ async function UploadSubscription(subscription) {
             item.phoneno,
             item.contactpersonname,
             item.consolidate_email,
+            item.ccmail,
+            item.clientaddressname,
+            item.billingaddressname,
+            item.pendingpayments,
+            item.amountpaid,
+            item.showpending,
+            item.tdsdeductions,
           ]
         );
 
@@ -5442,6 +6163,7 @@ module.exports = {
   addSubscriptionCustomerreq,
   Subscriptiondata,
   detailsPreLoader,
+  AddRevisedQuotation,
   AddQuotation,
   addCustomInvoice,
   GetCustomPDF,

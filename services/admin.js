@@ -2764,7 +2764,7 @@ async function GetSubscription(admin) {
     }
     var sql;
     if (!admin.hasOwnProperty("querystring") && admin.querystring == "") {
-      sql = await db.query(
+      sql = await db.query1(
         `SELECT DISTINCT Subscription_ID,Subscription_Name,No_of_Devices, No_of_Cameras, Addl_cameras, Addl_patrol, 
          Patrol_hours, Valid_Months, Valid_Years, Valid_Days, No_of_Analytics,Cloud_Storage, Amount, product_desc FROM subscriptionmaster WHERE Subscription_type = 1 and status =1 and deleted_flag = 0`
       );
@@ -2793,53 +2793,59 @@ async function GetSubscription(admin) {
           secret
         );
       }
-      const requiredFields = [
-        {
-          field: "siteid",
-          message: "Site id missing. Please provide the valid site id",
-        },
-      ];
+      // const requiredFields = [
+      //   {
+      //     field: "siteid",
+      //     message: "Site id missing. Please provide the valid site id",
+      //   },
+      // ];
 
-      for (const { field, message } of requiredFields) {
-        if (!querydata.hasOwnProperty(field)) {
-          return helper.getErrorResponse(
-            false,
-            "error",
-            message,
-            "GET THE SUBSCRIPTION LIST",
-            secret
-          );
-        }
-      }
-      var organizationid = 0,
-        companyid = 0,
-        sql = [];
+      // for (const { field, message } of requiredFields) {
+      //   if (!querydata.hasOwnProperty(field)) {
+      //     return helper.getErrorResponse(
+      //       false,
+      //       "error",
+      //       message,
+      //       "GET THE SUBSCRIPTION LIST",
+      //       secret
+      //     );
+      //   }
+      // // }
+      // var organizationid = 0,
+      //   companyid = 0,
+      sql = [];
       // const result1 = await db.query(
       //   `SELECT o.Organization_id, c.Customer_id FROM organizations o JOIN customermaster c ON o.Organization_id = c.Organization_id JOIN branchmaster b ON c.customer_id = b.customer_id where b.branch_id = ${querydata.siteid}`
       // );
       // if (result1.length > 0) {
       //   organizationid = result1[0].Organization_id;
       //   companyid = result1[0].Customer_id;
-      if (querydata.siteid != 0) {
-        sql = await db.query(
+      if (querydata.siteid != 0 && querydata.siteid) {
+        sql = await db.query1(
           `SELECT DISTINCT Subscription_ID,Subscription_Name, No_of_Devices, No_of_Cameras, Addl_cameras, Addl_patrol, 
          Patrol_hours, Valid_Months, Valid_Years, Valid_Days, No_of_Analytics,Cloud_Storage, Amount, product_desc FROM subscriptionmaster WHERE Subscription_type = 1 OR (site_id = ? AND site_id != 0) and status =1 and deleted_flag = 0;`,
           [querydata.siteid]
         );
-      } else if (querydata.companyid != 0) {
-        sql = await db.query(
+      } else if (querydata.companyid != 0 && querydata.companyid) {
+        sql = await db.query1(
           `SELECT DISTINCT Subscription_ID,Subscription_Name, No_of_Devices, No_of_Cameras, Addl_cameras, Addl_patrol, 
-         Patrol_hours, Valid_Months, Valid_Years, Valid_Days, No_of_Analytics,Cloud_Storage, Amount, product_desc FROM subscriptionmaster WHERE Subscription_type = 1 OR (customerbased_id = ? AND organization_id != 0)  and status =1 and deleted_flag = 0;`,
-          [querydata.siteid]
+         Patrol_hours, Valid_Months, Valid_Years, Valid_Days, No_of_Analytics,Cloud_Storage, Amount, product_desc FROM subscriptionmaster WHERE Subscription_type = 1 OR (enquiry_cust = ? AND enquiry_cust != 0)  and status =1 and deleted_flag = 0;`,
+          [querydata.companyid]
         );
-      } else if (querydata.organizationid != 0) {
-        sql = await db.query(
+      } else if (querydata.customerid != 0 && querydata.customerid) {
+        sql = await db.query1(
+          `SELECT DISTINCT Subscription_ID,Subscription_Name, No_of_Devices, No_of_Cameras, Addl_cameras, Addl_patrol, 
+         Patrol_hours, Valid_Months, Valid_Years, Valid_Days, No_of_Analytics,Cloud_Storage, Amount, product_desc FROM subscriptionmaster WHERE Subscription_type = 1 OR (customerbased_id = ? AND customerbased_id != 0)  and status =1 and deleted_flag = 0;`,
+          [querydata.customerid]
+        );
+      } else if (querydata.organizationid != 0 && querydata.organizationid) {
+        sql = await db.query1(
           `SELECT DISTINCT Subscription_ID,Subscription_Name, No_of_Devices, No_of_Cameras, Addl_cameras, Addl_patrol, 
          Patrol_hours, Valid_Months, Valid_Years, Valid_Days, No_of_Analytics,Cloud_Storage, Amount, product_desc FROM subscriptionmaster WHERE Subscription_type = 1 OR (organization_id = ? AND organization_id != 0) and status =1 and deleted_flag = 0;`,
-          [querydata.siteid]
+          [querydata.organizationid]
         );
       } else {
-        sql = await db.query(
+        sql = await db.query1(
           `SELECT DISTINCT Subscription_ID,Subscription_Name,No_of_Devices, No_of_Cameras, Addl_cameras, Addl_patrol, 
          Patrol_hours, Valid_Months, Valid_Years, Valid_Days, No_of_Analytics,Cloud_Storage, Amount, product_desc FROM subscriptionmaster WHERE Subscription_type = 1 and status =1 and deleted_flag = 0`
         );

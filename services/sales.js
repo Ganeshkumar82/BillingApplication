@@ -724,8 +724,12 @@ async function addsale(req, res) {
             [req.file.path, userid, EmailSent, WhatsappSent]
           );
           await mqttclient.publishMqttMessage(
+            "Notification",
+            "Client Requirement Created Successfully for " + querydata.name
+          );
+          await mqttclient.publishMqttMessage(
             "refresh",
-            "Client Requirement Creted Successfully"
+            "Client Requirement Created Successfully"
           );
           return helper.getSuccessResponse(
             true,
@@ -1349,28 +1353,27 @@ async function addInvoice(req, res) {
           "ADD INVOICE",
           secret
         );
+      } else {
+        const [sql2] = await db.spcall(
+          `CALL SP_INVOICE_ADD(?,?,?,?,?,?,?,?,?,?,?,@invid); SELECT @invid;`,
+          [
+            product.productname,
+            product.productquantity,
+            product.productgst,
+            product.productprice,
+            product.producthsn,
+            querydata.invoicegenid,
+            JSON.stringify(querydata.notes),
+            req.file.path,
+            invoiceid,
+            product.productsno,
+            product.producttotal,
+          ]
+        );
+
+        Quoteid = sql2[1][0]["@invid"];
       }
-
-      const [sql2] = await db.spcall(
-        `CALL SP_INVOICE_ADD(?,?,?,?,?,?,?,?,?,?,?,@invid); SELECT @invid;`,
-        [
-          product.productname,
-          product.productquantity,
-          product.productgst,
-          product.productprice,
-          product.producthsn,
-          querydata.invoicegenid,
-          JSON.stringify(querydata.notes),
-          req.file.path,
-          invoiceid,
-          product.productsno,
-          product.producttotal,
-        ]
-      );
-
-      Quoteid = sql2[1][0]["@invid"];
     }
-
     // Update Invoice Status
     await db.query(
       `UPDATE generateinvoiceid SET status = 0 WHERE invoice_id in(?)`,
@@ -1527,6 +1530,15 @@ async function addInvoice(req, res) {
     );
   }
 }
+
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//####################################################################### REQUEST BODY  #########################################################################################################
+// Image or pdf data for uploading the invoice
+//####################################################################### RESPONSE BODY  ########################################################################################################
+// {"code":true,"message":"Image Upload Successfully","Value":13}
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
 
 async function addCustomInvoice(req, res) {
   let secret;
@@ -3331,20 +3343,27 @@ async function detailsPreLoader(sales) {
           }
           const sql = await db.query(
             `SELECT cprocess_gene_id  FROM salesprocesslist 
-             WHERE cprocess_id = ?`,
+             WHERE processid IN ( SELECT processid FROM salesprocesslist WHERE cprocess_id = ?) 
+             AND process_type = 5 ORDER BY Row_updated_date DESC LIMIT 1`,
             [querydata.eventid]
           );
           if (sql[0]) {
             ccode = sql[0].cprocess_gene_id;
+            const [result1] = await db.spcall(
+              `CALL Generate_DeliveryChallan(?,?,@p_deliverychallan_id); select @p_deliverychallan_id`,
+              [userid, ccode]
+            );
+            const objectValue = result1[1][0];
+            eventnumber = objectValue["@p_deliverychallan_id"];
           } else {
             ccode = "SSIPL-DC/";
+            const [result1] = await db.spcall(
+              `CALL GenerateDeliverychId(?,?,@p_deliverychallan_id); select @p_deliverychallan_id`,
+              [userid, ccode]
+            );
+            const objectValue = result1[1][0];
+            eventnumber = objectValue["@p_deliverychallan_id"];
           }
-          const [result1] = await db.spcall(
-            `CALL GenerateDeliverychId(?,?,@p_deliverychallan_id); select @p_deliverychallan_id`,
-            [userid, ccode]
-          );
-          const objectValue = result1[1][0];
-          eventnumber = objectValue["@p_deliverychallan_id"];
           invoice_number = product[0].invoice_number;
         } else if (querydata.eventtype == "requestforquotation") {
           const [result1] = await db.spcall(
@@ -3369,30 +3388,24 @@ async function detailsPreLoader(sales) {
           eventnumber = objectValue["@p_creditnote_id"];
         } else if (querydata.eventtype == "revisedquotation") {
           const sql = await db.query(
-            `select cprocess_gene_id from salesprocesslist where cprocess_id In(?)`,
+            `select cprocess_gene_id from salesprocesslist where processid IN ( SELECT processid FROM salesprocesslist WHERE cprocess_id = ?) 
+            AND process_type IN(2,3) ORDER BY Row_updated_date DESC LIMIT 1`,
             [querydata.eventid]
           );
+          var ccode = `SSIPL-QUOTE/`;
           if (sql.length > 0) {
-            const ccode = sql[0].cprocess_gene_id;
-            const [result] = await db.spcall(
-              `CALL Generate_revisedquotation(?,?,@p_quotation_id); select @p_quotation_id`,
-              [userid, ccode]
-            );
-            const objectValue = result[1][0];
-            eventnumber = objectValue["@p_quotation_id"];
-            product = await db.query(
-              `select product_name productname,product_quantity productquantity,product_hsn producthsn, product_price productprice,product_gst productgst,product_sno productsno, product_total producttotal from revisedquotation_productmaster where process_id = ?`,
-              [querydata.eventid]
-            );
-          } else {
-            return helper.getErrorResponse(
-              false,
-              "error",
-              "Event id not found",
-              "GET THE EVENT NUMBER",
-              secret
-            );
+            ccode = sql[0].cprocess_gene_id;
           }
+          const [result] = await db.spcall(
+            `CALL Generate_revisedquotation(?,?,@p_quotation_id); select @p_quotation_id`,
+            [userid, ccode]
+          );
+          const objectValue = result[1][0];
+          eventnumber = objectValue["@p_quotation_id"];
+          product = await db.query(
+            `select product_name productname,product_quantity productquantity,product_hsn producthsn, product_price productprice,product_gst productgst,product_sno productsno, product_total producttotal from quotation_productmaster where process_id = ?`,
+            [querydata.eventid]
+          );
         }
       } else if (customertype == 2) {
         // if (customerid != 0 && customerid != "") {
@@ -3488,15 +3501,21 @@ async function detailsPreLoader(sales) {
           );
           if (sql[0]) {
             ccode = sql[0].cprocess_gene_id;
+            const [result1] = await db.spcall(
+              `CALL Generate_DeliveryChallan(?,?,@p_deliverychallan_id); select @p_deliverychallan_id`,
+              [userid, ccode]
+            );
+            const objectValue = result1[1][0];
+            eventnumber = objectValue["@p_deliverychallan_id"];
           } else {
             ccode = "SSIPL-DC/";
+            const [result1] = await db.spcall(
+              `CALL GenerateDeliverychId(?,?,@p_deliverychallan_id); select @p_deliverychallan_id`,
+              [userid, ccode]
+            );
+            const objectValue = result1[1][0];
+            eventnumber = objectValue["@p_deliverychallan_id"];
           }
-          const [result1] = await db.spcall(
-            `CALL GenerateDeliverychId(?,?,@p_deliverychallan_id); select @p_deliverychallan_id`,
-            [userid, ccode]
-          );
-          const objectValue = result1[1][0];
-          eventnumber = objectValue["@p_deliverychallan_id"];
           invoice_number = product[0].invoice_number;
         } else if (querydata.eventtype == "requestforquotation") {
           const [result1] = await db.spcall(
@@ -3521,30 +3540,24 @@ async function detailsPreLoader(sales) {
           eventnumber = objectValue["@p_creditnote_id"];
         } else if (querydata.eventtype == "revisedquotation") {
           const sql = await db.query(
-            `select cprocess_gene_id from salesprocesslist where cprocess_id In(?)`,
+            `select cprocess_gene_id from salesprocesslist where processid IN ( SELECT processid FROM salesprocesslist WHERE cprocess_id = ?) 
+            AND process_type IN(2,3) ORDER BY Row_updated_date DESC LIMIT 1`,
             [querydata.eventid]
           );
+          var ccode = `SSIPL-QUOTE/`;
           if (sql[0]) {
             const ccode = sql[0].cprocess_gene_id;
-            const [result] = await db.spcall(
-              `CALL Generate_revisedquotation(?,?,@p_quotation_id); select @p_quotation_id`,
-              [userid, ccode]
-            );
-            const objectValue = result[1][0];
-            eventnumber = objectValue["@p_quotation_id"];
-            product = await db.query(
-              `select product_name productname,product_quantity productquantity,product_hsn producthsn, product_price productprice,product_gst productgst,product_sno productsno, product_total producttotal from revisedquotation_productmaster where process_id = ?`,
-              [querydata.eventid]
-            );
-          } else {
-            return helper.getErrorResponse(
-              false,
-              "error",
-              "Event id not found",
-              "GET THE EVENT NUMBER",
-              secret
-            );
           }
+          const [result] = await db.spcall(
+            `CALL Generate_revisedquotation(?,?,@p_quotation_id); select @p_quotation_id`,
+            [userid, ccode]
+          );
+          const objectValue = result[1][0];
+          eventnumber = objectValue["@p_quotation_id"];
+          product = await db.query(
+            `select product_name productname,product_quantity productquantity,product_hsn producthsn, product_price productprice,product_gst productgst,product_sno productsno, product_total producttotal from quotation_productmaster where process_id = ?`,
+            [querydata.eventid]
+          );
         }
       } else {
         return helper.getErrorResponse(
@@ -5197,7 +5210,7 @@ async function addCustomQuotation(req, res) {
         secret
       );
     }
-    if (!querydata.hasOwnProperty("emailid") || querydata.emailid == "") {
+    if (!querydata.hasOwnProperty("emailid")) {
       return helper.getErrorResponse(
         false,
         "error",
@@ -5216,7 +5229,7 @@ async function addCustomQuotation(req, res) {
       );
     }
 
-    if (!querydata.hasOwnProperty("phoneno") || querydata.phoneno == "") {
+    if (!querydata.hasOwnProperty("phoneno")) {
       return helper.getErrorResponse(
         false,
         "error",
@@ -5576,12 +5589,16 @@ async function SendPdf(req, res) {
       ? querydata.phoneno
           .split(",")
           .map((num) => num.trim())
-          .filter((num) => num !== "") // Removes empty values
+          .filter((num) => num !== "")
       : [];
+
+    let whatsappResults = [];
+    let emailResult = false;
+
     // Send Email or WhatsApp Message
     if (querydata.messagetype === 1) {
       // Send only email
-      EmailSent = await mailer.sendQuotation(
+      emailResult = await mailer.sendQuotation(
         "",
         querydata.emailid,
         "PDF from Sporada Secure India Private Limited",
@@ -5592,9 +5609,10 @@ async function SendPdf(req, res) {
         querydata.feedback,
         querydata.ccemail
       );
+      EmailSent = emailResult;
     } else if (querydata.messagetype === 2) {
       // Send only WhatsApp
-      WhatsappSent = await Promise.all(
+      whatsappResults = await Promise.all(
         phoneNumbers.map(async (number) => {
           try {
             const response = await axios.post(
@@ -5605,17 +5623,18 @@ async function SendPdf(req, res) {
                 pdfpath: req.file.path,
               }
             );
-            return response.data.code;
+            return response.data.code === true;
           } catch (error) {
             console.error(`WhatsApp Error for ${number}:`, error.message);
             return false;
           }
         })
       );
+      WhatsappSent = whatsappResults.filter(Boolean).length;
     } else if (querydata.messagetype === 3) {
-      // Send both email & WhatsApp in parallel
-      promises.push(
-        mailer.sendQuotation(
+      // Send both email & WhatsApp
+      const emailPromise = mailer
+        .sendQuotation(
           "",
           querydata.emailid,
           "PDF from Sporada Secure India Private Limited",
@@ -5626,42 +5645,164 @@ async function SendPdf(req, res) {
           querydata.feedback,
           querydata.ccemail
         )
-      );
+        .then((result) => {
+          EmailSent = result;
+          return result;
+        });
 
-      promises.push(
-        Promise.all(
-          phoneNumbers.map(async (number) => {
-            try {
-              const response = await axios.post(
-                `${config.whatsappip}/billing/sendpdf`,
-                {
-                  phoneno: number,
-                  feedback: querydata.feedback,
-                  pdfpath: req.file.path,
-                }
-              );
-              return response.data.code;
-            } catch (error) {
-              console.error(`WhatsApp Error for ${number}:`, error.message);
-              return false;
-            }
-          })
-        ).then((results) => (WhatsappSent = results))
-      );
+      const whatsappPromise = Promise.all(
+        phoneNumbers.map(async (number) => {
+          try {
+            const response = await axios.post(
+              `${config.whatsappip}/billing/sendpdf`,
+              {
+                phoneno: number,
+                feedback: querydata.feedback,
+                pdfpath: req.file.path,
+              }
+            );
+            return response.data.code === 200;
+          } catch (error) {
+            console.error(`WhatsApp Error for ${number}:`, error.message);
+            return false;
+          }
+        })
+      ).then((results) => {
+        WhatsappSent = results.filter(Boolean).length;
+        return results;
+      });
 
-      // Run both requests in parallel and wait for completion
-      [EmailSent] = await Promise.all(promises);
+      // Wait for both to complete
+      await Promise.all([emailPromise, whatsappPromise]);
     }
-    return helper.getSuccessResponse(
-      true,
-      "success",
-      "Pdf send successfully",
-      {
-        WhatsappSent: WhatsappSent,
-        EmailSent: EmailSent,
-      },
-      secret
-    );
+
+    let isSuccess = false;
+    if (querydata.messagetype == 1 && EmailSent) {
+      isSuccess = true;
+    } else if (
+      querydata.messagetype == 2 &&
+      WhatsappSent == phoneNumbers.length
+    ) {
+      isSuccess = true;
+    } else if (
+      querydata.messagetype === 3 &&
+      EmailSent &&
+      WhatsappSent == phoneNumbers.length
+    ) {
+      isSuccess = true;
+    }
+
+    if (isSuccess) {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "PDF sent successfully",
+        { WhatsappSent, EmailSent },
+        secret
+      );
+    } else {
+      return helper.getErrorResponse(
+        false,
+        "failure",
+        "Failed to send PDF to all intended recipients",
+        { WhatsappSent, EmailSent },
+        secret
+      );
+    }
+
+    // var WhatsappSent = 0,
+    //   EmailSent = 0;
+    // const promises = [];
+    // const phoneNumbers = querydata.phoneno
+    //   ? querydata.phoneno
+    //       .split(",")
+    //       .map((num) => num.trim())
+    //       .filter((num) => num !== "") // Removes empty values
+    //   : [];
+    // // Send Email or WhatsApp Message
+    // if (querydata.messagetype === 1) {
+    //   // Send only email
+    //   EmailSent = await mailer.sendQuotation(
+    //     "",
+    //     querydata.emailid,
+    //     "PDF from Sporada Secure India Private Limited",
+    //     "sendpdf.html",
+    //     ``,
+    //     "SENDPDF",
+    //     req.file.path,
+    //     querydata.feedback,
+    //     querydata.ccemail
+    //   );
+    // } else if (querydata.messagetype === 2) {
+    //   // Send only WhatsApp
+    //   WhatsappSent = await Promise.all(
+    //     phoneNumbers.map(async (number) => {
+    //       try {
+    //         const response = await axios.post(
+    //           `${config.whatsappip}/billing/sendpdf`,
+    //           {
+    //             phoneno: number,
+    //             feedback: querydata.feedback,
+    //             pdfpath: req.file.path,
+    //           }
+    //         );
+    //         return response.data.code;
+    //       } catch (error) {
+    //         console.error(`WhatsApp Error for ${number}:`, error.message);
+    //         return false;
+    //       }
+    //     })
+    //   );
+    // } else if (querydata.messagetype === 3) {
+    //   // Send both email & WhatsApp in parallel
+    //   promises.push(
+    //     mailer.sendQuotation(
+    //       "",
+    //       querydata.emailid,
+    //       "PDF from Sporada Secure India Private Limited",
+    //       "sendpdf.html",
+    //       ``,
+    //       "SENDPDF",
+    //       req.file.path,
+    //       querydata.feedback,
+    //       querydata.ccemail
+    //     )
+    //   );
+
+    //   promises.push(
+    //     Promise.all(
+    //       phoneNumbers.map(async (number) => {
+    //         try {
+    //           const response = await axios.post(
+    //             `${config.whatsappip}/billing/sendpdf`,
+    //             {
+    //               phoneno: number,
+    //               feedback: querydata.feedback,
+    //               pdfpath: req.file.path,
+    //             }
+    //           );
+    //           return response.data.code;
+    //         } catch (error) {
+    //           console.error(`WhatsApp Error for ${number}:`, error.message);
+    //           return false;
+    //         }
+    //       })
+    //     ).then((results) => (WhatsappSent = results))
+    //   );
+
+    //   // Run both requests in parallel and wait for completion
+    //   [EmailSent] = await Promise.all(promises);
+    // }
+    // return helper.getSuccessResponse(
+    //   true,
+    //   "success",
+    //   "Pdf send successfully",
+    //   {
+    //     WhatsappSent: WhatsappSent,
+    //     EmailSent: EmailSent,
+    //   },
+    //   secret
+    // );
   } catch (er) {
     return helper.getErrorResponse(
       false,
@@ -6735,10 +6876,19 @@ async function getBinaryFile(sales) {
         secret
       );
     }
-    const sql = await db.query(
-      `select salesprocess_path from salesprocesslist where cprocess_id = ?`,
-      [querydata.eventid]
-    );
+    var sql;
+    if (querydata.eventtype == "revisedquotation") {
+      sql = await db.query(
+        `select salesprocess_path from salesprocesslist where processid IN ( SELECT processid FROM salesprocesslist WHERE cprocess_id = ?) 
+        AND process_type IN(2,3) ORDER BY Row_updated_date DESC LIMIT 1`,
+        [querydata.eventid]
+      );
+    } else {
+      sql = await db.query(
+        `select salesprocess_path from salesprocesslist where cprocess_id = ?`,
+        [querydata.eventid]
+      );
+    }
     var data;
     if (sql[0]) {
       // Ensure file exists
@@ -7493,33 +7643,76 @@ async function addRFQ(req, res) {
         `Update generaterfqid set status = 0 where rfqgen_id = '${querydata.rfqgenid}'`
       );
       // Send Email or WhatsApp Message
-      if (querydata.messagetype == 1 || querydata.messagetype == 3) {
-        EmailSent = await mailer.sendInvoice(
-          querydata.vendorname,
-          querydata.emailid,
-          "Request for Quotation from Sporada Secure India Private Limited",
-          "rfgpdf.html",
-          ``,
-          "RFQ_PDF_SEND",
-          req.file.path,
-          "",
-          "",
-          "",
-          querydata.ccemail
-        );
-      } else if (querydata.messagetype == 2 || querydata.messagetype == 3) {
-        WhatsappSent = await axios.post(
-          `${config.whatsappip}/billing/sendpdf`,
-          {
-            phoneno: querydata.phoneno,
-            feedback: `We hope you're doing well. We are interested in procuring the following products and would like to request a quotation from your company`,
-            pdfpath: req.file.path,
+      if (querydata.messagetype == 1) {
+        try {
+          EmailSent = await mailer.sendInvoice(
+            querydata.vendorname,
+            querydata.emailid,
+            "Request for Quotation from Sporada Secure India Private Limited",
+            "rfgpdf.html",
+            ``,
+            "RFQ_PDF_SEND",
+            req.file.path,
+            "",
+            "",
+            "",
+            querydata.ccemail
+          );
+        } catch (er) {
+          EmailSent = false;
+        }
+      } else if (querydata.messagetype == 2) {
+        try {
+          WhatsappSent = await axios.post(
+            `${config.whatsappip}/billing/sendpdf`,
+            {
+              phoneno: querydata.phoneno,
+              feedback: `We hope you're doing well. We are interested in procuring the following products and would like to request a quotation from your company`,
+              pdfpath: req.file.path,
+            }
+          );
+          if (WhatsappSent.data.code == true) {
+            WhatsappSent = WhatsappSent.data.code;
+          } else {
+            WhatsappSent = WhatsappSent.data.code;
           }
-        );
-        if (WhatsappSent.data.code == true) {
-          WhatsappSent = WhatsappSent.data.code;
-        } else {
-          WhatsappSent = WhatsappSent.data.code;
+        } catch (er) {
+          WhatsappSent = false;
+        }
+      } else {
+        try {
+          WhatsappSent = await axios.post(
+            `${config.whatsappip}/billing/sendpdf`,
+            {
+              phoneno: querydata.phoneno,
+              feedback: `We hope you're doing well. We are interested in procuring the following products and would like to request a quotation from your company`,
+              pdfpath: req.file.path,
+            }
+          );
+          if (WhatsappSent.data.code == true) {
+            WhatsappSent = WhatsappSent.data.code;
+          } else {
+            WhatsappSent = WhatsappSent.data.code;
+          }
+        } catch (er) {
+          WhatsappSent = false;
+        }
+        try {
+          EmailSent = await mailer.sendInvoice(
+            querydata.vendorname,
+            querydata.emailid,
+            "Request for Quotation from Sporada Secure India Private Limited",
+            "rfgpdf.html",
+            ``,
+            "RFQ_PDF_SEND",
+            req.file.path,
+            "",
+            "",
+            "",
+            querydata.ccemail
+          );
+        } catch (er) {
+          EmailSent = false;
         }
       }
       await mqttclient.publishMqttMessage(
@@ -7841,7 +8034,7 @@ async function addRevisedQuotation(req, res) {
           );
         } else {
           const [sql2] = await db.spcall(
-            `CALL SP_REVISEDQUOTATION_ADD(?,?,?,?,?,?,?,?,?,?,?,@revquoteid); SELECT @revquoteid;`,
+            `CALL SP_QUOTATION_ADD(?,?,?,?,?,?,?,?,?,?,?,@quoteid); SELECT @quoteid;`,
             [
               product.productname,
               product.productquantity,
@@ -7860,6 +8053,7 @@ async function addRevisedQuotation(req, res) {
           RevQuoteid = objectvalue3["@revquoteid"];
         }
       }
+
       const sql = await db.query(
         `Update generaterevisedquotationid set status = 0 where revquotation_id IN('${querydata.quotationgenid}')`
       );
@@ -7906,6 +8100,10 @@ async function addRevisedQuotation(req, res) {
         );
         await mqttclient.publishMqttMessage(
           "Notification",
+          "Quotation sent Internally for " + querydata.clientaddressname
+        );
+        await mqttclient.publishMqttMessage(
+          "refresh",
           "Quotation sent Internally for " + querydata.clientaddressname
         );
         return helper.getSuccessResponse(
@@ -9364,52 +9562,135 @@ async function approveQuotation(sales) {
         secret
       );
     }
-
-    const sql = await db.query(
-      `
-  UPDATE salesprocesslist
-  JOIN (
-    SELECT processid FROM salesprocesslist WHERE cprocess_id = ?
-  ) AS sp ON (
-    salesprocesslist.processid = sp.processid
-    AND salesprocesslist.process_type NOT IN (2, 3)
-  ) OR salesprocesslist.cprocess_id = ?
-  SET 
-    Approved_status = 1,
-    user_ip = ?,
-    Timestamp = ?
-`,
-      [
-        querydata.eventid,
-        querydata.eventid,
-        querydata.user_ip,
-        querydata.timestamp,
-      ]
-    );
-    if (sql.affectedRows > 0) {
-      await mqttclient.publishMqttMessage(
-        "refresh",
-        "Sales Quotation approved for the process id " + querydata.eventid
-      );
-      await mqttclient.publishMqttMessage(
-        "Notification",
-        "Sales Quotation approved for the process id " + querydata.eventid
-      );
-      return helper.getSuccessResponse(
-        true,
-        "success",
-        "Approved Successfully",
-        querydata.eventid,
+    if (!querydata.hasOwnProperty("module") || querydata.module == "") {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Module missing. Please provide the module",
+        "APPROVE THE QUOTATION",
         secret
       );
-    } else {
-      return helper.getSuccessResponse(
-        true,
-        "success",
-        "Approved Successfully",
-        querydata.eventid,
-        secret
+    }
+    if (querydata.module == "sales") {
+      const sql = await db.query(
+        `
+    UPDATE salesprocesslist
+    JOIN (
+      SELECT processid FROM salesprocesslist WHERE cprocess_id = ?
+    ) AS sp ON (
+      salesprocesslist.processid = sp.processid
+      AND salesprocesslist.process_type NOT IN (2, 3)
+    ) OR salesprocesslist.cprocess_id = ? 
+    SET 
+      Approved_status = 1,
+      user_ip = ?,
+      Timestamp = ? Where Approved_status = 2;
+  `,
+        [
+          querydata.eventid,
+          querydata.eventid,
+          querydata.user_ip,
+          querydata.timestamp,
+        ]
       );
+      const sql1 = await db.query(
+        `UPDATE salesprocesslist JOIN (SELECT processid FROM salesprocesslist WHERE cprocess_id = ?) AS sub ON salesprocesslist.processid = sub.processid
+        SET Approved_status = 1 WHERE salesprocesslist.process_type NOT IN (2, 3);`,
+        [querydata.eventid]
+      );
+      var processid;
+      const sql2 = await db.query(
+        `SELECT processid FROM salesprocesslist WHERE cprocess_id = ?`,
+        [querydata.eventid]
+      );
+      if (sql2.length > 0) {
+        processid = sql2.processid;
+      }
+      if (sql.affectedRows > 0) {
+        await mqttclient.publishMqttMessage(
+          "refresh",
+          "Sales Quotation approved for the process id " + processid
+        );
+        await mqttclient.publishMqttMessage(
+          "Notification",
+          "Sales Quotation approved for the process id " + processid
+        );
+        return helper.getSuccessResponse(
+          true,
+          "success",
+          "Approved Successfully",
+          processid,
+          secret
+        );
+      } else {
+        return helper.getSuccessResponse(
+          false,
+          "error",
+          "Action has already been taken for this quotation.",
+          querydata.eventid,
+          secret
+        );
+      }
+    } else if (querydata.module == "subscription") {
+      const sql = await db.query(
+        `
+    UPDATE subscriptionprocesslist
+    JOIN (
+      SELECT processid FROM subscriptionprocesslist WHERE sprocess_id = ?
+    ) AS sp ON (
+      subscriptionprocesslist.processid = sp.processid
+      AND subscriptionprocesslist.process_type NOT IN (2, 3)
+    ) OR subscriptionprocesslist.sprocess_id = ? 
+    SET 
+      Approved_status = 1,
+      user_ip = ?,
+      Timestamp = ? Where Approved_status = 2;
+  `,
+        [
+          querydata.eventid,
+          querydata.eventid,
+          querydata.user_ip,
+          querydata.timestamp,
+        ]
+      );
+      const sql1 = await db.query(
+        `UPDATE subscriptionprocesslist JOIN (SELECT processid FROM subscriptionprocesslist WHERE sprocess_id = ?) AS sub ON subscriptionprocesslist.processid = sub.processid
+        SET Approved_status = 1 WHERE subscriptionprocesslist.process_type NOT IN (2, 3);`,
+        [querydata.eventid]
+      );
+      var processid;
+      const sql2 = await db.query(
+        `SELECT processid FROM subscriptionprocesslist WHERE sprocess_id = ?`,
+        [querydata.eventid]
+      );
+      if (sql2.length > 0) {
+        processid = sql2.processid;
+      }
+      if (sql.affectedRows > 0) {
+        await mqttclient.publishMqttMessage(
+          "refresh",
+          "Sales Quotation approved for the process id " + processid
+        );
+        await mqttclient.publishMqttMessage(
+          "Notification",
+          "Sales Quotation approved for the process id " + processid
+        );
+        return helper.getSuccessResponse(
+          true,
+          "success",
+          "Approved Successfully",
+          processid,
+          secret
+        );
+      } else {
+        return helper.getSuccessResponse(
+          false,
+          "error",
+          "Action has already been taken for this quotation.",
+          querydata.eventid,
+          secret
+        );
+      }
     }
   } catch (er) {
     return helper.getErrorResponse(
@@ -9521,45 +9802,119 @@ async function rejectQuotation(sales) {
         secret
       );
     }
-
-    const sql = await db.query(
-      `UPDATE salesprocesslist
-       JOIN (
-         SELECT processid FROM salesprocesslist WHERE cprocess_id = ?
-       ) AS sp ON (
-         salesprocesslist.processid = sp.processid AND salesprocesslist.process_type NOT IN (2, 3)
-       )
-       OR salesprocesslist.cprocess_id = ?
-       SET 
-         Approved_status = 3,
-         Rejected_reason = ?`,
-      [querydata.eventid, querydata.eventid, querydata.reason]
-    );
-
-    if (sql.affectedRows > 0) {
-      await mqttclient.publishMqttMessage(
-        "refresh",
-        "Sales Quotation Rejected for the process id " + querydata.eventid
-      );
-      await mqttclient.publishMqttMessage(
-        "Notification",
-        "Sales Quotation Rejected for the process id " + querydata.eventid
-      );
-      return helper.getSuccessResponse(
-        true,
-        "success",
-        "Rejected Successfully",
-        querydata.eventid,
-        secret
-      );
-    } else {
+    if (!querydata.hasOwnProperty("module") || querydata.module == "") {
       return helper.getErrorResponse(
-        true,
-        "success",
-        "Rejected Successfully",
-        querydata.eventid,
+        false,
+        "error",
+        "Module missing. Please provide the module",
+        "REJECT QUOTATION",
         secret
       );
+    }
+    if (querydata.module == "sales") {
+      const sql = await db.query(
+        `UPDATE salesprocesslist
+         JOIN (
+           SELECT processid FROM salesprocesslist WHERE cprocess_id = ?
+         ) AS sp ON (
+           salesprocesslist.processid = sp.processid AND salesprocesslist.process_type NOT IN (2, 3)
+         )
+         OR salesprocesslist.cprocess_id = ? 
+         SET 
+           Approved_status = 3,
+           Rejected_reason = ? Where Approved_status = 2;;`,
+        [querydata.eventid, querydata.eventid, querydata.reason]
+      );
+      const sql1 = await db.query(
+        `UPDATE salesprocesslist JOIN (SELECT processid FROM salesprocesslist WHERE cprocess_id = 132) AS sub ON salesprocesslist.processid = sub.processid
+        SET Approved_status = 3 WHERE salesprocesslist.process_type NOT IN (2, 3);`,
+        [querydata.eventid]
+      );
+      var processid;
+      const sql2 = await db.query(
+        `SELECT processid FROM salesprocesslist WHERE cprocess_id = ?`,
+        [querydata.eventid]
+      );
+      if (sql2.length > 0) {
+        processid = sql2[0].processid;
+      }
+      if (sql.affectedRows > 0) {
+        await mqttclient.publishMqttMessage(
+          "refresh",
+          "Sales Quotation Rejected for the process id " + processid
+        );
+        await mqttclient.publishMqttMessage(
+          "Notification",
+          "Sales Quotation Rejected for the process id " + processid
+        );
+        return helper.getSuccessResponse(
+          true,
+          "success",
+          "Rejected Successfully",
+          querydata.eventid,
+          secret
+        );
+      } else {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Action has already been taken for this quotation.",
+          querydata.eventid,
+          secret
+        );
+      }
+    } else if (querydata.module == "subscription") {
+      const sql = await db.query(
+        `UPDATE subscriptionprocesslist
+         JOIN (
+           SELECT processid FROM subscriptionprocesslist WHERE sprocess_id = ?
+         ) AS sp ON (
+          subscriptionprocesslist.processid = sp.processid AND subscriptionprocesslist.process_type NOT IN (2, 3)
+         )
+         OR subscriptionprocesslist.sprocess_id = ? 
+         SET 
+           Approved_status = 3,
+           Rejected_reason = ? Where Approved_status = 2;;`,
+        [querydata.eventid, querydata.eventid, querydata.reason]
+      );
+      const sql1 = await db.query(
+        `UPDATE subscriptionprocesslist JOIN (SELECT processid FROM subscriptionprocesslist WHERE sprocess_id = ?) AS sub ON subscriptionprocesslist.processid = sub.processid
+        SET Approved_status = 3 WHERE subscriptionprocesslist.process_type NOT IN (2, 3);`,
+        [querydata.eventid]
+      );
+      var processid;
+      const sql2 = await db.query(
+        `SELECT processid FROM subscriptionprocesslist WHERE sprocess_id = ?`,
+        [querydata.eventid]
+      );
+      if (sql2.length > 0) {
+        processid = sql2[0].processid;
+      }
+      if (sql.affectedRows > 0) {
+        await mqttclient.publishMqttMessage(
+          "refresh",
+          "Sales Quotation Rejected for the process id " + processid
+        );
+        await mqttclient.publishMqttMessage(
+          "Notification",
+          "Sales Quotation Rejected for the process id " + processid
+        );
+        return helper.getSuccessResponse(
+          true,
+          "success",
+          "Rejected Successfully",
+          querydata.eventid,
+          secret
+        );
+      } else {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Action has already been taken for this quotation.",
+          querydata.eventid,
+          secret
+        );
+      }
     }
   } catch (er) {
     return helper.getErrorResponse(
@@ -9902,6 +10257,10 @@ async function IntQuotationApproval(req, res) {
       WHERE q.status = 1 AND q.process_id = ? AND a.status = 1;`,
       [sales.quoteid]
     );
+    const link = `http://192.168.0.200:8081?eventid=${sales.quoteid}&STOKEN=${sql[0].secret1}&module=sales`;
+    const feedbackMessage =
+      "If you want to proceed with the quotation, please click the following link: " +
+      link;
     // Send the correct HTML file
     if (sql1.affectedRows) {
       if (sales.s == 1) {
@@ -9929,11 +10288,12 @@ async function IntQuotationApproval(req, res) {
               sql[0].pdf_path,
               sql[0].feedback,
               sql[0].ccemail,
-              `http://192.168.0.200:8081?eventid=${sales.quoteid}&STOKEN=${sql[0].secret}`,
-              `http://192.168.0.200:8081?eventid=${sales.quoteid}&STOKEN=${sql[0].secret}`
+              `http://192.168.0.200:8081?eventid=${sales.quoteid}&STOKEN=${sql[0].secret}&module=sales`,
+              `http://192.168.0.200:8081?eventid=${sales.quoteid}&STOKEN=${sql[0].secret}&module=sales`
             );
           } else if (sql[0].message_type === 2) {
             // Send only WhatsApp
+
             WhatsappSent = await Promise.all(
               phoneNumbers.map(async (number) => {
                 try {
@@ -9941,7 +10301,7 @@ async function IntQuotationApproval(req, res) {
                     `${config.whatsappip}/billing/sendpdf`,
                     {
                       phoneno: number,
-                      feedback: sql[0].feedback,
+                      feedback: feedbackMessage,
                       pdfpath: sql[0].pdf_path,
                     }
                   );
@@ -9965,8 +10325,8 @@ async function IntQuotationApproval(req, res) {
                 sql[0].pdf_path,
                 sql[0].feedback,
                 sql[0].ccemail,
-                `http://192.168.0.200:8081?eventid=${sales.quoteid}&STOKEN=${sql[0].secret}`,
-                `http://192.168.0.200:8081?eventid=${sales.quoteid}&STOKEN=${sql[0].secret}`
+                `http://192.168.0.200:8081?eventid=${sales.quoteid}&STOKEN=${sql[0].secret}&module=sales`,
+                `http://192.168.0.200:8081?eventid=${sales.quoteid}&STOKEN=${sql[0].secret}&module=sales`
               )
             );
 
@@ -9978,7 +10338,7 @@ async function IntQuotationApproval(req, res) {
                       `${config.whatsappip}/billing/sendpdf`,
                       {
                         phoneno: number,
-                        feedback: sql[0].feedback,
+                        feedback: feedbackMessage,
                         pdfpath: sql[0].pdf_path,
                       }
                     );
@@ -10151,27 +10511,10 @@ async function GetCustomPDF(sales) {
       );
     }
     const sql = await db.query(
-      `select custom_id custompdfid,customeraddress_name,customeraddress,billing_address,billingaddress_name,customer_mailid,customer_phoneno,customer_gstno,add_date date,custom_type,gen_id,pdf_path,pdf_path path from custompdfmaster where status = 1`
+      `select custom_id custompdfid,customeraddress_name,customeraddress,billing_address,billingaddress_name,customer_mailid,customer_phoneno,customer_gstno,add_date date,custom_type,gen_id,pdf_path,pdf_path path from custompdfmaster where status = 1 order by Row_updated_date DESC`
     );
     var data;
-    if (sql.length >= 0) {
-      // for (let i = 0; i < sql.length; i++) {
-      //   // Ensure file exists
-      //   if (!fs.existsSync(sql[i].pdf_path)) {
-      //     // return helper.getErrorResponse(false,"error","File does not exist","GET BINARY DATA FOR THE PDF",secret);
-      //     return helper.getErrorResponse(
-      //       false,
-      //       "error",
-      //       "File does not exist",
-      //       "GET BINARY DATA FOR PDF",
-      //       secret
-      //     );
-      //   }
-      //   // for (let i = 0; i < sql.length; i++) {
-      //   binarydata = await helper.convertFileToBinary(sql[i].pdf_path);
-      //   sql[i].pdf_path = binarydata;
-      // }
-
+    if (sql.length > 0) {
       return helper.getSuccessResponse(
         true,
         "success",
@@ -10292,46 +10635,103 @@ async function getQuotationDetails(sales) {
         secret
       );
     }
-    const sql = await db.query(
-      `select custsales_name,salesprocess_path pdfpath,DATE_FORMAT(salesprocess_date, '%Y-%m-%d %H:%i:%s') AS salesprocess_date,salesprocess_path pdf_path,
+    if (
+      querydata.hasOwnProperty("module") == false ||
+      querydata.module == 0 ||
+      querydata.module == null
+    ) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Module missing",
+        "Get Quotation",
+        secret
+      );
+    }
+    if (querydata.module == "sales") {
+      const sql = await db.query(
+        `select custsales_name,salesprocess_path pdfpath,DATE_FORMAT(salesprocess_date, '%Y-%m-%d') AS salesprocess_date,salesprocess_path pdf_path,
       cprocess_gene_id quotation_id, 'Sporada Secure India Private Limited' AS mailed_by,'alerts@sporadasecure.com' AS mail_from
       from salesprocesslist where status = 1 and cprocess_id = ? and cprocess_id = (select cprocess_id from salesprocesslist where process_type IN(2,3) and
       processid = (select processid from salesprocesslist where cprocess_id = ? Order by processid) Order by cprocess_id DESC LIMIT 1)`,
-      [querydata.eventid, querydata.eventid]
-    );
-    var data;
-    if (sql.length >= 0) {
-      for (let i = 0; i < sql.length; i++) {
-        // Ensure file exists
-        if (!fs.existsSync(sql[i].pdf_path)) {
-          return helper.getErrorResponse(
-            false,
-            "error",
-            "File does not exist",
-            "GET BINARY DATA FOR PDF AND QUOTATION DETAILS",
-            secret
-          );
+        [querydata.eventid, querydata.eventid]
+      );
+      var data;
+      if (sql.length > 0) {
+        for (let i = 0; i < sql.length; i++) {
+          // Ensure file exists
+          if (!fs.existsSync(sql[i].pdf_path)) {
+            return helper.getErrorResponse(
+              false,
+              "error",
+              "File does not exist",
+              "GET BINARY DATA FOR PDF AND QUOTATION DETAILS",
+              secret
+            );
+          }
+          // for (let i = 0; i < sql.length; i++) {
+          binarydata = await helper.convertFileToBinary(sql[i].pdf_path);
+          sql[i].pdf_path = binarydata;
         }
-        // for (let i = 0; i < sql.length; i++) {
-        binarydata = await helper.convertFileToBinary(sql[i].pdf_path);
-        sql[i].pdf_path = binarydata;
-      }
 
-      return helper.getSuccessResponse(
-        true,
-        "success",
-        "Quotation Details Fetched Successfully",
-        sql[0],
-        secret
+        return helper.getSuccessResponse(
+          true,
+          "success",
+          "Quotation Details Fetched Successfully",
+          sql[0],
+          secret
+        );
+      } else {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Session expired.",
+          sql,
+          secret
+        );
+      }
+    } else if (querydata.module == "subscription") {
+      const sql = await db.query(
+        `select custsubs_name custsales_name,subsprocess_path pdfpath,DATE_FORMAT(subsprocess_date, '%Y-%m-%d') AS salesprocess_date,subsprocess_path pdf_path,
+      sprocess_gene_id quotation_id, 'Sporada Secure India Private Limited' AS mailed_by,'alerts@sporadasecure.com' AS mail_from
+      from subscriptionprocesslist where status = 1 and sprocess_id = ? and sprocess_id = (select sprocess_id from subscriptionprocesslist where process_type IN(2,3) and
+      processid = (select processid from subscriptionprocesslist where sprocess_id = ? Order by processid) Order by sprocess_id DESC LIMIT 1)`,
+        [querydata.eventid, querydata.eventid]
       );
-    } else {
-      return helper.getSuccessResponse(
-        false,
-        "error",
-        "Session expired.",
-        sql,
-        secret
-      );
+      var data;
+      if (sql.length > 0) {
+        for (let i = 0; i < sql.length; i++) {
+          // Ensure file exists
+          if (!fs.existsSync(sql[i].pdf_path)) {
+            return helper.getErrorResponse(
+              false,
+              "error",
+              "File does not exist",
+              "GET BINARY DATA FOR PDF AND QUOTATION DETAILS",
+              secret
+            );
+          }
+          // for (let i = 0; i < sql.length; i++) {
+          binarydata = await helper.convertFileToBinary(sql[i].pdf_path);
+          sql[i].pdf_path = binarydata;
+        }
+
+        return helper.getSuccessResponse(
+          true,
+          "success",
+          "Quotation Details Fetched Successfully",
+          sql[0],
+          secret
+        );
+      } else {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Session expired.",
+          sql,
+          secret
+        );
+      }
     }
   } catch (er) {
     return helper.getErrorResponse(
