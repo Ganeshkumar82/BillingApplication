@@ -71,7 +71,7 @@ let storage1 = multer.diskStorage({
       date.getFullYear().toString() +
       (date.getMonth() + 1).toString().padStart(2, "0") +
       date.getDate().toString().padStart(2, "0");
-    cb(null, `${timestamp}_${file.originalname}`); // Use timestamp to avoid duplicate filenames
+    cb(null, `${file.originalname}`); // Use timestamp to avoid duplicate filenames
   },
 });
 

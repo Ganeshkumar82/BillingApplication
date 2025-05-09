@@ -9,6 +9,7 @@ const salesRouter = require("./routes/sales");
 const SubscriptionRouter = require("./routes/subscription");
 const productRouter = require("./routes/product");
 const verificaitonRouter = require("./routes/verification");
+const billingRouter = require("./routes/billing");
 const { startWebSocketClient } = require("./Websocket");
 const port = 8081;
 
@@ -40,7 +41,7 @@ app.use("/sales", salesRouter);
 app.use("/product", productRouter);
 app.use("/verification", verificaitonRouter);
 app.use("/subscription", SubscriptionRouter);
-
+app.use("/billing", billingRouter);
 /* Error handler middleware */
 app.use((err, req, res, next) => {
   const statusCode = err.statusCode || 500;

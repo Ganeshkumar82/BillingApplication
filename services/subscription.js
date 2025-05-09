@@ -586,6 +586,8 @@ async function addRecurringInvoice(req, res) {
         "plantype",
         "duedate",
         "billperiod",
+        "billdetails",
+        "gstnumber",
       ];
 
       for (let field of requiredFields) {
@@ -672,7 +674,7 @@ async function addRecurringInvoice(req, res) {
 
       // Call DB stored procedure
       const [sql1] = await db.spcall(
-        `CALL SP_ADD_RECURRING_INVOICE(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@sprocessid); select @sprocessid;`,
+        `CALL SP_ADD_RECURRING_INVOICE(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@sprocessid); select @sprocessid;`,
         [
           querydata.subscriptionbillid,
           JSON.stringify(querydata.siteids),
@@ -689,6 +691,7 @@ async function addRecurringInvoice(req, res) {
           querydata.phoneno,
           querydata.ccemail,
           querydata.customerid,
+          JSON.stringify(querydata.billdetails),
         ]
       );
 
@@ -698,6 +701,37 @@ async function addRecurringInvoice(req, res) {
       const sql4 = await db.query(
         `Update subscriptionbillmaster set Email_sent = 1 where subscription_billid = ${querydata.subscriptionbillid}`
       );
+      try {
+        let billDetails;
+        if (typeof querydata.billdetails === "string") {
+          billDetails = JSON.parse(querydata.billdetails);
+        } else {
+          billDetails = querydata.billdetails;
+        }
+        const { gst, subtotal, total } = billDetails;
+        const { CGST, IGST, SGST } = gst;
+        const [sql2] = await db.spcall(
+          `CALL InsertClientVoucher(?,?,?,?,?,?,?,?,?,?,?,?,?,?,@voucher_id,@voucher_number); select @voucher_id,@voucher_number`,
+          [
+            querydata.invoicegenid,
+            "payment voucher",
+            querydata.clientaddressname,
+            querydata.emailid,
+            querydata.phoneno,
+            querydata.clientaddressname,
+            querydata.clientaddress,
+            JSON.stringify(querydata.billdetails),
+            querydata.gstnumber,
+            total,
+            subtotal,
+            IGST,
+            CGST,
+            SGST,
+          ]
+        );
+      } catch (er) {
+        console.log(`Invoice number not exits ${er.message}`);
+      }
     }
 
     // Extract details from the first entry
@@ -904,20 +938,6 @@ async function GetRecurredInvoice(subscription) {
     }
 
     if (sql.length > 0) {
-      // if (!fs.existsSync(sql[0].pdf_data)) {
-      //   return helper.getErrorResponse(
-      //     false,
-      //     "error",
-      //     "File does not exist",
-      //     sql,
-      //     secret
-      //   );
-      // }
-      // for (let i = 0; i < sql.length; i++) {
-      //   binarydata = await helper.convertFileToBinary(sql[i].pdf_data);
-      //   sql[i].pdf_data = binarydata;
-      // }
-
       return helper.getSuccessResponse(
         true,
         "success",
