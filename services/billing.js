@@ -102,7 +102,8 @@ async function getSubscriptionInvoice(billing) {
       ) {
         query += ` AND Processid in(select cprocess_id from salesprocessmaster where customer_id = ?)`;
         sqlParams.push(querydata.customerid);
-      } else if (
+      }
+      if (
         querydata.startdate != null &&
         querydata.startdata != 0 &&
         querydata.startdate != undefined &&
@@ -112,7 +113,8 @@ async function getSubscriptionInvoice(billing) {
       ) {
         query += ` AND salesprocess_date BETWEEN ? and ?`;
         sqlParams.push(querydata.startdate, querydata.enddate);
-      } else if (
+      }
+      if (
         querydata.paymentstatus != null &&
         querydata.paymentstatus != undefined
       ) {
@@ -123,6 +125,14 @@ async function getSubscriptionInvoice(billing) {
           query += ` AND salesprocess_date BETWEEN ? and ?`;
           sqlParams.push(querydata.startdate, querydata.enddate);
         }
+      }
+      if (
+        querydata.duedays != null &&
+        querydata.duedays != undefined &&
+        querydata.duedays > 0
+      ) {
+        query += ` AND DATEDIFF(CURDATE(), sbm.Due_date) >= ?`;
+        sqlParams.push(querydata.duedays);
       }
       sql = await db.query(query, sqlParams);
     }
@@ -263,11 +273,9 @@ async function getSalesInvoice(billing) {
         querydata.paymentstatus != undefined
       ) {
         if (querydata.paymentstatus == 0) {
-          query += ` AND spl.spl.payment BETWEEN ? and ?`;
-          sqlParams.push(querydata.startdate, querydata.enddate);
+          query += ` AND spl.payment_status = 0`;
         } else if (querydata.paymentstatus == 1) {
-          query += ` AND spl.salesprocess_date BETWEEN ? and ?`;
-          sqlParams.push(querydata.startdate, querydata.enddate);
+          query += ` AND spl.payment_status = 1`;
         }
       }
       sql = await db.query(query, sqlParams);
@@ -301,7 +309,417 @@ async function getSalesInvoice(billing) {
   }
 }
 
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+
+async function getBinaryFile(subscription) {
+  try {
+    // Check if the session token exists
+    if (!subscription.hasOwnProperty("STOKEN")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken missing. Please provide the Login sessiontoken",
+        "GET BINARY DATA FOR PDF",
+        ""
+      );
+    }
+    var secret = subscription.STOKEN.substring(0, 16);
+    var querydata;
+    // Validate session token length
+    if (subscription.STOKEN.length > 50 || subscription.STOKEN.length < 30) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
+        "GET BINARY DATA FOR PDF",
+        secret
+      );
+    }
+
+    // Validate session token
+    const [result] = await db.spcall(
+      `CALL SP_STOKEN_CHECK(?,@result); SELECT @result;`,
+      [subscription.STOKEN]
+    );
+    const objectvalue = result[1][0];
+    const userid = objectvalue["@result"];
+
+    if (userid == null) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+        "GET BINARY DATA FOR PDF",
+        secret
+      );
+    }
+
+    // Check if querystring is provided
+    if (!subscription.hasOwnProperty("querystring")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring missing. Please provide the querystring",
+        "GET BINARY DATA FOR PDF",
+        secret
+      );
+    }
+
+    // Decrypt querystring
+    try {
+      querydata = await helper.decrypt(subscription.querystring, secret);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring Invalid error. Please provide the valid querystring.",
+        "GET BINARY DATA FOR PDF",
+        secret
+      );
+    }
+
+    // Parse the decrypted querystring
+    try {
+      querydata = JSON.parse(querydata);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring JSON error. Please provide valid JSON",
+        "GET BINARY DATA FOR PDF",
+        secret
+      );
+    }
+
+    // Validate required fields
+    if (
+      !querydata.hasOwnProperty("recurredbillid") ||
+      querydata.recurredbillid == ""
+    ) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Recurred bill id missing. Please provide the Recurred bill",
+        "GET BINARY DATA FOR PDF",
+        secret
+      );
+    }
+    const sql = await db.query(
+      `select pdf_path from subscriptionbillgenerated where subscription_generatedid = ?`,
+      [querydata.recurredbillid]
+    );
+    var data;
+    if (sql[0]) {
+      // Ensure file exists
+      if (!fs.existsSync(sql[0].pdf_path)) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "File does not exist",
+          "GET BINARY DATA FOR PDF",
+          secret
+        );
+      }
+      binarydata = await helper.convertFileToBinary(sql[0].pdf_path);
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "File Binary Fetched Successfully",
+        binarydata,
+        secret
+      );
+    } else {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "File Binary Fetched Successfully",
+        { binarydata: data },
+        secret
+      );
+    }
+  } catch (er) {
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal Error. Please contact Administration",
+      er.message,
+      secret
+    );
+  }
+}
+
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+
+async function getVouchers(billing) {
+  try {
+    // Check if the session token exists
+    if (!billing.hasOwnProperty("STOKEN")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken missing. Please provide the Login sessiontoken",
+        "GET VOUCHERS",
+        ""
+      );
+    }
+    var secret = billing.STOKEN.substring(0, 16);
+    var querydata;
+    // Validate session token length
+    if (billing.STOKEN.length > 50 || billing.STOKEN.length < 30) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
+        "GET VOUCHERS",
+        secret
+      );
+    }
+
+    // Validate session token
+    const [result] = await db.spcall(
+      `CALL SP_STOKEN_CHECK(?,@result); SELECT @result;`,
+      [billing.STOKEN]
+    );
+    const objectvalue = result[1][0];
+    const userid = objectvalue["@result"];
+
+    if (userid == null) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+        "GET VOUCHERS",
+        secret
+      );
+    }
+    var sql,
+      sqlParams = [];
+    // Check if querystring is provided
+    if (!billing.hasOwnProperty("querystring")) {
+      sql = `select invoice_number,voucher_type,name, email_id, phone_number,client_name,client_address,pending_amount,fully_cleared,partial_cleared,gstnumber,Total_amount,sub_total,IGST,CGST,SGST,voucher_number from clientvouchermaster where status = 1`;
+    }
+
+    // Decrypt querystring
+    try {
+      querydata = await helper.decrypt(billing.querystring, secret);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring Invalid error. Please provide the valid querystring.",
+        "GET VOUCHERS",
+        secret
+      );
+    }
+
+    // Parse the decrypted querystring
+    try {
+      querydata = JSON.parse(querydata);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring JSON error. Please provide valid JSON",
+        "GET VOUCHERS",
+        secret
+      );
+    }
+
+    sql = `select invoice_number,voucher_type,name, email_id, phone_number,client_name,client_address,pending_amount,fully_cleared,partial_cleared,gstnumber,Total_amount,sub_total,IGST,CGST,SGST,voucher_number,invoice_type from clientvouchermaster where status = 1`;
+
+    if (
+      querydata.vouchertype != null &&
+      querydata.vouchertype != 0 &&
+      querydata.vouchertype != undefined
+    ) {
+      if (querydata.vouchertype == "payment") {
+        sql += ` and voucher_type LIKE '%payment%'`;
+      } else if (querydata.vouchertype == "receipt") {
+        sql += ` and voucher_type LIKE '%receipt%'`;
+      } else {
+        sql += ` and voucher_type LIKE '%consolidate%'`;
+      }
+    }
+    if (
+      querydata.invoicetype != null &&
+      querydata.invoicetype != 0 &&
+      querydata.invoicetype != undefined
+    ) {
+      if (querydata.invoicetype == "sales") {
+        sql += ` and invoice_type like '%sales%'`;
+      } else if (querydata.invoicetype == "subscription") {
+        sql += ` and invoice_type like '%subscription%'`;
+      } else if (querydata.invoicetype == "vendor") {
+        sql += ` and invoice_type like '%vendor%'`;
+      }
+    }
+    console.log(sql);
+    // if (
+    //   querystring.clientname != null &&
+    //   querydata.clientname != 0 &&
+    //   querydata.clientname != undefined
+    // ) {
+    // }
+    const query = await db.query(sql, sqlParams);
+    if (query[0]) {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Vouchers fetched Successfully",
+        query,
+        secret
+      );
+    } else {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Vouchers fetched Successfully",
+        query,
+        secret
+      );
+    }
+  } catch (er) {
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal Error. Please contact Administration",
+      er.message,
+      secret
+    );
+  }
+}
+
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+
+async function ClearVouchers(billing) {
+  try {
+    // Check if the session token exists
+    if (!billing.hasOwnProperty("STOKEN")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken missing. Please provide the Login sessiontoken",
+        "CLEAR VOUCHERS",
+        ""
+      );
+    }
+    var secret = billing.STOKEN.substring(0, 16);
+    var querydata;
+    // Validate session token length
+    if (billing.STOKEN.length > 50 || billing.STOKEN.length < 30) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
+        "CLEAR VOUCHERS",
+        secret
+      );
+    }
+
+    // Validate session token
+    const [result] = await db.spcall(
+      `CALL SP_STOKEN_CHECK(?,@result); SELECT @result;`,
+      [billing.STOKEN]
+    );
+    const objectvalue = result[1][0];
+    const userid = objectvalue["@result"];
+
+    if (userid == null) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+        "CLEAR VOUCHERS",
+        secret
+      );
+    }
+    // Check if querystring is provided
+    if (!billing.hasOwnProperty("querystring")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring missing. Please provide the querystring",
+        "CLEAR VOUCHERS",
+        secret
+      );
+    }
+
+    // Decrypt querystring
+    try {
+      querydata = await helper.decrypt(billing.querystring, secret);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring Invalid error. Please provide the valid querystring.",
+        "CLEAR VOUCHERS",
+        secret
+      );
+    }
+
+    // Parse the decrypted querystring
+    try {
+      querydata = JSON.parse(querydata);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring JSON error. Please provide valid JSON",
+        "CLEAR VOUCHERS",
+        secret
+      );
+    }
+    if (!querydata.hasOwnProperty("voucherid") || querydata.voucherid == "") {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Voucher id missing. Please provide the Voucher id",
+        "ADD FEEDBACK FOR EVENTS",
+        secret
+      );
+    }
+
+    if (query[0]) {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Vouchers Cleared Successfully",
+        query,
+        secret
+      );
+    } else {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Vouchers Cleared Successfully",
+        query,
+        secret
+      );
+    }
+  } catch (er) {
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal Error. Please contact Administration",
+      er.message,
+      secret
+    );
+  }
+}
+
 module.exports = {
   getSubscriptionInvoice,
   getSalesInvoice,
+  getBinaryFile,
+  getVouchers,
+  ClearVouchers,
 };

@@ -711,7 +711,7 @@ async function addRecurringInvoice(req, res) {
         const { gst, subtotal, total } = billDetails;
         const { CGST, IGST, SGST } = gst;
         const [sql2] = await db.spcall(
-          `CALL InsertClientVoucher(?,?,?,?,?,?,?,?,?,?,?,?,?,?,@voucher_id,@voucher_number); select @voucher_id,@voucher_number`,
+          `CALL InsertClientVoucher(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@voucher_id,@voucher_number); select @voucher_id,@voucher_number`,
           [
             querydata.invoicegenid,
             "payment voucher",
@@ -727,6 +727,7 @@ async function addRecurringInvoice(req, res) {
             IGST,
             CGST,
             SGST,
+            "subscription",
           ]
         );
       } catch (er) {
@@ -3579,7 +3580,7 @@ async function AddRevisedQuotation(req, res) {
             subscriptiontype = 1;
           } else if (subscription1.subscriptionttype == "company") {
             const [rows] = await db.spcall1(
-              ` CALL InsertSubscription(?, ?, ?, ?, ?, ?, ?,?, @subscriptionid);SELECT @subscriptionid;`,
+              ` CALL InsertSubscription(?, ?, ?, ?, ?, ?, ?,?,?,@subscriptionid);SELECT @subscriptionid;`,
               [
                 subscriptiontype,
                 subscription1.name,

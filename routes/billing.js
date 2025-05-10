@@ -29,11 +29,29 @@ router.post("/getvoucher", async function (req, res, next) {
   }
 });
 
+router.post("/clearvoucher", async function (req, res, next) {
+  try {
+    res.json(await billing.ClearVouchers(req.body));
+  } catch (er) {
+    console.log(`Error while clearing the vouchers: ${er}`);
+    next(er);
+  }
+});
+
 router.post("/consolidateledger", async function (req, res, next) {
   try {
     res.json(await billing.ConsolidateLedger(req.body));
   } catch (er) {
     console.log(`Error while Fetching the consolidate ledger: ${er}`);
+    next(er);
+  }
+});
+
+router.post("/getbinaryfile", async function (req, res, next) {
+  try {
+    res.json(await billing.getBinaryFile(req.body));
+  } catch (er) {
+    console.log(`Error while getting the binary file : ${er}`);
     next(er);
   }
 });

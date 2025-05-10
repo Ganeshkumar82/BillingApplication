@@ -1395,7 +1395,7 @@ async function addInvoice(req, res) {
       const { gst, subtotal, total } = billDetails;
       const { CGST, IGST, SGST } = gst;
       const [sql2] = await db.spcall(
-        `CALL InsertClientVoucher(?,?,?,?,?,?,?,?,?,?,?,?,?,?,@voucher_id,@voucher_number); select @voucher_id,@voucher_number`,
+        `CALL InsertClientVoucher(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@voucher_id,@voucher_number); select @voucher_id,@voucher_number`,
         [
           querydata.invoicegenid,
           "payment voucher",
@@ -1411,6 +1411,7 @@ async function addInvoice(req, res) {
           IGST,
           CGST,
           SGST,
+          "sales",
         ]
       );
     } catch (er) {
