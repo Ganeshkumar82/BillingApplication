@@ -502,8 +502,8 @@ async function getVouchers(billing) {
       sqlParams = [];
     // Check if querystring is provided
     if (!billing.hasOwnProperty("querystring")) {
-      sql = `SELECT invoice_number,voucher_type,name,email_id,phone_number,client_name,client_address,pending_amount,fully_cleared,partial_cleared,gstnumber,Total_amount,sub_total,IGST,CGST,SGST,
-      voucher_number,invoice_type,customer_id,CASE WHEN SUM(Total_amount) OVER (PARTITION BY customer_id, invoice_type) >= 100000 THEN 1 ELSE 0 END AS tds_calculation
+      sql = `SELECT invoice_number,voucher_type,name,email_id,phone_number,client_name,client_address,pending_amount,fully_cleared,partially_cleared,gstnumber,Total_amount,sub_total,IGST,CGST,SGST,
+      voucher_number,invoice_type,customer_id,CASE WHEN SUM(Total_amount) OVER (PARTITION BY customer_id, invoice_type) >= 100000 THEN 1 ELSE 0 END AS tds_calculation,ROUND(sub_total * 0.02, 2) AS tdscalculation_amount
       FROM clientvouchermaster WHERE status = 1`;
     }
 
@@ -533,8 +533,8 @@ async function getVouchers(billing) {
       );
     }
 
-    sql = `SELECT invoice_number,voucher_type,name,email_id,phone_number,client_name,client_address,pending_amount,fully_cleared,partial_cleared,gstnumber,Total_amount,sub_total,IGST,CGST,SGST,
-    voucher_number,invoice_type,customer_id,CASE WHEN SUM(Total_amount) OVER (PARTITION BY customer_id, invoice_type) >= 100000 THEN 1 ELSE 0 END AS tds_calculation
+    sql = `SELECT invoice_number,voucher_type,name,email_id,phone_number,client_name,client_address,pending_amount,fully_cleared,partially_cleared,gstnumber,Total_amount,sub_total,IGST,CGST,SGST,
+    voucher_number,invoice_type,customer_id,CASE WHEN SUM(Total_amount) OVER (PARTITION BY customer_id, invoice_type) >= 100000 THEN 1 ELSE 0 END AS tds_calculation,ROUND(sub_total * 0.02, 2) AS tdscalculation_amount
     FROM clientvouchermaster WHERE status = 1`;
 
     if (
@@ -702,8 +702,8 @@ async function ClearVouchers(billing) {
       { field: "invoicenumber", message: "Invoice number missing." },
       { field: "emailid", message: "Email id missing." },
       { field: "phoneno", message: "Phone no missing." },
-      { field: "receivedamount", message: "Received amount missing." },
-      { field: "invoice_amount", message: "Invoice amount missing." },
+      // { field: "receivedamount", message: "Received amount missing." },
+      { field: "invoicetype", message: "Invoice type missing." },
       { field: "feedback", message: "Feedback type missing." },
     ];
 
@@ -713,12 +713,26 @@ async function ClearVouchers(billing) {
           false,
           "error",
           message,
-          "ADD FEEDBACK FOR EVENTS",
+          "CLEAR VOUCHERS",
           secret
         );
       }
     }
-
+    if (querydata.paymentstatus == "partial") {
+      const sql = await db.query(
+        `UPDATE clientvouchermaster SET partially_cleared = 1,  Pending_amount = ? - ?  WHERE voucher_id = ?`,
+        [querydata.grossamount, querydata.paidamount, querydata.voucherid]
+      );
+      if (querydata.invoicetype == "sales") {
+        const sql1 = await db.query(
+          `Update salesprocesslist SET payment_status = 1, Paid_amount = ? where invoice_number = ?`,
+          [querydata.paidamount, querydata.invoicenumber]
+        );
+      } else if (querydata.invoicetype == "subscription") {
+      } else if (querydata.invoicetype == "vendor") {
+      }
+    } else {
+    }
     if (query[0]) {
       return helper.getSuccessResponse(
         true,

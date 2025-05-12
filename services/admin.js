@@ -2023,9 +2023,9 @@ async function BranchList(admin) {
       }
       if (querydata.hasOwnProperty("companyid") && querydata.companyid != 0) {
         sql = await db.query1(
-          `SELECT bm.Branch_id, bm.Branch_name, bm.Branch_code, bm.branch_name AS client_addressname, bm.address AS clientaddress, 
-                bm.gstno AS gst_number,bm.contact_person, bm.Email_id AS emailid, bm.Contact_no AS contact_number, bm.billing_address, 
-                bm.Billingaddress_name AS billing_addressname, 
+          `SELECT bm.Branch_id, bm.Branch_name, bm.Branch_code, cst.clientaddress_name AS client_addressname, cst.customer_address AS clientaddress, 
+          cst.billing_gst AS gst_number,bm.contact_person, cst.emailid AS emailid, cst.Phoneno AS contact_number, cst.billing_address, 
+          cst.billingaddress_name AS billing_addressname, 
                 CASE WHEN bm.Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type, 
                 bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode, cst.from_date, cst.to_date, cst.Amount, cst.billingperiod 
             FROM branchmaster bm 
@@ -2035,9 +2035,9 @@ async function BranchList(admin) {
         );
 
         sql1 = await db.query1(
-          `SELECT bm.Branch_id, bm.Branch_name, bm.Branch_code, bm.branch_name AS client_addressname, bm.address AS clientaddress, 
-          bm.gstno AS gst_number,bm.contact_person, bm.Email_id AS emailid, bm.Contact_no AS contact_number, bm.billing_address, 
-          bm.Billingaddress_name AS billing_addressname, 
+          `SELECT bm.Branch_id, bm.Branch_name, bm.Branch_code,  cst.clientaddress_name AS client_addressname, cst.customer_address AS clientaddress, 
+          cst.billing_gst AS gst_number,bm.contact_person, cst.emailid AS emailid, cst.Phoneno AS contact_number, cst.billing_address, 
+          cst.billingaddress_name AS billing_addressname, 
           CASE WHEN bm.Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type, 
           bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode, cst.from_date, cst.to_date, cst.Amount, cst.billingperiod 
             FROM branchmaster bm 
@@ -2050,9 +2050,9 @@ async function BranchList(admin) {
         querydata.organizationid != 0
       ) {
         sql = await db.query1(
-          `SELECT bm.Branch_id, bm.Branch_name, bm.Branch_code, bm.branch_name AS client_addressname, bm.address AS clientaddress, 
-          bm.gstno AS gst_number,bm.contact_person, bm.Email_id AS emailid, bm.Contact_no AS contact_number, bm.billing_address, 
-          bm.Billingaddress_name AS billing_addressname, 
+          `SELECT bm.Branch_id, bm.Branch_name, bm.Branch_code,  cst.clientaddress_name AS client_addressname, cst.customer_address AS clientaddress, 
+          cst.billing_gst AS gst_number,bm.contact_person, cst.emailid AS emailid, cst.Phoneno AS contact_number, cst.billing_address, 
+          cst.billingaddress_name AS billing_addressname, 
           CASE WHEN bm.Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type, 
           bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode, cst.from_date, cst.to_date, cst.Amount, cst.billingperiod 
             FROM branchmaster bm 
@@ -2063,9 +2063,9 @@ async function BranchList(admin) {
         );
 
         sql1 = await db.query1(
-          `SELECT bm.Branch_id, bm.Branch_name, bm.Branch_code, bm.branch_name AS client_addressname, bm.address AS clientaddress, 
-          bm.gstno AS gst_number,bm.contact_person, bm.Email_id AS emailid, bm.Contact_no AS contact_number, bm.billing_address, 
-          bm.Billingaddress_name AS billing_addressname, 
+          `SELECT bm.Branch_id, bm.Branch_name, bm.Branch_code, cst.clientaddress_name AS client_addressname, cst.customer_address AS clientaddress, 
+          cst.billing_gst AS gst_number,bm.contact_person, cst.emailid AS emailid, cst.Phoneno AS contact_number, cst.billing_address, 
+          cst.billingaddress_name AS billing_addressname,  
           CASE WHEN bm.Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type, 
           bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode, cst.from_date, cst.to_date, cst.Amount, cst.billingperiod 
             FROM branchmaster bm 
@@ -2077,9 +2077,9 @@ async function BranchList(admin) {
       }
     } else {
       sql = await db.query1(
-        `SELECT bm.Branch_id, bm.Branch_name, bm.Branch_code, bm.branch_name AS client_addressname, bm.address AS clientaddress, 
-        bm.gstno AS gst_number,bm.contact_person, bm.Email_id AS emailid, bm.Contact_no AS contact_number, bm.billing_address, 
-        bm.Billingaddress_name AS billing_addressname, 
+        `SELECT bm.Branch_id, bm.Branch_name, cst.branchcode Branch_code, cst.clientaddress_name AS client_addressname, cst.customer_address AS clientaddress, 
+        cst.billing_gst AS gst_number,bm.contact_person, cst.emailid AS emailid, cst.Phoneno AS contact_number, cst.billing_address, 
+        cst.billingaddress_name AS billing_addressname, 
         CASE WHEN bm.Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type, 
         bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode, cst.from_date, cst.to_date, cst.Amount, cst.billingperiod 
             FROM branchmaster bm 
@@ -2088,9 +2088,9 @@ async function BranchList(admin) {
       );
 
       sql1 = await db.query1(
-        `SELECT bm.Branch_id, bm.Branch_name, bm.Branch_code, bm.branch_name AS client_addressname, bm.address AS clientaddress, 
-        bm.gstno AS gst_number,bm.contact_person, bm.Email_id AS emailid, bm.Contact_no AS contact_number, bm.billing_address, 
-        bm.Billingaddress_name AS billing_addressname, 
+        `SELECT bm.Branch_id, bm.Branch_name, bm.Branch_code, cst.clientaddress_name AS client_addressname, cst.customer_address AS clientaddress, 
+        cst.billing_gst AS gst_number,bm.contact_person, cst.emailid AS emailid, cst.Phoneno AS contact_number, cst.billing_address, 
+        cst.billingaddress_name AS billing_addressname, 
         CASE WHEN bm.Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type, 
         bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode, cst.from_date, cst.to_date, cst.Amount, cst.billingperiod 
             FROM branchmaster bm 
@@ -3325,6 +3325,7 @@ async function UpdateBranch(admin) {
         field: "contactno",
         message: "Contact number missing.",
       },
+      { field: "clientaddressname", message: "Client Address name missing." },
       { field: "address", message: "Address missing." },
       { field: "gstno", message: "Gst number missing." },
       { field: "billingaddressname", message: "Billing address name missing" },
@@ -3380,7 +3381,7 @@ async function UpdateBranch(admin) {
     const endDate = await helper.formatDateToSQL(querydata.enddate);
     if (querydata.hasOwnProperty("subscriptionid")) {
       await db.query1(
-        `UPDATE subscriptioncustomertrans SET billing_plan = ?, Bill_mode = ?, from_date = ?, to_date = ?, Amount = ?, billingperiod = ?,Subscription_ID = ? WHERE Branch_id =?`,
+        `UPDATE subscriptioncustomertrans SET billing_plan = ?, Bill_mode = ?, from_date = ?, to_date = ?, Amount = ?, billingperiod = ?,Subscription_ID = ?,customer_address =?,clientaddress_name =?,billing_address = ?,billingaddress_name = ?,billing_gst =? ,branchcode = ? WHERE Branch_id =?`,
         [
           querydata.billingplan,
           querydata.billmode,
@@ -3389,6 +3390,12 @@ async function UpdateBranch(admin) {
           querydata.amount,
           querydata.billingperiod,
           querydata.subscriptionid,
+          querydata.address,
+          querydata.clientaddressname,
+          querydata.billingaddress,
+          querydata.billingaddressname,
+          querydata.gstno,
+          querydata.branchcode,
           querydata.branchid,
         ]
       );

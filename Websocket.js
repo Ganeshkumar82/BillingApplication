@@ -91,7 +91,7 @@ async function sendInvoice() {
               FROM subscriptionbillmaster sbm2
               JOIN subscriptionbillgenerated sbg2
                 ON sbm2.subscription_billid = sbg2.subscription_billid
-              WHERE sbg2.payment_status = 0
+              WHERE sbg2.payment_status IN(0,2) 
                 AND sbm2.status = 1
                 AND sbm2.subscription_billid <> sbm.subscription_billid
                 AND sbm2.Site_list = sbm.Site_list
@@ -141,35 +141,37 @@ async function sendInvoice() {
       ) AS contactdetails,
 
       (
-          SELECT JSON_ARRAYAGG(
-              JSON_OBJECT(
-                  'invoiceid', sbg2.invoice_No,
-                  'duedate', sbm2.Due_date,
-                  'overduedays', DATEDIFF(NOW(), sbm2.Due_date),
-                  'charges', sbm2.plancharges
-              )
+        SELECT JSON_ARRAYAGG(
+          JSON_OBJECT(
+            'invoiceid', sbg2.invoice_No,
+            'duedate', sbm2.Due_date,
+            'overduedays', DATEDIFF(NOW(), sbm2.Due_date),
+            'charges', sbm2.plancharges,
+            'paidamount', sbm2.paidamount,
+            'pendingamount', sbm2.plancharges - sbm2.paidamount
           )
+        )
+        FROM subscriptionbillmaster sbm2
+        JOIN subscriptionbillgenerated sbg2
+          ON sbm2.subscription_billid = sbg2.subscription_billid
+        WHERE sbg2.payment_status IN (0, 2)
+          AND sbm2.status = 1
+          AND sbm2.subscription_billid <> sbm.subscription_billid
+          AND sbm2.Site_list = sbm.Site_list
+          AND DATE_FORMAT(sbm2.bill_date, '%Y-%m') < DATE_FORMAT(sbm.bill_date, '%Y-%m')
+      )
+       AS previousPendingInvoices,
+        (
+          SELECT IFNULL(SUM(sbm2.plancharges - sbm2.paidamount), 0)
           FROM subscriptionbillmaster sbm2
           JOIN subscriptionbillgenerated sbg2
             ON sbm2.subscription_billid = sbg2.subscription_billid
-          WHERE sbg2.payment_status = 0
+          WHERE sbg2.payment_status IN (0, 2)
             AND sbm2.status = 1
             AND sbm2.subscription_billid <> sbm.subscription_billid
             AND sbm2.Site_list = sbm.Site_list
             AND DATE_FORMAT(sbm2.bill_date, '%Y-%m') < DATE_FORMAT(sbm.bill_date, '%Y-%m')
-      ) AS previousPendingInvoices,
-
-      (
-          SELECT IFNULL(SUM(sbm2.plancharges), 0)
-          FROM subscriptionbillmaster sbm2
-          JOIN subscriptionbillgenerated sbg2
-            ON sbm2.subscription_billid = sbg2.subscription_billid
-          WHERE sbg2.payment_status = 0
-            AND sbm2.status = 1
-            AND sbm2.subscription_billid <> sbm.subscription_billid
-            AND sbm2.Site_list = sbm.Site_list
-            AND DATE_FORMAT(sbm2.bill_date, '%Y-%m') < DATE_FORMAT(sbm.bill_date, '%Y-%m')
-      ) AS totalPreviousPendingAmount
+        ) AS totalPreviousPendingAmount
 
   FROM NumberedInvoices sbm;`);
     // for (let i = 0; i < sql.length; i++) {
