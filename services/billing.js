@@ -502,7 +502,9 @@ async function getVouchers(billing) {
       sqlParams = [];
     // Check if querystring is provided
     if (!billing.hasOwnProperty("querystring")) {
-      sql = `select invoice_number,voucher_type,name, email_id, phone_number,client_name,client_address,pending_amount,fully_cleared,partial_cleared,gstnumber,Total_amount,sub_total,IGST,CGST,SGST,voucher_number from clientvouchermaster where status = 1`;
+      sql = `SELECT invoice_number,voucher_type,name,email_id,phone_number,client_name,client_address,pending_amount,fully_cleared,partial_cleared,gstnumber,Total_amount,sub_total,IGST,CGST,SGST,
+      voucher_number,invoice_type,customer_id,CASE WHEN SUM(Total_amount) OVER (PARTITION BY customer_id, invoice_type) >= 100000 THEN 1 ELSE 0 END AS tds_calculation
+      FROM clientvouchermaster WHERE status = 1`;
     }
 
     // Decrypt querystring
@@ -531,7 +533,9 @@ async function getVouchers(billing) {
       );
     }
 
-    sql = `select invoice_number,voucher_type,name, email_id, phone_number,client_name,client_address,pending_amount,fully_cleared,partial_cleared,gstnumber,Total_amount,sub_total,IGST,CGST,SGST,voucher_number,invoice_type from clientvouchermaster where status = 1`;
+    sql = `SELECT invoice_number,voucher_type,name,email_id,phone_number,client_name,client_address,pending_amount,fully_cleared,partial_cleared,gstnumber,Total_amount,sub_total,IGST,CGST,SGST,
+    voucher_number,invoice_type,customer_id,CASE WHEN SUM(Total_amount) OVER (PARTITION BY customer_id, invoice_type) >= 100000 THEN 1 ELSE 0 END AS tds_calculation
+    FROM clientvouchermaster WHERE status = 1`;
 
     if (
       querydata.vouchertype != null &&
@@ -560,12 +564,14 @@ async function getVouchers(billing) {
       }
     }
     console.log(sql);
-    // if (
-    //   querystring.clientname != null &&
-    //   querydata.clientname != 0 &&
-    //   querydata.clientname != undefined
-    // ) {
-    // }
+    if (
+      querystring.customerid != null &&
+      querydata.customerid != 0 &&
+      querydata.customerid != undefined
+    ) {
+      sql += ` and customer_id = ?`;
+      sqlParams.push(querystring.customerid);
+    }
     const query = await db.query(sql, sqlParams);
     if (query[0]) {
       return helper.getSuccessResponse(
@@ -678,14 +684,39 @@ async function ClearVouchers(billing) {
         secret
       );
     }
-    if (!querydata.hasOwnProperty("voucherid") || querydata.voucherid == "") {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Voucher id missing. Please provide the Voucher id",
-        "ADD FEEDBACK FOR EVENTS",
-        secret
-      );
+    const requiredFields = [
+      { field: "voucherid", message: "Voucher id missing." },
+      { field: "vouchernumber", message: "Voucher number missing." },
+      { field: "paymentstatus", message: "Payment status missing." },
+      { field: "IGST", message: "IGST missing." },
+      { field: "SCGT", message: "SGST missing." },
+      { field: "CCGT", message: "CGST missing." },
+      { field: "tds", message: "tds deductions missing." },
+      {
+        field: "grossamount",
+        message: "totalamount missing.",
+      },
+      { field: "paidamount", message: "Paid amount missing." },
+      { field: "clientaddressname", message: "Client address name missing." },
+      { field: "clientaddress", message: "Client address missing." },
+      { field: "invoicenumber", message: "Invoice number missing." },
+      { field: "emailid", message: "Email id missing." },
+      { field: "phoneno", message: "Phone no missing." },
+      { field: "receivedamount", message: "Received amount missing." },
+      { field: "invoice_amount", message: "Invoice amount missing." },
+      { field: "feedback", message: "Feedback type missing." },
+    ];
+
+    for (const { field, message } of requiredFields) {
+      if (!querydata.hasOwnProperty(field)) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          message,
+          "ADD FEEDBACK FOR EVENTS",
+          secret
+        );
+      }
     }
 
     if (query[0]) {

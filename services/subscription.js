@@ -728,6 +728,7 @@ async function addRecurringInvoice(req, res) {
             CGST,
             SGST,
             "subscription",
+            `SB-${querydata.customerid}`,
           ]
         );
       } catch (er) {

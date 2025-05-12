@@ -1394,26 +1394,34 @@ async function addInvoice(req, res) {
       }
       const { gst, subtotal, total } = billDetails;
       const { CGST, IGST, SGST } = gst;
-      const [sql2] = await db.spcall(
-        `CALL InsertClientVoucher(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@voucher_id,@voucher_number); select @voucher_id,@voucher_number`,
-        [
-          querydata.invoicegenid,
-          "payment voucher",
-          querydata.clientaddressname,
-          querydata.emailid,
-          querydata.phoneno,
-          querydata.clientaddressname,
-          querydata.clientaddress,
-          JSON.stringify(querydata.billdetails),
-          querydata.gstnumber,
-          total,
-          subtotal,
-          IGST,
-          CGST,
-          SGST,
-          "sales",
-        ]
+      const sq1 = await db.query(
+        `select customer_id from salesprocessmaster where cprocess_id = ?`,
+        [querydata.processid]
       );
+      if (sq1.length > 0) {
+        const customerid = sq1[0].customer_id;
+        const [sql2] = await db.spcall(
+          `CALL InsertClientVoucher(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@voucher_id,@voucher_number); select @voucher_id,@voucher_number`,
+          [
+            querydata.invoicegenid,
+            "payment voucher",
+            querydata.clientaddressname,
+            querydata.emailid,
+            querydata.phoneno,
+            querydata.clientaddressname,
+            querydata.clientaddress,
+            JSON.stringify(querydata.billdetails),
+            querydata.gstnumber,
+            total,
+            subtotal,
+            IGST,
+            CGST,
+            SGST,
+            "sales",
+            `SA-${customerid}`,
+          ]
+        );
+      }
     } catch (er) {
       console.log(`Invoice number not exits ${er.message}`);
     }
