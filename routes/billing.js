@@ -31,7 +31,7 @@ router.post("/getvoucher", async function (req, res, next) {
 
 router.post("/clearvoucher", async function (req, res, next) {
   try {
-    res.json(await billing.ClearVouchers(req.body));
+    res.json(await billing.ClearVouchers(req, res, next));
   } catch (er) {
     console.log(`Error while clearing the vouchers: ${er}`);
     next(er);
@@ -43,6 +43,24 @@ router.post("/consolidateledger", async function (req, res, next) {
     res.json(await billing.ConsolidateLedger(req.body));
   } catch (er) {
     console.log(`Error while Fetching the consolidate ledger: ${er}`);
+    next(er);
+  }
+});
+
+router.post("/tdsledger", async function (req, res, next) {
+  try {
+    res.json(await billing.TDSLedger(req.body));
+  } catch (er) {
+    console.log(`Error while Fetching the tds ledger: ${er}`);
+    next(er);
+  }
+});
+
+router.post("/gstledger", async function (req, res, next) {
+  try {
+    res.json(await billing.GSTLedger(req.body));
+  } catch (er) {
+    console.log(`Error while Fetching the gst ledger: ${er}`);
     next(er);
   }
 });

@@ -1197,16 +1197,18 @@ async function addInvoice(req, res) {
           "Upload Invoice"
         );
       }
+      secret = sales.STOKEN.substring(0, 16);
+
       if (sales.STOKEN.length > 50 || sales.STOKEN.length < 30) {
         return helper.getErrorResponse(
           false,
           "error",
           "Login session token size invalid. Please provide a valid session token.",
-          "Upload Invoice"
+          "Upload Invoice",
+          secret
         );
       }
 
-      secret = sales.STOKEN.substring(0, 16);
       if (!req.file) {
         return helper.getErrorResponse(
           false,

@@ -583,6 +583,49 @@ let uploadFile11 = multer({
 
 let uploadSubQuotationp = util.promisify(uploadFile11);
 
+//#############################################################################################################################################################################################
+//#############################################################################################################################################################################################
+//#############################################################################################################################################################################################
+//#############################################################################################################################################################################################
+
+// Dynamically set the storage path
+let storage13 = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    try {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.toLocaleString("default", { month: "long" }); // e.g., December
+      const day = now.getDate();
+      let folder = config.filestorage; // Default folder
+
+      folder = `${folder}/${year}/${month}/${day}/Voucher/transactions`;
+
+      // Ensure the folder exists
+      await fs.ensureDir(folder);
+
+      cb(null, folder);
+    } catch (err) {
+      cb(err);
+    }
+  },
+  filename: (req, file, cb) => {
+    const timestamp = Date.now();
+    const date = new Date(timestamp);
+
+    cb(null, `${timestamp}_${file.originalname}`); // Use timestamp to avoid duplicate filenames
+  },
+});
+
+// Set max file size to 2MB
+const maxSize13 = 2 * 1024 * 1024;
+
+let uploadFile13 = multer({
+  storage: storage13,
+  limits: { fileSize: maxSize13 },
+}).single("file");
+
+let uploadVoucher = util.promisify(uploadFile13);
+
 module.exports = {
   uploadFileMOR,
   uploadFileInvoice,
@@ -597,4 +640,5 @@ module.exports = {
   uploadSubCustomerrequ,
   uploadSubQuotationp,
   uploadcustominvoicepdf,
+  uploadVoucher,
 };

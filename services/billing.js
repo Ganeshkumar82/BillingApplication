@@ -503,8 +503,8 @@ async function getVouchers(billing) {
       sqlParams = [];
     // Check if querystring is provided
     if (!billing.hasOwnProperty("querystring")) {
-      sql = `SELECT invoice_number,voucher_type,name,email_id,phone_number,client_name,client_address,pending_amount,fully_cleared,partially_cleared,gstnumber,Total_amount,sub_total,IGST,CGST,SGST,
-      voucher_number,invoice_type,customer_id,CASE WHEN SUM(Total_amount) OVER (PARTITION BY customer_id, invoice_type) >= 100000 THEN 1 ELSE 0 END AS tds_calculation,ROUND(sub_total * 0.02, 2) AS tdscalculation_amount
+      sql = `SELECT invoice_number,voucher_type,email_id,phone_number,client_name,client_address,pending_amount,fully_cleared,partially_cleared,gstnumber,Total_amount,sub_total,IGST,CGST,SGST,
+      voucher_number,invoice_type,customer_id,CASE WHEN SUM(Total_amount) OVER (PARTITION BY customer_id, invoice_type) >= 100000 THEN 1 ELSE 0 END AS tds_calculation,ROUND(sub_total * 0.02, 2) AS tdscalculation_amount,payment_details,DATE(Row_updated_date) as date
       FROM clientvouchermaster WHERE status = 1`;
     }
 
@@ -534,8 +534,8 @@ async function getVouchers(billing) {
       );
     }
 
-    sql = `SELECT invoice_number,voucher_type,name,email_id,phone_number,client_name,client_address,pending_amount,fully_cleared,partially_cleared,gstnumber,Total_amount,sub_total,IGST,CGST,SGST,
-    voucher_number,invoice_type,customer_id,CASE WHEN SUM(Total_amount) OVER (PARTITION BY customer_id, invoice_type) >= 100000 THEN 1 ELSE 0 END AS tds_calculation,ROUND(sub_total * 0.02, 2) AS tdscalculation_amount
+    sql = `SELECT invoice_number,voucher_type,email_id,phone_number,client_name,client_address,pending_amount,fully_cleared,partially_cleared,gstnumber,Total_amount,sub_total,IGST,CGST,SGST,
+    voucher_number,invoice_type,customer_id,CASE WHEN SUM(Total_amount) OVER (PARTITION BY customer_id, invoice_type) >= 100000 THEN 1 ELSE 0 END AS tds_calculation,ROUND(sub_total * 0.02, 2) AS tdscalculation_amount,payment_details,DATE(Row_updated_date) as date
     FROM clientvouchermaster WHERE status = 1`;
 
     if (
@@ -572,6 +572,18 @@ async function getVouchers(billing) {
       sql += ` and customer_id = ?`;
       sqlParams.push(querydata.customerid);
     }
+    if (
+      querydata.startdate != null &&
+      querydata.startdate != 0 &&
+      querydata.startdate != undefined &&
+      querydata.enddate != null &&
+      querydata.enddate != 0 &&
+      querydata.enddate != undefined
+    ) {
+      sql += ` and DATE(Row_updated_date) BETWEEN ? and ?`;
+      sqlParams.push(querydata.startdate, querydata.enddate);
+    }
+
     console.log(sql);
     const query = await db.query(sql, sqlParams);
     if (query[0]) {
@@ -607,31 +619,43 @@ async function getVouchers(billing) {
 //###############################################################################################################################################################################################
 //###############################################################################################################################################################################################
 
-async function ClearVouchers(billing) {
+async function ClearVouchers(req, res, next) {
+  let secret, querydata, billing;
   try {
-    // Check if the session token exists
-    if (!billing.hasOwnProperty("STOKEN")) {
+    try {
+      await uploadFile.uploadVoucher(req, res);
+      billing = req.body;
+      // Check if the session token exists
+      if (!billing.hasOwnProperty("STOKEN")) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Login sessiontoken missing. Please provide the Login sessiontoken",
+          "CLEAR VOUCHERS",
+          ""
+        );
+      }
+      secret = billing.STOKEN.substring(0, 16);
+      querydata;
+      // Validate session token length
+      if (billing.STOKEN.length > 50 || billing.STOKEN.length < 30) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
+          "CLEAR VOUCHERS",
+          secret
+        );
+      }
+    } catch (er) {
       return helper.getErrorResponse(
         false,
         "error",
-        "Login sessiontoken missing. Please provide the Login sessiontoken",
-        "CLEAR VOUCHERS",
-        ""
-      );
-    }
-    var secret = billing.STOKEN.substring(0, 16);
-    var querydata;
-    // Validate session token length
-    if (billing.STOKEN.length > 50 || billing.STOKEN.length < 30) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
-        "CLEAR VOUCHERS",
+        `Could not upload the file. ${er.message}`,
+        er.message,
         secret
       );
     }
-
     // Validate session token
     const [result] = await db.spcall(
       `CALL SP_STOKEN_CHECK(?,@result); SELECT @result;`,
@@ -711,6 +735,7 @@ async function ClearVouchers(billing) {
       { field: "invoicetype", message: "Invoice type missing." },
       { field: "gstnumber", message: "GST number missing." },
       { field: "feedback", message: "Feedback type missing." },
+      { field: "transactiondetails", message: "Transaction details missing." },
     ];
 
     for (const { field, message } of requiredFields) {
@@ -725,20 +750,42 @@ async function ClearVouchers(billing) {
       }
     }
     try {
+      const sql50 = await db.query(
+        `Insert into vouchertransactions(voucher_id,voucher_number, amount,transaction_details,file_path) VALUES(?,?,?,?,?)`,
+        [
+          querydata.voucherid,
+          querydata.vouchernumber,
+          querydata.paidamount,
+          querydata.transactiondetails,
+          req.file.path || null,
+        ]
+      );
+    } catch (er) {
+      console.log(er);
+    }
+    try {
       if (querydata.paymentstatus == "partial") {
         const sql = await db.query(
-          `UPDATE clientvouchermaster SET partially_cleared = 1,  Pending_amount = ? - ?  WHERE voucher_id = ?`,
-          [querydata.grossamount, querydata.paidamount, querydata.voucherid]
+          `UPDATE clientvouchermaster SET  partially_cleared = 1,   Pending_amount = ? - ?,  payment_details = JSON_ARRAY_APPEND( IFNULL(payment_details, JSON_ARRAY()), '$', 
+           JSON_OBJECT('date', NOW(), 'amount', ?, 'transanctiondetails',?)) WHERE voucher_id = ? and fully_cleared != 0`,
+          [
+            querydata.grossamount,
+            querydata.paidamount,
+            querydata.paidamount,
+            querydata.transactiondetails,
+            querydata.voucherid,
+          ]
         );
+
         if (querydata.invoicetype == "sales") {
           const sql1 = await db.query(
-            `Update salesprocesslist SET payment_status = 2, Paid_amount = ? where invoice_number = ?`,
+            `Update salesprocesslist SET payment_status = 2, Paid_amount = ? where invoice_number = ? and payment_status != 1`,
             [querydata.paidamount, querydata.invoicenumber]
           );
         } else if (querydata.invoicetype == "subscription") {
           const sql2 = await db.query(
             `UPDATE subscriptionbillgenerated sbg JOIN subscriptionbillmaster sbm ON sbg.subscription_billid = sbm.subscription_billid SET sbg.payment_status = 2,sbm.Paid_amount = ?, 
-           sbm.pendingpayments = ? - ? WHERE sbg.invoice_number = ?
+           sbm.pendingpayments = ? - ? WHERE sbg.invoice_number = ? and sbg.payment_status != 1
           `,
             [
               querydata.paidamount,
@@ -757,8 +804,15 @@ async function ClearVouchers(billing) {
           tdsamount = 0;
         }
         const sql = await db.query(
-          `UPDATE clientvouchermaster SET fully_cleared = 1, partially_cleared = 0 WHERE voucher_id = ? AND FLOOR(total_amount) = FLOOR(? + ?)`,
-          [querydata.voucherid, querydata.paidamount, tdsamount]
+          `UPDATE clientvouchermaster SET fully_cleared = 1, partially_cleared = 0 , payment_details = JSON_ARRAY_APPEND( IFNULL(payment_details, JSON_ARRAY()), '$', 
+          JSON_OBJECT('date', NOW(), 'amount', ?, 'transanctiondetails',?)) WHERE voucher_id = ? AND FLOOR(total_amount) = FLOOR(? + ?)`,
+          [
+            querydata.paidamount,
+            querydata.transactiondetails,
+            querydata.voucherid,
+            querydata.paidamount,
+            tdsamount,
+          ]
         );
         if (sql.affectedRows > 0) {
           if (querydata.invoicetype == "sales") {
@@ -773,28 +827,28 @@ async function ClearVouchers(billing) {
           `,
               [querydata.paidamount, querydata.invoicenumber]
             );
+            if (querydata.tdsstatus == true) {
+              const [sql4] = await db.spcall(
+                `CALL upsert_tdsledger(?,?,?,?,?,?,?,?,?,?,?)`,
+                [
+                  querydata.voucherid,
+                  querydata.vouchernumber,
+                  querydata.clientaddressname,
+                  querydata.IGST,
+                  querydata.CGST,
+                  querydata.SGST,
+                  querydata.grossamount,
+                  querydata.subtotal,
+                  tdsamount,
+                  querydata.gstnumber,
+                  "receivable",
+                ]
+              );
+            }
           } else if (querydata.invoicetype == "vendor") {
           }
-          if (querydata.tdsstatus == true) {
-            const sql4 = await db.query(
-              `INSERT INTO tdsledger(voucher_id,voucher_number,client_name,IGST,CGST,SGST,totalamount,subtotal,tdsamount,gst_number,tds_type) values(?,?,?,?,?,?,?,?,?,?,?)`,
-              [
-                querydata.voucherid,
-                querydata.vouchernumber,
-                querydata.clientaddressname,
-                querydata.IGST,
-                querydata.CGST,
-                querydata.SGST,
-                querydata.grossamount,
-                querydata.subtotal,
-                tdsamount,
-                querydata.gstnumber,
-                "receivable",
-              ]
-            );
-          }
-          const sql5 = await db.query(
-            `INSERT INTO gstledger(voucher_id,voucher_number,client_name,IGST,CGST,SGST,totalamount,subtotal,gst_number,gst_type) values(?,?,?,?,?,?,?,?,?,?)`,
+          const [sql5] = await db.spcall(
+            `CALL upsert_gstledger(?,?,?,?,?,?,?,?,?,?)`,
             [
               querydata.voucherid,
               querydata.vouchernumber,
@@ -819,6 +873,15 @@ async function ClearVouchers(billing) {
         }
       }
     } catch (er) {
+      const sql6 = await db.query(
+        `delete from gstledger where voucher_number = ?`,
+        [querydata.vouchernumber]
+      );
+      const sql7 = await db.query(
+        `DELETE FROM tdsledger WHERE voucher_number = ?`,
+        [querydata.vouchernumber]
+      );
+
       return helper.getErrorResponse(
         false,
         "error",
@@ -845,10 +908,324 @@ async function ClearVouchers(billing) {
   }
 }
 
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+
+async function TDSLedger(billing) {
+  try {
+    // Check if the session token exists
+    if (!billing.hasOwnProperty("STOKEN")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken missing. Please provide the Login sessiontoken",
+        "TDS LEDGER",
+        ""
+      );
+    }
+    var secret = billing.STOKEN.substring(0, 16);
+    var querydata;
+    // Validate session token length
+    if (billing.STOKEN.length > 50 || billing.STOKEN.length < 30) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
+        "TDS LEDGER",
+        secret
+      );
+    }
+
+    // Validate session token
+    const [result] = await db.spcall(
+      `CALL SP_STOKEN_CHECK(?,@result); SELECT @result;`,
+      [billing.STOKEN]
+    );
+    const objectvalue = result[1][0];
+    const userid = objectvalue["@result"];
+
+    if (userid == null) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+        "TDS LEDGER",
+        secret
+      );
+    }
+    var sql,
+      sqlParams = [];
+    // Check if querystring is provided
+    if (!billing.hasOwnProperty("querystring")) {
+      sql = `SELECT tdsledger_id,voucher_id,voucher_number,client_name,IGST,CGST,SGST,totalamount,subtotal,tdsamount,gst_number,tds_type,Row_updated_date,tds_filed FROM tdsledger where status =1`;
+    }
+
+    // Decrypt querystring
+    try {
+      querydata = await helper.decrypt(billing.querystring, secret);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring Invalid error. Please provide the valid querystring.",
+        "TDS LEDGER",
+        secret
+      );
+    }
+
+    // Parse the decrypted querystring
+    try {
+      querydata = JSON.parse(querydata);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring JSON error. Please provide valid JSON",
+        "TDS LEDGER",
+        secret
+      );
+    }
+
+    sql = `SELECT tdsledger_id, voucher_id ,voucher_number ,client_name, IGST, CGST, SGST, totalamount,subtotal,tdsamount,gst_number,tds_type,Row_updated_date,tds_filed FROM tdsledger where status = 1`;
+
+    if (
+      querydata.tdstype != null &&
+      querydata.tdstype != 0 &&
+      querydata.tdstype != undefined
+    ) {
+      if (querydata.tdstype == "receivable") {
+        sql += ` and tds_type LIKE '%receivable%'`;
+      } else if (querydata.vouchertype == "payable") {
+        sql += ` and tds_type LIKE '%payable%'`;
+      }
+    }
+    if (
+      querydata.invoicetype != null &&
+      querydata.invoicetype != 0 &&
+      querydata.invoicetype != undefined
+    ) {
+      if (querydata.invoicetype == "sales") {
+        sql += ` and voucher_id IN (select voucher_id from clientvouchermaster where invoice_type like '%sales%')`;
+      } else if (querydata.invoicetype == "subscription") {
+        sql += ` and voucher_id IN (select voucher_id from clientvouchermaster where invoice_type like '%subscription%')`;
+      } else if (querydata.invoicetype == "vendor") {
+        sql += ` and voucher_id IN (select voucher_id from clientvouchermaster where invoice_type like '%vendor%')`;
+      }
+    }
+    if (
+      querydata.customerid != null &&
+      querydata.customerid != 0 &&
+      querydata.customerid != undefined
+    ) {
+      sql += ` and voucher_id IN (select voucher_id from clientvouchermaster where customer_id = ?)`;
+      sqlParams.push(querydata.customerid);
+    }
+    if (
+      querydata.startdate != null &&
+      querydata.startdate != 0 &&
+      querydata.startdate != undefined &&
+      querydata.enddate != null &&
+      querydata.enddate != 0 &&
+      querydata.enddate != undefined
+    ) {
+      sql += ` and DATE(Row_updated_date) BETWEEN ? and ?`;
+      sqlParams.push(querydata.startdate, querydata.enddate);
+    }
+
+    console.log(sql);
+    const query = await db.query(sql, sqlParams);
+    if (query[0]) {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Tds Ledger fetched Successfully",
+        query,
+        secret
+      );
+    } else {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Tds Ledger  fetched Successfully",
+        query,
+        secret
+      );
+    }
+  } catch (er) {
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal Error. Please contact Administration",
+      er.message,
+      secret
+    );
+  }
+}
+
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+
+async function GSTLedger(billing) {
+  try {
+    // Check if the session token exists
+    if (!billing.hasOwnProperty("STOKEN")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken missing. Please provide the Login sessiontoken",
+        "GST LEDGER",
+        ""
+      );
+    }
+    var secret = billing.STOKEN.substring(0, 16);
+    var querydata;
+    // Validate session token length
+    if (billing.STOKEN.length > 50 || billing.STOKEN.length < 30) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
+        "GST LEDGER",
+        secret
+      );
+    }
+
+    // Validate session token
+    const [result] = await db.spcall(
+      `CALL SP_STOKEN_CHECK(?,@result); SELECT @result;`,
+      [billing.STOKEN]
+    );
+    const objectvalue = result[1][0];
+    const userid = objectvalue["@result"];
+
+    if (userid == null) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+        "GST LEDGER",
+        secret
+      );
+    }
+    var sql,
+      sqlParams = [];
+    // Check if querystring is provided
+    if (!billing.hasOwnProperty("querystring")) {
+      sql = `SELECT tdsledger_id,voucher_id,voucher_number,client_name,IGST,CGST,SGST,totalamount,subtotal,tdsamount,gst_number,tds_type,Row_updated_date,tds_filed FROM tdsledger where status =1`;
+    }
+
+    // Decrypt querystring
+    try {
+      querydata = await helper.decrypt(billing.querystring, secret);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring Invalid error. Please provide the valid querystring.",
+        "GST LEDGER",
+        secret
+      );
+    }
+
+    // Parse the decrypted querystring
+    try {
+      querydata = JSON.parse(querydata);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring JSON error. Please provide valid JSON",
+        "GST LEDGER",
+        secret
+      );
+    }
+
+    sql = `SELECT gstledger_id,voucher_id,voucher_number,client_name,IGST,CGST,SGST,gst_number,gst_type,Row_updated_date,gst_filed,totalamount,subtotal FROM gstledger where status = 1`;
+
+    if (
+      querydata.tdstype != null &&
+      querydata.tdstype != 0 &&
+      querydata.tdstype != undefined
+    ) {
+      if (querydata.tdstype == "input") {
+        sql += ` and gst_type LIKE '%input%'`;
+      } else if (querydata.vouchertype == "output") {
+        sql += ` and gst_type LIKE '%output%'`;
+      }
+    }
+    if (
+      querydata.invoicetype != null &&
+      querydata.invoicetype != 0 &&
+      querydata.invoicetype != undefined
+    ) {
+      if (querydata.invoicetype == "sales") {
+        sql += ` and voucher_id IN (select voucher_id from clientvouchermaster where invoice_type like '%sales%')`;
+      } else if (querydata.invoicetype == "subscription") {
+        sql += ` and voucher_id IN (select voucher_id from clientvouchermaster where invoice_type like '%subscription%')`;
+      } else if (querydata.invoicetype == "vendor") {
+        sql += ` and voucher_id IN (select voucher_id from clientvouchermaster where invoice_type like '%vendor%')`;
+      }
+    }
+    if (
+      querydata.customerid != null &&
+      querydata.customerid != 0 &&
+      querydata.customerid != undefined
+    ) {
+      sql += ` and voucher_id IN (select voucher_id from clientvouchermaster where customer_id = ?)`;
+      sqlParams.push(querydata.customerid);
+    }
+    if (
+      querydata.startdate != null &&
+      querydata.startdate != 0 &&
+      querydata.startdate != undefined &&
+      querydata.enddate != null &&
+      querydata.enddate != 0 &&
+      querydata.enddate != undefined
+    ) {
+      sql += ` and DATE(Row_updated_date) BETWEEN ? and ?`;
+      sqlParams.push(querydata.startdate, querydata.enddate);
+    }
+
+    console.log(sql);
+    const query = await db.query(sql, sqlParams);
+    if (query[0]) {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Gst Ledger fetched Successfully",
+        query,
+        secret
+      );
+    } else {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Gst Ledger fetched Successfully",
+        query,
+        secret
+      );
+    }
+  } catch (er) {
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal Error. Please contact Administration",
+      er.message,
+      secret
+    );
+  }
+}
+
 module.exports = {
   getSubscriptionInvoice,
   getSalesInvoice,
   getBinaryFile,
   getVouchers,
   ClearVouchers,
+  TDSLedger,
+  GSTLedger,
 };
