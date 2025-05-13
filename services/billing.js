@@ -10,6 +10,7 @@ const axios = require("axios");
 const path = require("path");
 const mqttclient = require("../mqttclient");
 const { Console } = require("console");
+const { el } = require("date-fns/locale");
 
 //###############################################################################################################################################################################################
 //################################################################################################################################################################################################
@@ -563,15 +564,15 @@ async function getVouchers(billing) {
         sql += ` and invoice_type like '%vendor%'`;
       }
     }
-    console.log(sql);
     if (
-      querystring.customerid != null &&
+      querydata.customerid != null &&
       querydata.customerid != 0 &&
       querydata.customerid != undefined
     ) {
       sql += ` and customer_id = ?`;
-      sqlParams.push(querystring.customerid);
+      sqlParams.push(querydata.customerid);
     }
+    console.log(sql);
     const query = await db.query(sql, sqlParams);
     if (query[0]) {
       return helper.getSuccessResponse(
@@ -689,12 +690,16 @@ async function ClearVouchers(billing) {
       { field: "vouchernumber", message: "Voucher number missing." },
       { field: "paymentstatus", message: "Payment status missing." },
       { field: "IGST", message: "IGST missing." },
-      { field: "SCGT", message: "SGST missing." },
-      { field: "CCGT", message: "CGST missing." },
+      { field: "SGST", message: "SGST missing." },
+      { field: "CGST", message: "CGST missing." },
       { field: "tds", message: "tds deductions missing." },
       {
         field: "grossamount",
         message: "totalamount missing.",
+      },
+      {
+        field: "subtotal",
+        message: "Sub total missing.",
       },
       { field: "paidamount", message: "Paid amount missing." },
       { field: "clientaddressname", message: "Client address name missing." },
@@ -702,8 +707,9 @@ async function ClearVouchers(billing) {
       { field: "invoicenumber", message: "Invoice number missing." },
       { field: "emailid", message: "Email id missing." },
       { field: "phoneno", message: "Phone no missing." },
-      // { field: "receivedamount", message: "Received amount missing." },
+      { field: "tdsstatus", message: "TDS status missing." },
       { field: "invoicetype", message: "Invoice type missing." },
+      { field: "gstnumber", message: "GST number missing." },
       { field: "feedback", message: "Feedback type missing." },
     ];
 
@@ -718,38 +724,116 @@ async function ClearVouchers(billing) {
         );
       }
     }
-    if (querydata.paymentstatus == "partial") {
-      const sql = await db.query(
-        `UPDATE clientvouchermaster SET partially_cleared = 1,  Pending_amount = ? - ?  WHERE voucher_id = ?`,
-        [querydata.grossamount, querydata.paidamount, querydata.voucherid]
-      );
-      if (querydata.invoicetype == "sales") {
-        const sql1 = await db.query(
-          `Update salesprocesslist SET payment_status = 1, Paid_amount = ? where invoice_number = ?`,
-          [querydata.paidamount, querydata.invoicenumber]
+    try {
+      if (querydata.paymentstatus == "partial") {
+        const sql = await db.query(
+          `UPDATE clientvouchermaster SET partially_cleared = 1,  Pending_amount = ? - ?  WHERE voucher_id = ?`,
+          [querydata.grossamount, querydata.paidamount, querydata.voucherid]
         );
-      } else if (querydata.invoicetype == "subscription") {
-      } else if (querydata.invoicetype == "vendor") {
+        if (querydata.invoicetype == "sales") {
+          const sql1 = await db.query(
+            `Update salesprocesslist SET payment_status = 2, Paid_amount = ? where invoice_number = ?`,
+            [querydata.paidamount, querydata.invoicenumber]
+          );
+        } else if (querydata.invoicetype == "subscription") {
+          const sql2 = await db.query(
+            `UPDATE subscriptionbillgenerated sbg JOIN subscriptionbillmaster sbm ON sbg.subscription_billid = sbm.subscription_billid SET sbg.payment_status = 2,sbm.Paid_amount = ?, 
+           sbm.pendingpayments = ? - ? WHERE sbg.invoice_number = ?
+          `,
+            [
+              querydata.paidamount,
+              querydata.grossamount,
+              querydata.paidamount,
+              querydata.invoicenumber,
+            ]
+          );
+        } else if (querydata.invoicetype == "vendor") {
+        }
+      } else if (querydata.paymentstatus == "complete") {
+        var tdsamount;
+        if (querydata.tdsstatus == true) {
+          tdsamount = querydata.tdsstatus ? +(subtotal * 0.02).toFixed(2) : 0;
+        } else {
+          tdsamount = 0;
+        }
+        const sql = await db.query(
+          `UPDATE clientvouchermaster SET fully_cleared = 1, partially_cleared = 0 WHERE voucher_id = ? AND FLOOR(total_amount) = FLOOR(? + ?)`,
+          [querydata.voucherid, querydata.paidamount, tdsamount]
+        );
+        if (sql.affectedRows > 0) {
+          if (querydata.invoicetype == "sales") {
+            const sql1 = await db.query(
+              `Update salesprocesslist SET payment_status = 1 where cprocess_gene_id = ?`,
+              [querydata.invoicenumber]
+            );
+          } else if (querydata.invoicetype == "subscription") {
+            const sql2 = await db.query(
+              `UPDATE subscriptionbillgenerated sbg JOIN subscriptionbillmaster sbm ON sbg.subscription_billid = sbm.subscription_billid SET sbg.payment_status = 1,sbm.Paid_amount = ? 
+        WHERE sbg.invoice_number = ?
+          `,
+              [querydata.paidamount, querydata.invoicenumber]
+            );
+          } else if (querydata.invoicetype == "vendor") {
+          }
+          if (querydata.tdsstatus == true) {
+            const sql4 = await db.query(
+              `INSERT INTO tdsledger(voucher_id,voucher_number,client_name,IGST,CGST,SGST,totalamount,subtotal,tdsamount,gst_number,tds_type) values(?,?,?,?,?,?,?,?,?,?,?)`,
+              [
+                querydata.voucherid,
+                querydata.vouchernumber,
+                querydata.clientaddressname,
+                querydata.IGST,
+                querydata.CGST,
+                querydata.SGST,
+                querydata.grossamount,
+                querydata.subtotal,
+                tdsamount,
+                querydata.gstnumber,
+                "receivable",
+              ]
+            );
+          }
+          const sql5 = await db.query(
+            `INSERT INTO gstledger(voucher_id,voucher_number,client_name,IGST,CGST,SGST,totalamount,subtotal,gst_number,gst_type) values(?,?,?,?,?,?,?,?,?,?)`,
+            [
+              querydata.voucherid,
+              querydata.vouchernumber,
+              querydata.clientaddressname,
+              querydata.IGST,
+              querydata.CGST,
+              querydata.SGST,
+              querydata.grossamount,
+              querydata.subtotal,
+              querydata.gstnumber,
+              "output",
+            ]
+          );
+        } else {
+          return helper.getErrorResponse(
+            false,
+            "error",
+            "Paid Amount not matching the total amount.",
+            querydata.vouchernumber,
+            secret
+          );
+        }
       }
-    } else {
-    }
-    if (query[0]) {
-      return helper.getSuccessResponse(
-        true,
-        "success",
-        "Vouchers Cleared Successfully",
-        query,
-        secret
-      );
-    } else {
-      return helper.getSuccessResponse(
-        true,
-        "success",
-        "Vouchers Cleared Successfully",
-        query,
+    } catch (er) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Error clearing the Voucher",
+        querydata.vouchernumber,
         secret
       );
     }
+    return helper.getSuccessResponse(
+      true,
+      "success",
+      "Vouchers Cleared Successfully",
+      querydata.vouchernumber,
+      secret
+    );
   } catch (er) {
     return helper.getErrorResponse(
       false,

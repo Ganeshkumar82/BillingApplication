@@ -24,13 +24,13 @@ function connectWebSocket() {
   });
 
   socket.on("close", () => {
-    console.log("WebSocket disconnected, attempting to reconnect...");
+    // console.log("WebSocket disconnected, attempting to reconnect...");
     isConnected = false;
     reconnectWebSocket();
   });
 
   socket.on("error", (error) => {
-    console.error("WebSocket error:", error);
+    // console.error("WebSocket error:", error);
     isConnected = false;
   });
 }
@@ -38,7 +38,7 @@ function connectWebSocket() {
 function reconnectWebSocket() {
   setTimeout(() => {
     if (!isConnected) {
-      console.log("Reconnecting WebSocket...");
+      // console.log("Reconnecting WebSocket...");
       connectWebSocket();
     }
   }, 10000); // Retry connection every 5 seconds
@@ -192,7 +192,7 @@ async function sendInvoice() {
     // socket.send(JSON.stringify(sql));
     // }
   } else {
-    console.log("WebSocket not connected, skipping message.");
+    // console.log("WebSocket not connected, skipping message.");
     reconnectWebSocket();
   }
 }
@@ -201,13 +201,6 @@ async function sendInvoice() {
 cron.schedule("00 19 * * *", () => {
   console.log("Cron job started at 07:16 PM");
   sendInvoice();
-  // if (interval) {
-  //   clearInterval(interval);
-  // }
-
-  // interval = setInterval(async () => {
-  //   await sendInvoice();
-  // }, 60 * 1000); // Send every 1 minute
 });
 connectWebSocket();
 
@@ -294,9 +287,7 @@ HAVING (
     (MAX(sct.billing_plan) = 'Prepaid' AND DAY(CURDATE()) = 6)
     OR
     (MAX(sct.billing_plan) = 'Postpaid' AND CURDATE() = LAST_DAY(CURDATE()))
-);
-
-`);
+);`);
 
     // Loop and insert into target DB
     // Loop and insert into target DB
