@@ -1423,6 +1423,32 @@ async function addInvoice(req, res) {
             `SA-${customerid}`,
           ]
         );
+        const objectvalue = sql2[1][0];
+        const voucherid = objectvalue["@voucher_id"];
+        const vouchernumber = objectvalue["@voucher_number"];
+        const [sql3] = await db.spcall(
+          `CALL SP_INSERT_CONSOLIDATE_LEDGER(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@ledgerid); select @ledgerid`,
+          [
+            querydata.invoicegenid,
+            querydata.clientaddressname,
+            JSON.stringify(querydata.billdetails),
+            querydata.gstnumber,
+            total,
+            subtotal,
+            IGST,
+            CGST,
+            SGST,
+            0,
+            "sales",
+            `SA-${querydata.customerid}`,
+            voucherid,
+            vouchernumber,
+            "receivable",
+            0,
+            1,
+            `Sales Invoice created for ${querydata.clientaddressname}`,
+          ]
+        );
       }
     } catch (er) {
       console.log(`Invoice number not exits ${er.message}`);

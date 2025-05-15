@@ -1737,9 +1737,51 @@ async function GetCompany(admin) {
         secret
       );
     }
-    const sql = await db.query1(
-      `select customer_id companyid,customer_name companyname,Email_id emailid,customer_name client_addressname,address client_address,customer_name billing_addressname,billing_address billing_addressname, contact_no contactnumber,gst_number from customermaster where status =1 and deleted_flag =0`
-    );
+    var sql = [],
+      sql1 = [];
+    if (admin.hasOwnProperty("querystring")) {
+      try {
+        querydata = await helper.decrypt(admin.querystring, secret);
+      } catch (ex) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Querystring Invalid error. Please provide the valid querystring.",
+          "FETCH COMPANY LIST",
+          secret
+        );
+      }
+
+      // Parse the decrypted querystring
+      try {
+        querydata = JSON.parse(querydata);
+      } catch (ex) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Querystring JSON error. Please provide valid JSON",
+          "FETCH COMPANY LIST",
+          secret
+        );
+      }
+      if (
+        querydata.hasOwnProperty("organizationid") == false &&
+        querydata.organizationid != 0
+      ) {
+        sql = await db.query1(
+          `select customer_id companyid,customer_name companyname,Email_id emailid,customer_name client_addressname,address client_address,customer_name billing_addressname,billing_address billing_addressname, contact_no contactnumber,gst_number from customermaster where status =1 and deleted_flag =0`
+        );
+      }
+      sql = await db.query1(
+        `select customer_id companyid,customer_name companyname,Email_id emailid,customer_name client_addressname,address client_address,customer_name billing_addressname,billing_address billing_addressname, contact_no contactnumber,gst_number from customermaster where status =1 and deleted_flag =0 and Organization_id = ?`,
+        [querydata.organizationid]
+      );
+    } else {
+      sql = await db.query1(
+        `select customer_id companyid,customer_name companyname,Email_id emailid,customer_name client_addressname,address client_address,customer_name billing_addressname,billing_address billing_addressname, contact_no contactnumber,gst_number from customermaster where status =1 and deleted_flag =0`
+      );
+    }
+
     if (sql[0]) {
       return helper.getSuccessResponse(
         true,
@@ -2024,7 +2066,7 @@ async function BranchList(admin) {
       if (querydata.hasOwnProperty("companyid") && querydata.companyid != 0) {
         sql = await db.query1(
           `SELECT bm.Branch_id, bm.Branch_name, bm.Branch_code, cst.clientaddress_name AS client_addressname, cst.customer_address AS clientaddress, 
-          cst.billing_gst AS gst_number,bm.contact_person, cst.emailid AS emailid, cst.Phoneno AS contact_number, cst.billing_address, 
+          cst.billing_gst AS gst_number,sct.contactperson_name contact_person,cst.emailid AS emailid, cst.Phoneno AS contact_number, cst.billing_address, 
           cst.billingaddress_name AS billing_addressname, 
                 CASE WHEN bm.Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type, 
                 bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode, cst.from_date, cst.to_date, cst.Amount, cst.billingperiod 
@@ -2036,7 +2078,7 @@ async function BranchList(admin) {
 
         sql1 = await db.query1(
           `SELECT bm.Branch_id, bm.Branch_name, bm.Branch_code,  cst.clientaddress_name AS client_addressname, cst.customer_address AS clientaddress, 
-          cst.billing_gst AS gst_number,bm.contact_person, cst.emailid AS emailid, cst.Phoneno AS contact_number, cst.billing_address, 
+          cst.billing_gst AS gst_number,sct.contactperson_name contact_person,cst.emailid AS emailid, cst.Phoneno AS contact_number, cst.billing_address, 
           cst.billingaddress_name AS billing_addressname, 
           CASE WHEN bm.Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type, 
           bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode, cst.from_date, cst.to_date, cst.Amount, cst.billingperiod 
@@ -2051,7 +2093,7 @@ async function BranchList(admin) {
       ) {
         sql = await db.query1(
           `SELECT bm.Branch_id, bm.Branch_name, bm.Branch_code,  cst.clientaddress_name AS client_addressname, cst.customer_address AS clientaddress, 
-          cst.billing_gst AS gst_number,bm.contact_person, cst.emailid AS emailid, cst.Phoneno AS contact_number, cst.billing_address, 
+          cst.billing_gst AS gst_number,sct.contactperson_name contact_person,cst.emailid AS emailid, cst.Phoneno AS contact_number, cst.billing_address, 
           cst.billingaddress_name AS billing_addressname, 
           CASE WHEN bm.Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type, 
           bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode, cst.from_date, cst.to_date, cst.Amount, cst.billingperiod 
@@ -2064,7 +2106,7 @@ async function BranchList(admin) {
 
         sql1 = await db.query1(
           `SELECT bm.Branch_id, bm.Branch_name, bm.Branch_code, cst.clientaddress_name AS client_addressname, cst.customer_address AS clientaddress, 
-          cst.billing_gst AS gst_number,bm.contact_person, cst.emailid AS emailid, cst.Phoneno AS contact_number, cst.billing_address, 
+          cst.billing_gst AS gst_number,sct.contactperson_name contact_person,cst.emailid AS emailid, cst.Phoneno AS contact_number, cst.billing_address, 
           cst.billingaddress_name AS billing_addressname,  
           CASE WHEN bm.Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type, 
           bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode, cst.from_date, cst.to_date, cst.Amount, cst.billingperiod 
@@ -2078,7 +2120,7 @@ async function BranchList(admin) {
     } else {
       sql = await db.query1(
         `SELECT bm.Branch_id, bm.Branch_name, cst.branchcode Branch_code, cst.clientaddress_name AS client_addressname, cst.customer_address AS clientaddress, 
-        cst.billing_gst AS gst_number,bm.contact_person, cst.emailid AS emailid, cst.Phoneno AS contact_number, cst.billing_address, 
+        cst.billing_gst AS gst_number,sct.contactperson_name contact_person,cst.emailid AS emailid, cst.Phoneno AS contact_number, cst.billing_address, 
         cst.billingaddress_name AS billing_addressname, 
         CASE WHEN bm.Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type, 
         bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode, cst.from_date, cst.to_date, cst.Amount, cst.billingperiod 
@@ -2089,7 +2131,7 @@ async function BranchList(admin) {
 
       sql1 = await db.query1(
         `SELECT bm.Branch_id, bm.Branch_name, bm.Branch_code, cst.clientaddress_name AS client_addressname, cst.customer_address AS clientaddress, 
-        cst.billing_gst AS gst_number,bm.contact_person, cst.emailid AS emailid, cst.Phoneno AS contact_number, cst.billing_address, 
+        cst.billing_gst AS gst_number,sct.contactperson_name contact_person, cst.emailid AS emailid, cst.Phoneno AS contact_number, cst.billing_address, 
         cst.billingaddress_name AS billing_addressname, 
         CASE WHEN bm.Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type, 
         bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode, cst.from_date, cst.to_date, cst.Amount, cst.billingperiod 
@@ -2202,18 +2244,18 @@ async function GetBranchList(admin) {
       }
       if (querydata.hasOwnProperty("companyid") && querydata.companyid != 0) {
         sql = await db.query1(
-          `SELECT bm.Branch_id, bm.Branch_name, bm.Branch_code, bm.branch_name AS clientaddress_name, bm.address AS clientaddress, 
-                bm.gstno AS gst_number,bm.contact_person, bm.Email_id AS emailid, bm.Contact_no AS contact_number, bm.billing_address, 
-                bm.Billingaddress_name AS billing_addressname FROM branchmaster bm 
+          `SELECT bm.Branch_id, bm.Branch_name, bm.Branch_code, sct.clientaddress_name AS clientaddress_name, sct.customer_address AS clientaddress, 
+                sct.billing_gst AS gst_number,sct.contactperson_name contact_person, sct.Emailid AS emailid, sct.phoneno AS contact_number, sct.billing_address, 
+                sct.Billingaddress_name AS billing_addressname FROM branchmaster bm JOIN subscriptioncustomertrans sct ON bm.branch_id = sct.branch_id 
                 WHERE bm.site_type = 0 AND bm.status = 1 AND bm.deleted_flag = 0 AND bm.Customer_id = ?`,
           [querydata.companyid]
         );
       }
     } else {
       sql = await db.query1(
-        `SELECT bm.Branch_id, bm.Branch_name, bm.Branch_code, bm.branch_name AS clientaddress_name, bm.address AS clientaddress, 
-        bm.gstno AS gst_number,bm.contact_person, bm.Email_id AS emailid, bm.Contact_no AS contact_number, bm.billing_address, 
-        bm.Billingaddress_name AS billing_addressname FROM branchmaster bm 
+        `SELECT bm.Branch_id, bm.Branch_name, bm.Branch_code, sct.clientaddress_name AS clientaddress_name, sct.customer_address AS clientaddress, 
+        sct.billing_gst AS gst_number,sct.contactperson_name contact_person, sct.Emailid AS emailid, sct.phoneno AS contact_number, sct.billing_address, 
+        sct.Billingaddress_name AS billing_addressname FROM branchmaster bm JOIN subscriptioncustomertrans sct ON bm.branch_id = sct.branch_id 
         WHERE bm.site_type = 0 AND bm.status = 1 AND bm.deleted_flag = 0`
       );
     }
