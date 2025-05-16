@@ -503,9 +503,8 @@ async function getVouchers(billing) {
       sqlParams = [];
     // Check if querystring is provided
     if (!billing.hasOwnProperty("querystring")) {
-      sql = `SELECT voucher_id,invoice_number,voucher_type,email_id,phone_number,client_name,client_address,pending_amount,fully_cleared,partially_cleared,gstnumber,Total_amount,sub_total,IGST,CGST,SGST,
-      voucher_number,invoice_type,customer_id,CASE WHEN SUM(Total_amount) OVER (PARTITION BY customer_id, invoice_type) >= 100000 THEN 1 ELSE 0 END AS tds_calculation,ROUND(sub_total * 0.02, 2) AS tdscalculation_amount,payment_details,DATE(Row_updated_date) as date
-      FROM clientvouchermaster WHERE status = 1`;
+      sql = `SELECT voucher_id,invoice_number,voucher_type,email_id,phone_number,client_name,client_address, pending_amount,fully_cleared,partially_cleared,gstnumber,Total_amount,sub_total,
+      IGST,CGST,SGST,voucher_number,invoice_type,customer_id,CASE WHEN voucher_type IN ('sales', 'subscription') THEN 1 WHEN SUM(Total_amount) OVER (PARTITION BY customer_id, invoice_type) >= 100000 THEN 1 ELSE 0 END AS tds_calculation,ROUND(sub_total * 0.02, 2) AS tdscalculation_amount, payment_details, DATE(Row_updated_date) as date FROM clientvouchermaster WHERE status = 1`;
     }
 
     // Decrypt querystring
@@ -534,9 +533,8 @@ async function getVouchers(billing) {
       );
     }
 
-    sql = `SELECT voucher_id,invoice_number,voucher_type,email_id,phone_number,client_name,client_address,pending_amount,fully_cleared,partially_cleared,gstnumber,Total_amount,sub_total,IGST,CGST,SGST,
-    voucher_number,invoice_type,customer_id,CASE WHEN SUM(Total_amount) OVER (PARTITION BY customer_id, invoice_type) >= 100000 THEN 1 ELSE 0 END AS tds_calculation,ROUND(sub_total * 0.02, 2) AS tdscalculation_amount,payment_details,DATE(Row_updated_date) as date
-    FROM clientvouchermaster WHERE status = 1`;
+    sql = `SELECT voucher_id,invoice_number,voucher_type,email_id,phone_number,client_name,client_address, pending_amount,fully_cleared,partially_cleared,gstnumber,Total_amount,sub_total,
+    IGST,CGST,SGST,voucher_number,invoice_type,customer_id,CASE WHEN voucher_type IN ('sales', 'subscription') THEN 1 WHEN SUM(Total_amount) OVER (PARTITION BY customer_id, invoice_type) >= 100000 THEN 1 ELSE 0 END AS tds_calculation,ROUND(sub_total * 0.02, 2) AS tdscalculation_amount, payment_details, DATE(Row_updated_date) as date FROM clientvouchermaster WHERE status = 1`;
 
     if (
       querydata.vouchertype != null &&
@@ -756,13 +754,15 @@ async function ClearVouchers(req, res, next) {
         path = req.file.path;
       }
       const sql50 = await db.query(
-        `Insert into vouchertransactions(voucher_id,voucher_number, amount,transaction_details,file_path) VALUES(?,?,?,?,?)`,
+        `Insert into vouchertransactions(voucher_id,voucher_number, amount,transaction_details,file_path,paymentstatus,tdsstatus) VALUES(?,?,?,?,?,?,?)`,
         [
           querydata.voucherid,
           querydata.vouchernumber,
           querydata.paidamount,
           querydata.transactiondetails,
           path || null,
+          querydata.paymentstatus,
+          querydata.tdsstatus,
         ]
       );
     } catch (er) {
@@ -787,20 +787,23 @@ async function ClearVouchers(req, res, next) {
           // const sql9 = await db.query(`Update consolidateledger SET creditstatus =1 , debitstatus = 1 , creditbilldetails =`);
           if (querydata.invoicetype == "sales") {
             const sql1 = await db.query(
-              `Update salesprocesslist SET payment_status = 2, Paid_amount = ? where invoice_number = ? and payment_status != 1`,
+              `Update salesprocesslist SET payment_status = 2, Paid_amount = Paid_amount + ? where invoice_number = ? and payment_status != 1`,
               [querydata.paidamount, querydata.invoicenumber]
             );
           } else if (querydata.invoicetype == "subscription") {
+            const dsql1 = await db.query(
+              `select Pending_amount from clientvouchermaster where voucher_id = ?`,
+              [querydata.voucherid]
+            );
+            var pending_amount = 0;
+            if (dsql1.length > 0) {
+              pending_amount = dsql1[0].Pending_amount;
+            }
             const sql2 = await db.query(
-              `UPDATE subscriptionbillgenerated sbg JOIN subscriptionbillmaster sbm ON sbg.subscription_billid = sbm.subscription_billid SET sbg.payment_status = 2,sbm.Paidamount = ?, 
-           sbm.pendingpayments = ? - ? WHERE sbg.invoice_no = ? and sbg.payment_status != 1
+              `UPDATE subscriptionbillgenerated sbg JOIN subscriptionbillmaster sbm ON sbg.subscription_billid = sbm.subscription_billid SET sbg.payment_status = 2,sbm.Paidamount =sbm.Paidamount + ?, 
+           sbm.pendingpayments = ? WHERE sbg.invoice_no = ? and sbg.payment_status != 1
           `,
-              [
-                querydata.paidamount,
-                querydata.grossamount,
-                querydata.paidamount,
-                querydata.invoicenumber,
-              ]
+              [querydata.paidamount, pending_amount, querydata.invoicenumber]
             );
           } else if (querydata.invoicetype == "vendor") {
           }
@@ -838,12 +841,12 @@ async function ClearVouchers(req, res, next) {
         if (sql.changedRows > 0) {
           if (querydata.invoicetype == "sales") {
             const sql1 = await db.query(
-              `Update salesprocesslist SET payment_status = 1 where cprocess_gene_id = ?`,
-              [querydata.invoicenumber]
+              `Update salesprocesslist SET Paid_amount = Paid_amount + ?,payment_status = 1 where cprocess_gene_id = ?`,
+              [querydata.paidamount, querydata.invoicenumber]
             );
           } else if (querydata.invoicetype == "subscription") {
             const sql2 = await db.query(
-              `UPDATE subscriptionbillgenerated sbg JOIN subscriptionbillmaster sbm ON sbg.subscription_billid = sbm.subscription_billid SET sbg.payment_status = 1,sbm.Paidamount = ? 
+              `UPDATE subscriptionbillgenerated sbg JOIN subscriptionbillmaster sbm ON sbg.subscription_billid = sbm.subscription_billid SET sbg.payment_status = 1,sbm.Paidamount =sbm.Paidamount + ? 
         WHERE sbg.invoice_no = ?
           `,
               [querydata.paidamount, querydata.invoicenumber]

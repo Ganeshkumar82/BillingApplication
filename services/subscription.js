@@ -711,7 +711,7 @@ async function addRecurringInvoice(req, res) {
         const { gst, subtotal, total } = billDetails;
         const { CGST, IGST, SGST } = gst;
         const [sql2] = await db.spcall(
-          `CALL InsertClientVoucher(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@voucher_id,@voucher_number); select @voucher_id,@voucher_number`,
+          `CALL InsertClientVoucher(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@voucher_id,@voucher_number); select @voucher_id,@voucher_number`,
           [
             querydata.invoicegenid,
             "payment voucher",
@@ -735,7 +735,7 @@ async function addRecurringInvoice(req, res) {
         const voucherid = objectvalue["@voucher_id"];
         const vouchernumber = objectvalue["@voucher_number"];
         const [sql3] = await db.spcall(
-          `CALL SP_INSERT_CONSOLIDATE_LEDGER(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@ledgerid); select @ledgerid`,
+          `CALL SP_INSERT_CONSOLIDATE_LEDGER(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@ledgerid); select @ledgerid;`,
           [
             querydata.invoicegenid,
             querydata.clientaddressname,
@@ -848,7 +848,7 @@ async function addRecurringInvoice(req, res) {
     // await mqttclient.publishMqttMessage("refresh", "Invoice created");
     await mqttclient.publishMqttMessage(
       "Notification",
-      `Recurring invoice created for ${billingaddressname}`
+      `Recurring invoice created for ${clientaddressname}`
     );
 
     return helper.getSuccessResponse(

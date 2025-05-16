@@ -10,7 +10,7 @@ let isConnected = false;
 let interval = null; // Store interval to prevent duplicate jobs
 
 function connectWebSocket() {
-  socket = new WebSocket("ws://192.168.0.111:8081");
+  socket = new WebSocket("ws://192.168.0.111:9091");
 
   socket.on("open", () => {
     console.log("Connected to WebSocket server");
@@ -24,13 +24,13 @@ function connectWebSocket() {
   });
 
   socket.on("close", () => {
-    console.log("WebSocket disconnected, attempting to reconnect...");
+    // console.log("WebSocket disconnected, attempting to reconnect...");
     isConnected = false;
     reconnectWebSocket();
   });
 
   socket.on("error", (error) => {
-    console.error("WebSocket error:", error);
+    // console.error("WebSocket error:", error);
     isConnected = false;
   });
 }
@@ -38,7 +38,7 @@ function connectWebSocket() {
 function reconnectWebSocket() {
   setTimeout(() => {
     if (!isConnected) {
-      console.log("Reconnecting WebSocket...");
+      // console.log("Reconnecting WebSocket...");
       connectWebSocket();
     }
   }, 10000); // Retry connection every 5 seconds
@@ -91,7 +91,7 @@ async function sendInvoice() {
               FROM subscriptionbillmaster sbm2
               JOIN subscriptionbillgenerated sbg2
                 ON sbm2.subscription_billid = sbg2.subscription_billid
-              WHERE sbg2.payment_status = 0
+              WHERE sbg2.payment_status IN(0,2) 
                 AND sbm2.status = 1
                 AND sbm2.subscription_billid <> sbm.subscription_billid
                 AND sbm2.Site_list = sbm.Site_list
@@ -146,13 +146,15 @@ async function sendInvoice() {
                   'invoiceid', sbg2.invoice_No,
                   'duedate', sbm2.Due_date,
                   'overduedays', DATEDIFF(NOW(), sbm2.Due_date),
-                  'charges', sbm2.plancharges
+                  'charges', sbm2.plancharges,
+                  'paidamount', sbm2.paidamount,
+                  'pendingamount', sbm2.plancharges - sbm2.paidamount
               )
           )
           FROM subscriptionbillmaster sbm2
           JOIN subscriptionbillgenerated sbg2
             ON sbm2.subscription_billid = sbg2.subscription_billid
-          WHERE sbg2.payment_status = 0
+          WHERE sbg2.payment_status IN (0, 2)
             AND sbm2.status = 1
             AND sbm2.subscription_billid <> sbm.subscription_billid
             AND sbm2.Site_list = sbm.Site_list
@@ -164,7 +166,7 @@ async function sendInvoice() {
           FROM subscriptionbillmaster sbm2
           JOIN subscriptionbillgenerated sbg2
             ON sbm2.subscription_billid = sbg2.subscription_billid
-          WHERE sbg2.payment_status = 0
+          WHERE sbg2.payment_status IN (0, 2)
             AND sbm2.status = 1
             AND sbm2.subscription_billid <> sbm.subscription_billid
             AND sbm2.Site_list = sbm.Site_list
@@ -190,13 +192,13 @@ async function sendInvoice() {
     // socket.send(JSON.stringify(sql));
     // }
   } else {
-    console.log("WebSocket not connected, skipping message.");
+    // console.log("WebSocket not connected, skipping message.");
     reconnectWebSocket();
   }
 }
 
 // Cron job to start sending messages every minute after 03:14 AM
-cron.schedule("00 19 * * *", () => {
+cron.schedule("44 02 * * *", () => {
   console.log("Cron job started at 07:16 PM");
   sendInvoice();
   // if (interval) {
