@@ -1403,7 +1403,7 @@ async function addInvoice(req, res) {
       if (sq1.length > 0) {
         const customerid = sq1[0].customer_id;
         const [sql2] = await db.spcall(
-          `CALL InsertClientVoucher(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@voucher_id,@voucher_number); select @voucher_id,@voucher_number`,
+          `CALL InsertClientVoucher(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@voucher_id,@voucher_number); select @voucher_id,@voucher_number`,
           [
             querydata.invoicegenid,
             "payment voucher",
@@ -1421,17 +1421,19 @@ async function addInvoice(req, res) {
             SGST,
             "sales",
             `SA-${customerid}`,
+            `Sales Invoice created for ${querydata.clientaddressname}`,
           ]
         );
         const objectvalue = sql2[1][0];
         const voucherid = objectvalue["@voucher_id"];
         const vouchernumber = objectvalue["@voucher_number"];
         const [sql3] = await db.spcall(
-          `CALL SP_INSERT_CONSOLIDATE_LEDGER(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@ledgerid); select @ledgerid`,
+          `CALL SP_DEBIT_CLIENT_LEDGER(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@ledgerid); select @ledgerid`,
           [
             querydata.invoicegenid,
             querydata.clientaddressname,
             JSON.stringify(querydata.billdetails),
+            "",
             querydata.gstnumber,
             total,
             subtotal,
@@ -1440,12 +1442,9 @@ async function addInvoice(req, res) {
             SGST,
             0,
             "sales",
-            `SA-${querydata.customerid}`,
             voucherid,
             vouchernumber,
             "receivable",
-            0,
-            1,
             `Sales Invoice created for ${querydata.clientaddressname}`,
           ]
         );

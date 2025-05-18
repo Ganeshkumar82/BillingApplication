@@ -38,9 +38,18 @@ router.post("/clearvoucher", async function (req, res, next) {
   }
 });
 
+router.post("/clientledger", async function (req, res, next) {
+  try {
+    res.json(await billing.clientLedger(req.body));
+  } catch (er) {
+    console.log(`Error while Fetching the consolidate ledger: ${er}`);
+    next(er);
+  }
+});
+
 router.post("/consolidateledger", async function (req, res, next) {
   try {
-    res.json(await billing.ConsolidateLedger(req.body));
+    res.json(await billing.consolidateLedger(req.body));
   } catch (er) {
     console.log(`Error while Fetching the consolidate ledger: ${er}`);
     next(er);
