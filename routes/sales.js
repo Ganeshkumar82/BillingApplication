@@ -114,15 +114,6 @@ router.post("/addprocesslist", async function (req, res, next) {
   }
 });
 
-router.post("/getprocesslist", async function (req, res, next) {
-  try {
-    res.json(await sales.GetProcessList(req.body));
-  } catch (er) {
-    console.log(`Error while Fetching the process list: ${er}`);
-    next(er);
-  }
-});
-
 router.post("/updateprocesslist", async function (req, res, next) {
   try {
     res.json(await sales.UpdateProcessList(req.body));

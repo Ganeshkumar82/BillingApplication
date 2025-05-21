@@ -1428,12 +1428,18 @@ async function addInvoice(req, res) {
         const voucherid = objectvalue["@voucher_id"];
         const vouchernumber = objectvalue["@voucher_number"];
         const [sql3] = await db.spcall(
-          `CALL SP_DEBIT_CLIENT_LEDGER(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@ledgerid); select @ledgerid`,
+          `CALL SP_DEBIT_CLIENT_LEDGER(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@ledgerid); select @ledgerid`,
           [
             querydata.invoicegenid,
             querydata.clientaddressname,
             JSON.stringify(querydata.billdetails),
-            "",
+            JSON.stringify({
+              amount: 0,
+              transactiondetails: null,
+              date: null,
+              feedback: null,
+              tdsamount: 0,
+            }),
             querydata.gstnumber,
             total,
             subtotal,
@@ -2691,137 +2697,6 @@ async function AddProcessList(sales) {
       "error",
       "Internal Error. Please contact Administration",
       er.message,
-      secret
-    );
-  }
-}
-
-//###############################################################################################################################################################################################
-//###############################################################################################################################################################################################
-//###############################################################################################################################################################################################
-//###############################################################################################################################################################################################
-
-async function GetProcessList(sales) {
-  try {
-    // Check if the session token exists
-    if (!sales.hasOwnProperty("STOKEN")) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login sessiontoken missing. Please provide the Login sessiontoken",
-        "GET SALES PROCESS LIST",
-        ""
-      );
-    }
-    var secret = sales.STOKEN.substring(0, 16);
-    var querydata;
-    // Validate session token length
-    if (sales.STOKEN.length > 50 || sales.STOKEN.length < 30) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
-        "GET SALES PROCESS LIST",
-        secret
-      );
-    }
-
-    // Validate session token
-    const [result] = await db.spcall(
-      "CALL SP_STOKEN_CHECK(?,@result); SELECT @result;",
-      [sales.STOKEN]
-    );
-    const objectvalue = result[1][0];
-    const userid = objectvalue["@result"];
-
-    if (userid == null) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
-        "GET SALES PROCESS LIST",
-        secret
-      );
-    }
-
-    // Check if querystring is provided
-    if (!sales.hasOwnProperty("querystring")) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Querystring missing. Please provide the querystring",
-        "GET SALES PROCESS LIST",
-        secret
-      );
-    }
-
-    // Decrypt querystring
-    try {
-      querydata = await helper.decrypt(sales.querystring, secret);
-    } catch (ex) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Querystring Invalid error. Please provide the valid querystring.",
-        "GET SALES PROCESS LIST",
-        secret
-      );
-    }
-
-    // Parse the decrypted querystring
-    try {
-      querydata = JSON.parse(querydata);
-    } catch (ex) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Querystring JSON error. Please provide valid JSON",
-        "GET SALES PROCESS LIST",
-        secret
-      );
-    }
-
-    // Validate required fields
-    if (
-      !querydata.hasOwnProperty("processid") ||
-      querydata.custsalesname == ""
-    ) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Process id missing. Please provide the Process id",
-        "GET SALES PROCESS LIST",
-        secret
-      );
-    }
-    // const sql1 = await db.query(`select custsales_name,salesprocess_path,salesprocess_date,Apporved_status from salesprocesslist where processid = ?`,[querydata.processid])
-    const sql = await db.query(
-      `select custsales_name,salesprocess_path,salesprocess_date,Approved_status from salesprocesslist where processid = ?`,
-      [querydata.processid]
-    );
-    if (sql[0]) {
-      return helper.getSuccessResponse(
-        true,
-        "success",
-        "Process list Fetched successfully",
-        sql,
-        secret
-      );
-    } else {
-      return helper.getErrorResponse(
-        true,
-        "success",
-        "Process list Fetched successfully",
-        sql,
-        secret
-      );
-    }
-  } catch (er) {
-    return helper.getErrorResponse(
-      false,
-      "error",
-      "Internal Error. Please contact Administration",
-      "GET SALES PROCESS LIST",
       secret
     );
   }
@@ -11020,7 +10895,6 @@ module.exports = {
   getProcesslist,
   AddSalesProcess,
   AddProcessList,
-  GetProcessList,
   UpdateSalesProcess,
   UpdateProcessList,
   detailsPreLoader,

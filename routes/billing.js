@@ -38,9 +38,18 @@ router.post("/clearvoucher", async function (req, res, next) {
   }
 });
 
-router.post("/clientledger", async function (req, res, next) {
+router.post("/clearconsolidatevoucher", async function (req, res, next) {
   try {
-    res.json(await billing.clientLedger(req.body));
+    res.json(await billing.ClearConsolidateVouchers(req, res, next));
+  } catch (er) {
+    console.log(`Error while clearing the consolidate vouchers: ${er}`);
+    next(er);
+  }
+});
+
+router.post("/accountledger", async function (req, res, next) {
+  try {
+    res.json(await billing.accountLedger(req.body));
   } catch (er) {
     console.log(`Error while Fetching the consolidate ledger: ${er}`);
     next(er);
@@ -79,6 +88,33 @@ router.post("/getbinaryfile", async function (req, res, next) {
     res.json(await billing.getBinaryFile(req.body));
   } catch (er) {
     console.log(`Error while getting the binary file : ${er}`);
+    next(er);
+  }
+});
+
+router.post("/gettransactionfile", async function (req, res, next) {
+  try {
+    res.json(await billing.getTransactionFile(req.body));
+  } catch (er) {
+    console.log(`Error while getting the transactions file : ${er}`);
+    next(er);
+  }
+});
+
+router.post("/getsubscriptioncustomer", async function (req, res, next) {
+  try {
+    res.json(await billing.getSubscriptionCustomer(req.body));
+  } catch (er) {
+    console.log(`Error while fetching the subscription customer list : ${er}`);
+    next(er);
+  }
+});
+
+router.post("/getsalescustomer", async function (req, res, next) {
+  try {
+    res.json(await billing.getSalesCustomer(req.body));
+  } catch (er) {
+    console.log(`Error while fetching the sales customer list : ${er}`);
     next(er);
   }
 });

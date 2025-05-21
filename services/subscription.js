@@ -736,12 +736,18 @@ async function addRecurringInvoice(req, res) {
         const voucherid = objectvalue["@voucher_id"];
         const vouchernumber = objectvalue["@voucher_number"];
         const [sql3] = await db.spcall(
-          `CALL SP_DEBIT_CLIENT_LEDGER(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@ledgerid); select @ledgerid;`,
+          `CALL SP_DEBIT_CLIENT_LEDGER(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@ledgerid); select @ledgerid;`,
           [
             querydata.invoicegenid,
             querydata.clientaddressname,
             JSON.stringify(querydata.billdetails),
-            "",
+            JSON.stringify({
+              amount: 0,
+              transactiondetails: null,
+              date: null,
+              feedback: null,
+              tdsamount: 0,
+            }),
             querydata.gstnumber,
             total,
             subtotal,
@@ -804,22 +810,22 @@ async function addRecurringInvoice(req, res) {
 
     if (messagetype === 1 || messagetype === 3) {
       // Email or Both
-      EmailSent = await mailer.sendRecurredInvoice(
-        clientaddressname,
-        emailid,
-        subject,
-        "recurredinvoicepdf.html",
-        "",
-        "RECURRED_INVOICE_PDF_SEND",
-        pdfPaths,
-        invoicegenid,
-        formattedDate,
-        totalamount,
-        ccemail,
-        feedback,
-        billperiod,
-        duedate
-      );
+      // EmailSent = await mailer.sendRecurredInvoice(
+      //   clientaddressname,
+      //   emailid,
+      //   subject,
+      //   "recurredinvoicepdf.html",
+      //   "",
+      //   "RECURRED_INVOICE_PDF_SEND",
+      //   pdfPaths,
+      //   invoicegenid,
+      //   formattedDate,
+      //   totalamount,
+      //   ccemail,
+      //   feedback,
+      //   billperiod,
+      //   duedate
+      // );
     }
 
     if (messagetype === 2 || messagetype === 3) {
@@ -827,14 +833,14 @@ async function addRecurringInvoice(req, res) {
       WhatsappSent = await Promise.all(
         phoneNumbers.map(async (number) => {
           try {
-            const response = await axios.post(
-              `${config.whatsappip}/billing/sendpdf`,
-              {
-                phoneno: number,
-                feedback,
-                pdfpath: pdfPaths,
-              }
-            );
+            // const response = await axios.post(
+            //   `${config.whatsappip}/billing/sendpdf`,
+            //   {
+            //     phoneno: number,
+            //     feedback,
+            //     pdfpath: pdfPaths,
+            //   }
+            // );
             return response.data.code;
           } catch (error) {
             console.error("WhatsApp error:", error.message);
