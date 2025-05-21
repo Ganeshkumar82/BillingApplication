@@ -2078,6 +2078,65 @@ async function TDSLedger(billing) {
 
     console.log(sql);
     const query = await db.query(sql, sqlParams);
+
+    if (query) {
+      let netTdsAmount = 0;
+      let totalTds = 0;
+      let totalPaid = 0;
+      let totalReceivables = 0;
+      let totalPayables = 0;
+      let updatedRows = [];
+
+      query.forEach((entry) => {
+        // payment_details can be object or array
+        let paid = 0;
+        if (Array.isArray(entry.payment_details)) {
+          paid = entry.payment_details.reduce(
+            (sum, pd) => sum + parseFloat(pd.amount || 0),
+            0
+          );
+        } else if (
+          entry.payment_details &&
+          typeof entry.payment_details === "object"
+        ) {
+          paid = parseFloat(entry.payment_details.amount || 0);
+        }
+        const tds = parseFloat(entry.tdsamount || 0);
+        totalPaid += paid;
+        totalTds += tds;
+        netTdsAmount += tds - paid;
+
+        // Sum receivables/payables
+        if (entry.tds_type === "receivable") {
+          totalReceivables += tds;
+        } else if (entry.tds_type === "payable") {
+          totalPayables += tds;
+        }
+
+        updatedRows.push({
+          ...entry,
+          paidamount: paid,
+          balance: parseFloat((tds - paid).toFixed(2)),
+          runningbalance: parseFloat(netTdsAmount.toFixed(2)),
+        });
+      });
+
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Tds Ledger fetched Successfully",
+        {
+          tdsledger: updatedRows,
+          totalTds: totalTds,
+          totalPaid: totalPaid,
+          netTdsBalance: netTdsAmount,
+          totalReceivables: totalReceivables,
+          totalPayables: totalPayables,
+          netTds: totalReceivables - totalPayables,
+        },
+        secret
+      );
+    }
     if (query[0]) {
       return helper.getSuccessResponse(
         true,
