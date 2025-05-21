@@ -1208,7 +1208,7 @@ async function ClearVouchers(req, res, next) {
 //###############################################################################################################################################################################################
 //#####
 async function ClearConsolidateVouchers(req, res, next) {
-  let secret, querydata1, billing;
+  let secret, querydata1, querydata2, billing;
   try {
     try {
       await uploadFile.uploadVoucher(req, res);
@@ -1224,7 +1224,7 @@ async function ClearConsolidateVouchers(req, res, next) {
         );
       }
       secret = billing.STOKEN.substring(0, 16);
-      querydata;
+      // var querydata;
       // Validate session token length
       if (billing.STOKEN.length > 50 || billing.STOKEN.length < 30) {
         return helper.getErrorResponse(
@@ -1297,24 +1297,16 @@ async function ClearConsolidateVouchers(req, res, next) {
         secret
       );
     }
-    if (querydata1.feedback == null || querydata1.feedback == 0) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        `Transaction details missing.`,
-        "CLEAR CONSOLIDATE VOUCHERS",
-        secret
-      );
-    }
     const requiredFields1 = [
-      { field: "voucherid", message: "Voucher id missing." },
-      { field: "vouchernumber", message: "Voucher number missing." },
+      { field: "voucherids", message: "Voucher ids missing." },
+      { field: "vouchernumbers", message: "Voucher numbers missing." },
       { field: "totalpaidamount", message: "Paid amount missing." },
       { field: "tdsstatus", message: "TDS status missing." },
       { field: "feedback", message: "Feedback type missing." },
       { field: "date", message: "Date missing." },
       { field: "transactiondetails", message: "Transaction details missing." },
       { field: "voucherlist", message: "Voucher list missing." },
+      { field: "paymentstatus", message: "Payment status missing." },
     ];
     for (const { field, message } of requiredFields1) {
       if (!querydata1.hasOwnProperty(field)) {
@@ -1330,7 +1322,7 @@ async function ClearConsolidateVouchers(req, res, next) {
     let tdsamount = 0;
     let partially = 0;
     var paymentdetails = null;
-    var description = null;
+    var description = `CONSOLIDATED CLEARANCE`;
     var transactionid = 0;
     try {
       var path = null;
@@ -1340,12 +1332,12 @@ async function ClearConsolidateVouchers(req, res, next) {
       const [sql50] = await db.spcall(
         `CALL InsertVoucherTransaction(?, ?, ?, ?, ?, ?, ?,@transaction_id);select @transaction_id;`,
         [
-          querydata1.voucherid,
-          querydata1.vouchernumber,
+          JSON.stringify(querydata1.voucherids),
+          JSON.stringify(querydata1.vouchernumbers),
           querydata1.paidamount,
           querydata1.transactiondetails,
           path || null,
-          querydata1.paymentstatus,
+          `complete`,
           querydata1.tdsstatus,
         ]
       );
@@ -1355,15 +1347,16 @@ async function ClearConsolidateVouchers(req, res, next) {
       console.log(er);
     }
 
-    if (!Array.isArray(voucherlist)) {
-      querydata1 = [voucherlist]; // Wrap in an array if it's a single object
+    if (!Array.isArray(querydata1.voucherlist)) {
+      querydata2 = [querydata1.voucherlist]; // Wrap in an array if it's a single object
+    } else {
+      querydata2 = querydata1.voucherlist;
     }
 
-    for (const querydata of querydata1) {
+    for (const querydata of querydata2) {
       const requiredFields = [
         { field: "voucherid", message: "Voucher id missing." },
         { field: "vouchernumber", message: "Voucher number missing." },
-        { field: "paymentstatus", message: "Payment status missing." },
         { field: "IGST", message: "IGST missing." },
         { field: "SGST", message: "SGST missing." },
         { field: "CGST", message: "CGST missing." },
@@ -1382,7 +1375,6 @@ async function ClearConsolidateVouchers(req, res, next) {
         { field: "invoicenumber", message: "Invoice number missing." },
         { field: "emailid", message: "Email id missing." },
         { field: "phoneno", message: "Phone no missing." },
-        { field: "tdsstatus", message: "TDS status missing." },
         { field: "invoicetype", message: "Invoice type missing." },
         { field: "gstnumber", message: "GST number missing." },
       ];
@@ -1393,7 +1385,7 @@ async function ClearConsolidateVouchers(req, res, next) {
             false,
             "error",
             message,
-            "CLEAR VOUCHERS",
+            "CLEAR CONSOLIDATE VOUCHERS",
             secret
           );
         }
@@ -1405,8 +1397,8 @@ async function ClearConsolidateVouchers(req, res, next) {
       let SGST = querydata.SGST || 0;
 
       try {
-        if (querydata.paymentstatus == "complete") {
-          if (querydata.tdsstatus) {
+        if (querydata1.paymentstatus == "complete") {
+          if (querydata1.tdsstatus) {
             tdsamount = Math.round(querydata.subtotal * 0.02);
           } else {
             tdsamount = 0;
@@ -1426,12 +1418,12 @@ async function ClearConsolidateVouchers(req, res, next) {
                  'feedback',? )),cleared_date = ? WHERE voucher_id = ? AND ROUND(Total_amount) = ROUND(paid_amount + ? + ?)`,
             [
               querydata.paidamount,
-              querydata.date,
+              querydata1.date,
               querydata.paidamount,
-              querydata.transactiondetails,
+              querydata1.transactiondetails,
               transactionid,
-              querydata.feedback,
-              querydata.date,
+              querydata1.feedback,
+              querydata1.date,
               querydata.voucherid,
               querydata.paidamount,
               tdsamount,
@@ -1439,12 +1431,12 @@ async function ClearConsolidateVouchers(req, res, next) {
           );
           if (sql.changedRows > 0) {
             const sql43 = await db.query(
-              `select payment_details,description from clientvouchermaster where voucher_id = ?`,
+              `select payment_details from clientvouchermaster where voucher_id = ?`,
               [querydata.voucherid]
             );
             if (sql43.length > 0) {
               paymentdetails = sql43[0].payment_details;
-              description = sql43[0].description;
+              description = `CONSOLIDATED CLEARANCE`;
             }
             if (querydata.invoicetype == "sales") {
               const sql1 = await db.query(
@@ -1559,9 +1551,9 @@ async function ClearConsolidateVouchers(req, res, next) {
             }),
             JSON.stringify({
               amount: querydata.paidamount,
-              transactiondetails: querydata.transactiondetails,
-              date: querydata.date,
-              feedback: querydata.feedback,
+              transactiondetails: querydata1.transactiondetails,
+              date: querydata1.date,
+              feedback: querydata1.feedback,
               tdsamount: tdsamount,
             }),
             querydata.gstnumber,
@@ -1585,13 +1577,13 @@ async function ClearConsolidateVouchers(req, res, next) {
     }
     await mqttclient.publishMqttMessage(
       "refresh",
-      "Voucher Cleared Successfully"
+      "Consolidated voucher Cleared Successfully"
     );
     return helper.getSuccessResponse(
       true,
       "success",
       "Voucher Cleared Successfully",
-      querydata.vouchernumber,
+      querydata1.vouchernumbers,
       secret
     );
   } catch (er) {
