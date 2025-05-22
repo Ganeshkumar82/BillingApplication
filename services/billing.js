@@ -2001,7 +2001,8 @@ async function TDSLedger(billing) {
       sqlParams = [];
     // Check if querystring is provided
     if (!billing.hasOwnProperty("querystring")) {
-      sql = `SELECT tdsledger_id,voucher_id,voucher_number,client_name,IGST,CGST,SGST,totalamount,subtotal,tdsamount,gst_number,tds_type,Row_updated_date,tds_filed,payment_details,description,bill_details FROM tdsledger where status =1`;
+      sql = `SELECT tdsledger_id, voucher_id, voucher_number, client_name, IGST, CGST, SGST, totalamount, subtotal, tdsamount, gst_number, tds_type, Row_updated_date, tds_filed, payment_details, description, bill_details, CASE WHEN tds_type = 'Receivable' THEN tdsamount ELSE 0 END AS creditAmount, CASE WHEN tds_type = 'Payable' THEN tdsamount ELSE 0 END AS debitAmount FROM tdsledger WHERE status = 1;
+`;
     }
 
     // Decrypt querystring
@@ -2030,7 +2031,8 @@ async function TDSLedger(billing) {
       );
     }
 
-    sql = `SELECT tdsledger_id, voucher_id ,voucher_number ,client_name, IGST, CGST, SGST, totalamount,subtotal,tdsamount,gst_number,tds_type,Row_updated_date,tds_filed,payment_details,description,bill_details FROM tdsledger where status = 1`;
+    sql = `SELECT tdsledger_id, voucher_id, voucher_number, client_name, IGST, CGST, SGST, totalamount, subtotal, tdsamount, gst_number, tds_type, Row_updated_date, tds_filed, payment_details, description, bill_details, CASE WHEN tds_type = 'Receivable' THEN tdsamount ELSE 0 END AS creditAmount, CASE WHEN tds_type = 'Payable' THEN tdsamount ELSE 0 END AS debitAmount FROM tdsledger WHERE status = 1;
+`;
 
     if (
       querydata.tdstype != null &&
@@ -2116,8 +2118,6 @@ async function TDSLedger(billing) {
         updatedRows.push({
           ...entry,
           paidamount: paid,
-          balance: parseFloat((tds - paid).toFixed(2)),
-          runningbalance: parseFloat(netTdsAmount.toFixed(2)),
         });
       });
 
