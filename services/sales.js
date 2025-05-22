@@ -1403,10 +1403,10 @@ async function addInvoice(req, res) {
       if (sq1.length > 0) {
         const customerid = sq1[0].customer_id;
         const [sql2] = await db.spcall(
-          `CALL InsertClientVoucher(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@voucher_id,@voucher_number); select @voucher_id,@voucher_number`,
+          `CALL InsertClientVoucher(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@voucher_id,@voucher_number); select @voucher_id,@voucher_number`,
           [
             querydata.invoicegenid,
-            "payment voucher",
+            "receipt voucher",
             querydata.clientaddressname,
             querydata.emailid,
             querydata.phoneno,
@@ -1422,6 +1422,7 @@ async function addInvoice(req, res) {
             "sales",
             `SA-${customerid}`,
             `Sales Invoice created for ${querydata.clientaddressname}`,
+            null,
           ]
         );
         const objectvalue = sql2[1][0];
@@ -1438,7 +1439,6 @@ async function addInvoice(req, res) {
               transactiondetails: null,
               date: null,
               feedback: null,
-              tdsamount: 0,
             }),
             querydata.gstnumber,
             total,

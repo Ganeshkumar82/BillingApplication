@@ -711,10 +711,10 @@ async function addRecurringInvoice(req, res) {
         const { gst, subtotal, total } = billDetails;
         const { CGST, IGST, SGST } = gst;
         const [sql2] = await db.spcall(
-          `CALL InsertClientVoucher(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@voucher_id,@voucher_number); select @voucher_id,@voucher_number`,
+          `CALL InsertClientVoucher(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@voucher_id,@voucher_number); select @voucher_id,@voucher_number`,
           [
             querydata.invoicegenid,
-            "payment voucher",
+            "receipt voucher",
             querydata.clientaddressname,
             querydata.emailid,
             querydata.phoneno,
@@ -730,6 +730,7 @@ async function addRecurringInvoice(req, res) {
             "subscription",
             `SB-${querydata.customerid}`,
             `Subscription Invoice created for ${querydata.clientaddressname}`,
+            querydata.duedate,
           ]
         );
         const objectvalue = sql2[1][0];
@@ -746,7 +747,6 @@ async function addRecurringInvoice(req, res) {
               transactiondetails: null,
               date: null,
               feedback: null,
-              tdsamount: 0,
             }),
             querydata.gstnumber,
             total,
@@ -810,22 +810,22 @@ async function addRecurringInvoice(req, res) {
 
     if (messagetype === 1 || messagetype === 3) {
       // Email or Both
-      // EmailSent = await mailer.sendRecurredInvoice(
-      //   clientaddressname,
-      //   emailid,
-      //   subject,
-      //   "recurredinvoicepdf.html",
-      //   "",
-      //   "RECURRED_INVOICE_PDF_SEND",
-      //   pdfPaths,
-      //   invoicegenid,
-      //   formattedDate,
-      //   totalamount,
-      //   ccemail,
-      //   feedback,
-      //   billperiod,
-      //   duedate
-      // );
+      EmailSent = await mailer.sendRecurredInvoice(
+        clientaddressname,
+        emailid,
+        subject,
+        "recurredinvoicepdf.html",
+        "",
+        "RECURRED_INVOICE_PDF_SEND",
+        pdfPaths,
+        invoicegenid,
+        formattedDate,
+        totalamount,
+        ccemail,
+        feedback,
+        billperiod,
+        duedate
+      );
     }
 
     if (messagetype === 2 || messagetype === 3) {
@@ -833,14 +833,14 @@ async function addRecurringInvoice(req, res) {
       WhatsappSent = await Promise.all(
         phoneNumbers.map(async (number) => {
           try {
-            // const response = await axios.post(
-            //   `${config.whatsappip}/billing/sendpdf`,
-            //   {
-            //     phoneno: number,
-            //     feedback,
-            //     pdfpath: pdfPaths,
-            //   }
-            // );
+            const response = await axios.post(
+              `${config.whatsappip}/billing/sendpdf`,
+              {
+                phoneno: number,
+                feedback,
+                pdfpath: pdfPaths,
+              }
+            );
             return response.data.code;
           } catch (error) {
             console.error("WhatsApp error:", error.message);

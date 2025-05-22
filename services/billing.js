@@ -1057,9 +1057,14 @@ async function ClearVouchers(req, res, next) {
           `,
               [querydata.paidamount, querydata.invoicenumber]
             );
+            if (!Array.isArray(paymentdetails)) {
+              paymentdetails = [paymentdetails];
+            } else {
+              paymentdetails = paymentdetails;
+            }
             if (querydata.tdsstatus == true) {
               const [sql4] = await db.spcall(
-                `CALL upsert_tdsledger(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                `CALL upsert_tdsledger(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
                 [
                   querydata.voucherid,
                   querydata.vouchernumber,
@@ -1073,20 +1078,21 @@ async function ClearVouchers(req, res, next) {
                   querydata.gstnumber,
                   "receivable",
                   description,
-                  JSON.stringify(paymentdetails),
+                  JSON.stringify(paymentdetails) || [],
                   JSON.stringify({
                     gst: { IGST: IGST, SGST: SGST, CGST: CGST },
                     tds: tdsamount || 0,
                     total: totalamount || 0,
                     subtotal: subtotal || 0,
                   }),
+                  querydata.invoicenumber,
                 ]
               );
             }
           } else if (querydata.invoicetype == "vendor") {
           }
           const [sql5] = await db.spcall(
-            `CALL upsert_gstledger(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            `CALL upsert_gstledger(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
             [
               querydata.voucherid,
               querydata.vouchernumber,
@@ -1099,13 +1105,14 @@ async function ClearVouchers(req, res, next) {
               querydata.gstnumber,
               "output",
               description,
-              JSON.stringify(paymentdetails),
+              JSON.stringify(paymentdetails) || [],
               JSON.stringify({
                 gst: { IGST: IGST, SGST: SGST, CGST: CGST },
                 tds: tdsamount || 0,
                 total: totalamount || 0,
                 subtotal: subtotal || 0,
               }),
+              querydata.invoicenumber,
             ]
           );
         } else {
@@ -1181,17 +1188,20 @@ async function ClearVouchers(req, res, next) {
     } catch (er) {
       console.log(er);
     }
-    await mqttclient.publishMqttMessage(
-      "refresh",
-      "Voucher Cleared Successfully"
-    );
-    return helper.getSuccessResponse(
-      true,
-      "success",
-      "Voucher Cleared Successfully",
-      querydata.vouchernumber,
-      secret
-    );
+    try {
+      await mqttclient.publishMqttMessage(
+        "refresh",
+        "Voucher Cleared Successfully"
+      );
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Voucher Cleared Successfully",
+        querydata.vouchernumber,
+        secret
+      );
+    } finally {
+    }
   } catch (er) {
     return helper.getErrorResponse(
       false,
@@ -2001,7 +2011,7 @@ async function TDSLedger(billing) {
       sqlParams = [];
     // Check if querystring is provided
     if (!billing.hasOwnProperty("querystring")) {
-      sql = `SELECT tdsledger_id,voucher_id,voucher_number,client_name,IGST,CGST,SGST,totalamount,subtotal,tdsamount,gst_number,tds_type,Row_updated_date,tds_filed,payment_details,description,bill_details FROM tdsledger where status =1`;
+      sql = `SELECT tdsledger_id,voucher_id,voucher_number,client_name,IGST,CGST,SGST,totalamount,subtotal,tdsamount,gst_number,tds_type,Row_updated_date,tds_filed,payment_details,description,bill_details,invoice_number FROM tdsledger where status =1`;
     }
 
     // Decrypt querystring
@@ -2030,7 +2040,7 @@ async function TDSLedger(billing) {
       );
     }
 
-    sql = `SELECT tdsledger_id, voucher_id ,voucher_number ,client_name, IGST, CGST, SGST, totalamount,subtotal,tdsamount,gst_number,tds_type,Row_updated_date,tds_filed,payment_details,description,bill_details FROM tdsledger where status = 1`;
+    sql = `SELECT tdsledger_id, voucher_id ,voucher_number ,client_name, IGST, CGST, SGST, totalamount,subtotal,tdsamount,gst_number,tds_type,Row_updated_date,tds_filed,payment_details,description,bill_details,invoice_number FROM tdsledger where status = 1`;
 
     if (
       querydata.tdstype != null &&
@@ -2218,8 +2228,7 @@ async function GSTLedger(billing) {
       sqlParams = [];
     // Check if querystring is provided
     if (!billing.hasOwnProperty("querystring")) {
-      sql = `SELECT gstledger_id,voucher_id,voucher_number,client_name,IGST,CGST,SGST,gst_number,(IGST+CGST+SGST) totalgst,gst_type,DATE(Row_updated_date) date,gst_filed,totalamount,subtotal,payment_details,description,bill_details
-       FROM gstledger where status = 1`;
+      sql = `SELECT gstledger_id,voucher_id,voucher_number,client_name,IGST,CGST,SGST,gst_number,(IGST+CGST+SGST) totalgst,gst_type,DATE(Row_updated_date) date,gst_filed,totalamount,subtotal,payment_details,description,bill_details,invoice_number FROM gstledger where status = 1`;
     }
 
     // Decrypt querystring
@@ -2248,7 +2257,7 @@ async function GSTLedger(billing) {
       );
     }
 
-    sql = `SELECT gstledger_id,voucher_id,voucher_number,client_name,IGST,CGST,SGST,gst_number,(IGST+CGST+SGST) totalgst,gst_type,DATE(Row_updated_date) date,gst_filed,totalamount,subtotal,payment_details,description,bill_details FROM gstledger where status = 1`;
+    sql = `SELECT gstledger_id,voucher_id,voucher_number,client_name,IGST,CGST,SGST,gst_number,(IGST+CGST+SGST) totalgst,gst_type,DATE(Row_updated_date) date,gst_filed,totalamount,subtotal,payment_details,description,bill_details,invoice_number FROM gstledger where status = 1`;
     query1 = `select SUM(IGST) IGST,SUM(CGST) CGST,SUM(SGST) SGST FROM gstledger WHERE status = 1 and gst_type = 'input'`;
     query2 = `select SUM(IGST) IGST,SUM(CGST) CGST,SUM(SGST) SGST FROM gstledger WHERE status = 1 and gst_type = 'output'`;
     if (
