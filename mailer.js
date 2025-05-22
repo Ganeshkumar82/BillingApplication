@@ -714,6 +714,77 @@ async function sendQuotation(
   }
 }
 
+async function sendDueActionEmail(
+  recipientName,
+  recipientEmail,
+  subject,
+  moduleTag,        // <-- Pass 'DUE' or 'OVERDUE'
+  invoiceNumber,
+  dueDate,
+  totalAmount,
+  paidAmount,
+  pendingAmount
+) {
+  try {
+    // Fetch mail server settings using the module tag
+    const settingValue = await helper.getServerSetting(moduleTag);
+    const SettingValue = JSON.parse(JSON.parse(JSON.stringify(settingValue)).SettingValue);
+
+    const transporter = nodemailer.createTransport({
+      host: SettingValue.host,
+      port: SettingValue.Port,
+      secure: true,
+      auth: {
+        user: SettingValue.Email,
+        pass: SettingValue.password,
+      },
+      debug: true,
+    });
+
+    const handlebarOptions = {
+      viewEngine: {
+        partialsDir: path.resolve("./views/"),
+        defaultLayout: false,
+      },
+      viewPath: path.resolve("./views/"),
+    };
+
+    transporter.use("compile", hbs(handlebarOptions));
+
+    const mailOptions = {
+      from: `"${SettingValue.FromName}" <${SettingValue.Email}>`,
+      to: recipientEmail,
+      subject: subject,
+      template: SettingValue.Template.replace('.html', ''), // remove .html if needed
+      context: {
+        name: recipientName,
+        product: invoiceNumber,
+        productfeatures: [
+          { label: "Total Amount", value: totalAmount },
+          { label: "Paid Amount", value: paidAmount },
+          { label: "Pending Amount", value: pendingAmount },
+          { label: "Due Date", value: dueDate },
+        ],
+      },
+    };
+
+    return new Promise((resolve, reject) => {
+      transporter.sendMail(mailOptions, function (error, info) {
+        if (error) {
+          console.error("Error sending due action email:", error);
+          resolve(false);
+        } else {
+          console.log("Due action message sent: " + info.response);
+          resolve(true);
+        }
+      });
+    });
+  } catch (er) {
+    console.log(`error sending due action mail -> ${er}`);
+    return false;
+  }
+}
+
 module.exports = {
   sendPDF,
   sendEmail,
@@ -721,4 +792,5 @@ module.exports = {
   sendInvoice,
   sendRecurredInvoice,
   sendQuotation,
+  sendDueActionEmail,
 };
