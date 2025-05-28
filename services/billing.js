@@ -703,7 +703,7 @@ async function getVouchers(billing) {
     ) {
       if (querydata.paymentstatus == "partial") {
         sql += ` and partially_cleared = 1 AND fully_cleared = 0`;
-      } else if (querydata.paymentstatus == "complete") {
+      } else if (querydata.paymentstatus == "paid") {
         sql += ` and partially_cleared = 0 AND fully_cleared = 1`;
       } else if (querydata.paymentstatus == "unpaid") {
         sql += ` and partially_cleared = 0 AND fully_cleared = 0`;
@@ -3117,67 +3117,6 @@ async function getDashboard(billing) {
       );
     }
 
-    // Check if querystring is provided
-    if (!billing.querystring) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Querystring missing. Please provide the querystring",
-        "GET DASHBOARD DETAILS",
-        secret
-      );
-    }
-
-    // Decrypt querystring
-    let querydata;
-    try {
-      querydata = await helper.decrypt(billing.querystring, secret);
-    } catch (ex) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Querystring Invalid error. Please provide the valid querystring.",
-        "GET DASHBOARD DETAILS",
-        secret
-      );
-    }
-
-    // Parse the decrypted querystring
-    try {
-      querydata = JSON.parse(querydata);
-    } catch (ex) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Querystring JSON error. Please provide valid JSON",
-        "GET DASHBOARD DETAILS",
-        secret
-      );
-    }
-
-    // Validate required fields
-    const requiredFields = [
-      { field: "voucherid", message: "Voucher id missing." },
-      { field: "date", message: "Date missing." },
-      { field: "feedback", message: "Feedback missing." },
-    ];
-    for (const { field, message } of requiredFields) {
-      if (!querydata.hasOwnProperty(field)) {
-        return helper.getErrorResponse(
-          false,
-          "error",
-          message,
-          "GET DASHBOARD DETAILS",
-          secret
-        );
-      }
-    }
-
-    const overdueEntry = {
-      date: formatDate(querydata.date),
-      feedback: querydata.feedback,
-    };
-
     // Append overdueEntry to Overdue_days JSON array
     const sql = await db.query(
       `UPDATE clientvouchermaster
@@ -3186,11 +3125,7 @@ async function getDashboard(billing) {
       [JSON.stringify(overdueEntry), querydata.voucherid]
     );
 
-    if (sql.affectedRows > 0) {
-      await mqttclient.publishMqttMessage(
-        "refresh",
-        "Overdue details updated successfully"
-      );
+    if (sql.length > 0) {
       return helper.getSuccessResponse(
         true,
         "success",
