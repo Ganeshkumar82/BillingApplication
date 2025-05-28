@@ -64,7 +64,8 @@ async function getSubscriptionInvoice(billing) {
     if (!billing.querystring) {
       sql = await db.query(
         `select sbg.subscription_generatedid recurredbillid,sbm.subscription_billid,sbm.site_Ids,sbm.client_addressname,sbm.client_address,sbm.billing_addressname,sbm.billing_address
-        ,sbg.pdf_path pdf_data,sbg.Invoice_no,sbg.TotalAmount,sbm.email_id,sbg.phone_no,sbg.ccemail,sbm.bill_date date,sbm.customer_GST gstnumber,sbm.Due_date,sbm.hsn_code,sbm.plantype,sbm.billmode,sbg.payment_status,sbm.pendingPayments,sbm.plan_name,cvm.voucher_id,CASE WHEN CURDATE() > sbm.Due_date THEN DATEDIFF(CURDATE(), sbm.Due_date) ELSE 0 END AS overdue_days,CASE WHEN CURDATE() > sbm.Due_date THEN 1 ELSE 0 END AS is_overdue from subscriptionbillmaster sbm JOIN subscriptionbillgenerated sbg ON sbm.subscription_billid = sbg.subscription_billid JOIN clientvouchermaster cvm ON cvm.invoice_number = sbg.Invoice_no where sbm.Email_sent = 1 and sbm.status = 1`
+        ,sbg.pdf_path pdf_data,sbg.Invoice_no,sbg.TotalAmount,sbm.email_id,sbg.phone_no,sbg.ccemail,sbm.bill_date date,sbm.customer_GST gstnumber,DATE_FORMAT(cvm.Due_date, '%Y-%m-%d %H:%i:%s') AS Due_date,sbm.hsn_code,sbm.plantype,sbm.billmode,sbg.payment_status,sbm.pendingPayments,sbm.plan_name,cvm.voucher_id,cvm.voucher_number,CASE WHEN cvm.fully_cleared = 1 THEN NULL WHEN cvm.Due_date IS NULL OR DATEDIFF(CURDATE(), cvm.Due_date) <= 0 THEN 0 ELSE DATEDIFF(CURDATE(), cvm.Due_date) END AS Overdue_days
+        , cvm.Overdue_days as Overdue_history from subscriptionbillmaster sbm JOIN subscriptionbillgenerated sbg ON sbm.subscription_billid = sbg.subscription_billid JOIN clientvouchermaster cvm ON cvm.invoice_number = sbg.Invoice_no where sbm.Email_sent = 1 and sbm.status = 1`
       );
     } else {
       // Decrypt querystring
@@ -94,7 +95,8 @@ async function getSubscriptionInvoice(billing) {
       }
       var sqlParams = [];
       let query = `select sbg.subscription_generatedid recurredbillid,sbm.subscription_billid,sbm.site_Ids,sbm.client_addressname,sbm.client_address,sbm.billing_addressname,sbm.billing_address
-    ,sbg.pdf_path pdf_data,sbg.Invoice_no,sbg.TotalAmount,sbm.email_id,sbg.phone_no,sbg.ccemail,sbm.bill_date date,sbm.customer_GST gstnumber,sbm.Due_date,sbm.hsn_code,sbm.plantype,sbm.billmode,sbg.payment_status,sbm.pendingPayments,sbm.plan_name,cvm.voucher_id,cvm.voucher_number,CASE WHEN CURDATE() > sbm.Due_date THEN DATEDIFF(CURDATE(), sbm.Due_date) ELSE 0 END AS overdue_days,CASE WHEN CURDATE() > sbm.Due_date THEN 1 ELSE 0 END AS is_overdue from subscriptionbillmaster sbm
+    ,sbg.pdf_path pdf_data,sbg.Invoice_no,sbg.TotalAmount,sbm.email_id,sbg.phone_no,sbg.ccemail,sbm.bill_date date,sbm.customer_GST gstnumber,DATE_FORMAT(cvm.Due_date, '%Y-%m-%d %H:%i:%s') AS Due_date,sbm.hsn_code,sbm.plantype,sbm.billmode,sbg.payment_status,sbm.pendingPayments,sbm.plan_name,cvm.voucher_id,cvm.voucher_number,CASE WHEN cvm.fully_cleared = 1 THEN NULL WHEN cvm.Due_date IS NULL OR DATEDIFF(CURDATE(), cvm.Due_date) <= 0 THEN 0 ELSE DATEDIFF(CURDATE(), cvm.Due_date) END AS Overdue_days
+    , cvm.Overdue_days as Overdue_history from subscriptionbillmaster sbm
     JOIN subscriptionbillgenerated sbg ON sbm.subscription_billid = sbg.subscription_billid JOIN clientvouchermaster cvm ON cvm.invoice_number = sbg.Invoice_no where sbm.Email_sent = 1 and sbm.status = 1`;
       if (
         querydata.customerid != 0 &&
@@ -218,7 +220,8 @@ async function getSalesInvoice(billing) {
     if (!billing.querystring) {
       sql = await db.query(
         `select spl.cprocess_id event_id,spl.cprocess_gene_id invoicenumber,spl.custsales_name client_addressname, spl.client_address, spl.billingaddress_name billing_addressname,spl.billing_address,spl.gst_number gstnumber,spl.email_id,
-        spl.phone_number phone_no, spl.ccemail, spl.invoice_amount, spl.processid,spl.salesprocess_date date,cvm.voucher_id,cvm.voucher_number from
+        spl.phone_number phone_no, spl.ccemail, spl.invoice_amount, spl.processid,DATE_FORMAT(spl.salesprocess_date, '%Y-%m-%d %H:%i:%s') AS date,cvm.voucher_id,cvm.voucher_number,CASE WHEN cvm.Due_date IS NULL OR DATEDIFF(CURDATE(), cvm.Due_date) <= 0 THEN 0 ELSE DATEDIFF(CURDATE(), cvm.Due_date) END AS Overdue_days
+        , cvm.Overdue_days as Overdue_history,cvm.Due_date,spl.payment_status,spl.paid_amount from
         salesprocesslist spl JOIN clientvouchermaster cvm ON cvm.invoice_number = spl.cprocess_gene_id where spl.process_type = 4 and spl.status = 1;`
       );
     } else {
@@ -249,7 +252,8 @@ async function getSalesInvoice(billing) {
       }
       var sqlParams = [];
       let query = `select spl.cprocess_id event_id,spl.cprocess_gene_id invoicenumber,spl.custsales_name client_addressname, spl.client_address, spl.billingaddress_name billing_addressname,spl.billing_address,spl.gst_number gstnumber,spl.email_id,
-      spl.phone_number phone_no, spl.ccemail, spl.invoice_amount, spl.processid,spl.salesprocess_date date,cvm.voucher_id from
+      spl.phone_number phone_no, spl.ccemail, spl.invoice_amount, spl.processid,spl.salesprocess_date date,cvm.voucher_id,cvm.voucher_number,CASE WHEN cvm.Due_date IS NULL OR DATEDIFF(CURDATE(), cvm.Due_date) <= 0 THEN 0 ELSE DATEDIFF(CURDATE(), cvm.Due_date) END AS Overdue_days
+      , cvm.Overdue_days as Overdue_history,cvm.Due_date from
       salesprocesslist spl JOIN clientvouchermaster cvm ON cvm.invoice_number = spl.cprocess_gene_id where spl.process_type = 4 and spl.status = 1`;
 
       if (
@@ -645,7 +649,8 @@ async function getVouchers(billing) {
     // Check if querystring is provided
     if (!billing.hasOwnProperty("querystring")) {
       sql = `SELECT voucher_id,invoice_number,voucher_type,email_id,phone_number,client_name,client_address, pending_amount,fully_cleared,partially_cleared,gstnumber,Total_amount,sub_total,
-      IGST,CGST,SGST,voucher_number,invoice_type,customer_id,CASE WHEN invoice_type IN ('sales', 'subscription') THEN 1 WHEN SUM(Total_amount) OVER (PARTITION BY customer_id, invoice_type) >= 100000 THEN 1 ELSE 0 END AS tds_calculation,ROUND(sub_total * 0.02, 2) AS tdscalculation_amount, payment_details, Description,DATE(Row_updated_date) as date FROM clientvouchermaster WHERE status = 1`;
+      IGST,CGST,SGST,voucher_number,invoice_type,customer_id,CASE WHEN invoice_type IN ('sales', 'subscription') THEN 1 WHEN SUM(Total_amount) OVER (PARTITION BY customer_id, invoice_type) >= 100000 THEN 1 ELSE 0 END AS tds_calculation,ROUND(sub_total * 0.02, 2) AS tdscalculation_amount, payment_details, Description, DATE_FORMAT(DATE(Row_updated_date), '%Y-%m-%d %H:%i:%s') AS date, DATE_FORMAT(DATE(Due_date), '%Y-%m-%d %H:%i:%s') AS Due_date,CASE WHEN fully_cleared = 1 THEN NULL WHEN Due_date IS NULL OR DATEDIFF(CURDATE(), Due_date) <= 0 THEN 0 ELSE DATEDIFF(CURDATE(), Due_date) END AS Overdue_days
+, Overdue_days as Overdue_history FROM clientvouchermaster WHERE status = 1`;
     }
 
     // Decrypt querystring
@@ -675,7 +680,8 @@ async function getVouchers(billing) {
     }
 
     sql = `SELECT voucher_id,invoice_number,voucher_type,email_id,phone_number,client_name,client_address, pending_amount,fully_cleared,partially_cleared,gstnumber,Total_amount,sub_total,
-    IGST,CGST,SGST,voucher_number,invoice_type,customer_id,CASE WHEN invoice_type IN ('sales', 'subscription') THEN 1 WHEN SUM(Total_amount) OVER (PARTITION BY customer_id, invoice_type) >= 100000 THEN 1 ELSE 0 END AS tds_calculation,ROUND(sub_total * 0.02, 2) AS tdscalculation_amount, payment_details,Description, DATE(Row_updated_date) as date FROM clientvouchermaster WHERE status = 1`;
+    IGST,CGST,SGST,voucher_number,invoice_type,customer_id,CASE WHEN invoice_type IN ('sales', 'subscription') THEN 1 WHEN SUM(Total_amount) OVER (PARTITION BY customer_id, invoice_type) >= 100000 THEN 1 ELSE 0 END AS tds_calculation,ROUND(sub_total * 0.02, 2) AS tdscalculation_amount, payment_details, Description, DATE_FORMAT(DATE(Row_updated_date), '%Y-%m-%d %H:%i:%s') AS date, DATE_FORMAT(DATE(Due_date), '%Y-%m-%d %H:%i:%s') AS Due_date,CASE WHEN fully_cleared = 1 THEN NULL WHEN Due_date IS NULL OR DATEDIFF(CURDATE(), Due_date) <= 0 THEN 0 ELSE DATEDIFF(CURDATE(), Due_date) END AS Overdue_days
+, Overdue_days as Overdue_history FROM clientvouchermaster WHERE status = 1`;
 
     if (
       querydata.vouchertype != null &&
@@ -696,11 +702,11 @@ async function getVouchers(billing) {
       querydata.paymentstatus != undefined
     ) {
       if (querydata.paymentstatus == "partial") {
-        sql += ` and voucher_type LIKE '%payment%'`;
+        sql += ` and partially_cleared = 1 AND fully_cleared = 0`;
       } else if (querydata.paymentstatus == "complete") {
-        sql += ` and voucher_type LIKE '%receipt%'`;
-      } else {
-        sql += ` and voucher_type LIKE '%consolidate%'`;
+        sql += ` and partially_cleared = 0 AND fully_cleared = 1`;
+      } else if (querydata.paymentstatus == "unpaid") {
+        sql += ` and partially_cleared = 0 AND fully_cleared = 0`;
       }
     }
     if (
@@ -732,8 +738,13 @@ async function getVouchers(billing) {
       querydata.enddate != 0 &&
       querydata.enddate != undefined
     ) {
-      sql += ` and DATE(Row_updated_date) BETWEEN ? and ?`;
-      sqlParams.push(querydata.startdate, querydata.enddate);
+      if (querydata.startdate == querydata.enddate) {
+        sql += ` and DATE(Row_updated_date) = ?`;
+        sqlParams.push(querydata.enddate);
+      } else {
+        sql += ` and DATE(Row_updated_date) BETWEEN ? and ?`;
+        sqlParams.push(querydata.startdate, querydata.enddate);
+      }
     }
 
     console.log(sql);
@@ -897,6 +908,7 @@ async function ClearVouchers(req, res, next) {
       { field: "gstnumber", message: "GST number missing." },
       { field: "feedback", message: "Feedback type missing." },
       { field: "transactiondetails", message: "Transaction details missing." },
+      { field: "paymentmode", message: "Payment mode missing." },
     ];
 
     for (const { field, message } of requiredFields) {
@@ -926,7 +938,7 @@ async function ClearVouchers(req, res, next) {
         path = req.file.path;
       }
       const [sql50] = await db.spcall(
-        `CALL InsertVoucherTransaction(?, ?, ?, ?, ?, ?, ?,@transaction_id);select @transaction_id;`,
+        `CALL InsertVoucherTransaction(?, ?, ?, ?, ?, ?, ?,?,@transaction_id);select @transaction_id;`,
         [
           querydata.voucherid,
           querydata.vouchernumber,
@@ -935,6 +947,7 @@ async function ClearVouchers(req, res, next) {
           path || null,
           querydata.paymentstatus,
           querydata.tdsstatus,
+          querydata.paymentmode,
         ]
       );
       const objectvalue = sql50[1][0];
@@ -965,7 +978,7 @@ async function ClearVouchers(req, res, next) {
         }
         const sql = await db.query(
           `UPDATE clientvouchermaster SET  partially_cleared = 1, Pending_amount = Pending_amount - ?, paid_amount = paid_amount + ? ,payment_details = JSON_ARRAY_APPEND( IFNULL(payment_details, JSON_ARRAY()), '$', 
-           JSON_OBJECT('date', NOW(), 'amount', ?, 'transanctiondetails',?,'feedback',?,'transactionid',?)),cleared_date = ? WHERE voucher_id = ? and fully_cleared != 1 and total_amount > ? and pending_amount > 0`,
+           JSON_OBJECT('date', NOW(), 'amount', ?, 'transanctiondetails',?,'feedback',?,'transactionid',?,'paymentmode',?)),cleared_date = ? WHERE voucher_id = ? and fully_cleared != 1 and total_amount > ? and pending_amount > 0`,
           [
             querydata.paidamount,
             querydata.paidamount,
@@ -973,7 +986,8 @@ async function ClearVouchers(req, res, next) {
             querydata.transactiondetails,
             querydata.feedback,
             transactionid,
-            querydata.date,
+            querydata.paymentmode,
+            formatDate(querydata.date),
             querydata.voucherid,
             querydata.paidamount,
           ]
@@ -1022,7 +1036,8 @@ async function ClearVouchers(req, res, next) {
                  'amount', ?, 
                  'transanctiondetails', ?,
                  'transactionid',?,
-                 'feedback',? )),cleared_date = ? WHERE voucher_id = ? AND ROUND(Total_amount) = ROUND(paid_amount + ? + ?)`,
+                 'feedback',?,
+                 'paymentmode',? )),cleared_date = ? WHERE voucher_id = ? AND ROUND(Total_amount) = ROUND(paid_amount + ? + ?)`,
           [
             querydata.paidamount,
             querydata.date,
@@ -1030,7 +1045,8 @@ async function ClearVouchers(req, res, next) {
             querydata.transactiondetails,
             transactionid,
             querydata.feedback,
-            querydata.date,
+            querydata.paymentmode,
+            formatDate(querydata.date),
             querydata.voucherid,
             querydata.paidamount,
             tdsamount,
@@ -1078,7 +1094,7 @@ async function ClearVouchers(req, res, next) {
                   querydata.gstnumber,
                   "receivable",
                   description,
-                  JSON.stringify(paymentdetails) || [],
+                  JSON.stringify(paymentdetails),
                   JSON.stringify({
                     gst: { IGST: IGST, SGST: SGST, CGST: CGST },
                     tds: tdsamount || 0,
@@ -1105,7 +1121,7 @@ async function ClearVouchers(req, res, next) {
               querydata.gstnumber,
               "output",
               description,
-              JSON.stringify(paymentdetails) || [],
+              JSON.stringify(paymentdetails),
               JSON.stringify({
                 gst: { IGST: IGST, SGST: SGST, CGST: CGST },
                 tds: tdsamount || 0,
@@ -1166,8 +1182,9 @@ async function ClearVouchers(req, res, next) {
           JSON.stringify({
             amount: querydata.paidamount,
             transactiondetails: querydata.transactiondetails,
-            date: querydata.date,
+            date: formatDate(querydata.date),
             feedback: querydata.feedback,
+            paymentmode: querydata.paymentmode,
             tdsamount: tdsamount,
           }),
           querydata.gstnumber,
@@ -1317,6 +1334,7 @@ async function ClearConsolidateVouchers(req, res, next) {
       { field: "transactiondetails", message: "Transaction details missing." },
       { field: "voucherlist", message: "Voucher list missing." },
       { field: "paymentstatus", message: "Payment status missing." },
+      { field: "paymentmode", message: "Payment mode missing." },
     ];
     for (const { field, message } of requiredFields1) {
       if (!querydata1.hasOwnProperty(field)) {
@@ -1340,7 +1358,7 @@ async function ClearConsolidateVouchers(req, res, next) {
         path = req.file.path;
       }
       const [sql50] = await db.spcall(
-        `CALL InsertVoucherTransaction(?, ?, ?, ?, ?, ?, ?,@transaction_id);select @transaction_id;`,
+        `CALL InsertVoucherTransaction(?, ?, ?, ?, ?, ?, ?,?,@transaction_id);select @transaction_id;`,
         [
           JSON.stringify(querydata1.voucherids),
           JSON.stringify(querydata1.vouchernumbers),
@@ -1349,6 +1367,7 @@ async function ClearConsolidateVouchers(req, res, next) {
           path || null,
           `complete`,
           querydata1.tdsstatus,
+          querydata1.paymentmode,
         ]
       );
       const objectvalue = sql50[1][0];
@@ -1425,15 +1444,17 @@ async function ClearConsolidateVouchers(req, res, next) {
                  'amount', ?, 
                  'transanctiondetails', ?,
                  'transactionid',?,
-                 'feedback',? )),cleared_date = ? WHERE voucher_id = ? AND ROUND(Total_amount) = ROUND(paid_amount + ? + ?)`,
+                 'feedback',?,
+                 'paymentmode',? )),cleared_date = ? WHERE voucher_id = ? AND ROUND(Total_amount) = ROUND(paid_amount + ? + ?)`,
             [
               querydata.paidamount,
-              querydata1.date,
+              formatDate(querydata1.date),
               querydata.paidamount,
               querydata1.transactiondetails,
               transactionid,
               querydata1.feedback,
-              querydata1.date,
+              querydata.paymentmode,
+              formatDate(querydata1.date),
               querydata.voucherid,
               querydata.paidamount,
               tdsamount,
@@ -1462,7 +1483,7 @@ async function ClearConsolidateVouchers(req, res, next) {
               );
               if (querydata.tdsstatus == true) {
                 const [sql4] = await db.spcall(
-                  `CALL upsert_tdsledger(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                  `CALL upsert_tdsledger(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
                   [
                     querydata.voucherid,
                     querydata.vouchernumber,
@@ -1483,13 +1504,14 @@ async function ClearConsolidateVouchers(req, res, next) {
                       total: totalamount || 0,
                       subtotal: subtotal || 0,
                     }),
+                    querydata.invoicenumber,
                   ]
                 );
               }
             } else if (querydata.invoicetype == "vendor") {
             }
             const [sql5] = await db.spcall(
-              `CALL upsert_gstledger(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+              `CALL upsert_gstledger(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
               [
                 querydata.voucherid,
                 querydata.vouchernumber,
@@ -1509,6 +1531,7 @@ async function ClearConsolidateVouchers(req, res, next) {
                   total: totalamount || 0,
                   subtotal: subtotal || 0,
                 }),
+                querydata.invoicenumber,
               ]
             );
           } else {
@@ -1562,8 +1585,9 @@ async function ClearConsolidateVouchers(req, res, next) {
             JSON.stringify({
               amount: querydata.paidamount,
               transactiondetails: querydata1.transactiondetails,
-              date: querydata1.date,
+              date: formatDate(querydata1.date),
               feedback: querydata1.feedback,
+              paymentmode: querydata1.paymentmode,
               tdsamount: tdsamount,
             }),
             querydata.gstnumber,
@@ -1653,11 +1677,12 @@ async function accountLedger(billing) {
         secret
       );
     }
-    var sql,
-      sqlParams = [];
+    var sql, formattedStartDate, formattedEndDate;
+    sqlParams = [];
     // Check if querystring is provided
     if (!billing.hasOwnProperty("querystring")) {
-      sql = `SELECT clientledger_id,voucher_id,voucher_number,client_name,tdsamount,gst_number,invoicenumber,ledger_type,DATE(Row_updated_date) date,debitamount, creditamount,billdetails,description, partially_cleared,Payment_details FROM clientledger where status =1 and voucher_id IN (select voucher_id from clientvouchermaster where invoice_type like '%sales%' or invoice_type like '%subscription%')`;
+      sql = `SELECT cl.clientledger_id,cl.voucher_id,cl.voucher_number,cl.client_name,cl.tdsamount,cl.gst_number,cl.invoicenumber,cl.ledger_type,DATE(cl.Row_updated_date) date,cl.debitamount, cl.creditamount,cl.billdetails,cl.description, cl.partially_cleared,cl.Payment_details,CASE WHEN cvm.Due_date IS NULL OR DATEDIFF(CURDATE(), cvm.Due_date) <= 0 THEN 0 ELSE DATEDIFF(CURDATE(), cvm.Due_date) END AS Overdue_days
+      , cvm.Overdue_days as Overdue_history,cvm.invoice_type FROM clientledger cl JOIN clientvouchermaster cvm ON cvm.voucher_id = cl.voucher_id where cl.status =1`;
     }
     try {
       querydata = await helper.decrypt(billing.querystring, secret);
@@ -1684,7 +1709,8 @@ async function accountLedger(billing) {
       );
     }
 
-    sql = `SELECT clientledger_id,voucher_id,voucher_number,client_name,tdsamount,gst_number,invoicenumber,ledger_type,DATE(Row_updated_date) date,debitamount, creditamount,billdetails,description, partially_cleared,Payment_details FROM clientledger where status =1`;
+    sql = `SELECT cl.clientledger_id,cl.voucher_id,cl.voucher_number,cl.client_name,cl.tdsamount,cl.gst_number,cl.invoicenumber,cl.ledger_type,DATE(cl.Row_updated_date) date,cl.debitamount, cl.creditamount,cl.billdetails,cl.description, cl.partially_cleared,cl.Payment_details,CASE WHEN cvm.Due_date IS NULL OR DATEDIFF(CURDATE(), cvm.Due_date) <= 0 THEN 0 ELSE DATEDIFF(CURDATE(), cvm.Due_date) END AS Overdue_days
+    , cvm.Overdue_days as Overdue_history,cvm.invoice_type FROM clientledger cl JOIN clientvouchermaster cvm ON cvm.voucher_id = cl.voucher_id where cl.status =1`;
 
     if (
       querydata.ledgertype != null &&
@@ -1692,9 +1718,9 @@ async function accountLedger(billing) {
       querydata.ledgertype != undefined
     ) {
       if (querydata.ledgertype == "receivable") {
-        sql += ` and ledger_type LIKE '%receivable%'`;
+        sql += ` and cl.ledger_type LIKE '%receivable%'`;
       } else if (querydata.ledgertype == "payable") {
-        sql += ` and ledger_type LIKE '%payable%'`;
+        sql += ` and cl.ledger_type LIKE '%payable%'`;
       }
     }
     if (
@@ -1703,9 +1729,9 @@ async function accountLedger(billing) {
       querydata.paymenttype != undefined
     ) {
       if (querydata.paymenttype == "credit") {
-        sql += ` and creditamount != 0`;
+        sql += ` and cl.creditamount != 0`;
       } else if (querydata.paymenttype == "debit") {
-        sql += ` and debitamount != 0`;
+        sql += ` and cl.debitamount != 0`;
       }
     }
     if (
@@ -1714,11 +1740,11 @@ async function accountLedger(billing) {
       querydata.invoicetype != undefined
     ) {
       if (querydata.invoicetype == "sales") {
-        sql += ` and voucher_id IN (select voucher_id from clientvouchermaster where invoice_type like '%sales%')`;
+        sql += ` and cvm.invoice_type like '%sales%'`;
       } else if (querydata.invoicetype == "subscription") {
-        sql += ` and voucher_id IN (select voucher_id from clientvouchermaster where invoice_type like '%subscription%')`;
+        sql += ` and cvm.invoice_type like '%subscription%'`;
       } else if (querydata.invoicetype == "vendor") {
-        sql += ` and voucher_id IN (select voucher_id from clientvouchermaster where invoice_type like '%vendor%')`;
+        sql += ` and cvm.invoice_type like '%vendor%'`;
       }
     }
     if (
@@ -1726,7 +1752,7 @@ async function accountLedger(billing) {
       querydata.customerid != 0 &&
       querydata.customerid != undefined
     ) {
-      sql += ` and voucher_id IN (select voucher_id from clientvouchermaster where customer_id = ?)`;
+      sql += ` and cvm.customer_id = ?`;
       sqlParams.push(querydata.customerid);
     }
     if (
@@ -1737,8 +1763,28 @@ async function accountLedger(billing) {
       querydata.enddate != 0 &&
       querydata.enddate != undefined
     ) {
-      sql += ` and DATE(Row_updated_date) BETWEEN ? and ?`;
-      sqlParams.push(querydata.startdate, querydata.enddate);
+      formattedStartDate = querydata.startdate;
+      formattedEndDate = querydata.enddate;
+      if (querydata.startdate == querydata.enddate) {
+        sql += ` and DATE(cl.Row_updated_date) = ?`;
+        sqlParams.push(querydata.enddate);
+      } else {
+        sql += ` and DATE(cl.Row_updated_date) BETWEEN ? and ?`;
+        sqlParams.push(querydata.startdate, querydata.enddate);
+      }
+    } else {
+      const now = new Date();
+      const startDate = new Date(now);
+      startDate.setDate(now.getDate() - 100); // Subtract 100 days
+      startDate.setHours(0, 0, 0, 0); // Set to the start of the day
+      const endDate = new Date(now);
+      endDate.setHours(23, 59, 59, 999); // Set to the end of the current day
+      const formatDate = (date) => date.toISOString().split("T")[0]; // Format as 'YYYY-MM-DD'
+      formattedStartDate = formatDate(startDate);
+      formattedEndDate = formatDate(endDate);
+
+      sql += ` and DATE(cl.Row_updated_date) BETWEEN ? and ?`;
+      sqlParams.push(formattedStartDate, formattedEndDate);
     }
 
     console.log(sql);
@@ -1769,6 +1815,8 @@ async function accountLedger(billing) {
           creditAmount: creditAmount,
           debitAmount: debitAmount,
           balanceAmount: netAmount,
+          startdate: formattedStartDate,
+          enddate: formattedEndDate,
         },
         secret
       );
@@ -1978,7 +2026,7 @@ async function TDSLedger(billing) {
       );
     }
     var secret = billing.STOKEN.substring(0, 16);
-    var querydata;
+    var querydata, formattedStartDate, formattedEndDate;
     // Validate session token length
     if (billing.STOKEN.length > 50 || billing.STOKEN.length < 30) {
       return helper.getErrorResponse(
@@ -2011,7 +2059,8 @@ async function TDSLedger(billing) {
       sqlParams = [];
     // Check if querystring is provided
     if (!billing.hasOwnProperty("querystring")) {
-      sql = `SELECT tdsledger_id, voucher_id, voucher_number, client_name, IGST, CGST, SGST, totalamount, subtotal, tdsamount, gst_number, tds_type, Row_updated_date, tds_filed, payment_details, description, bill_details, CASE WHEN tds_type = 'Receivable' THEN tdsamount ELSE 0 END AS creditAmount, CASE WHEN tds_type = 'Payable' THEN tdsamount ELSE 0 END AS debitAmount FROM tdsledger WHERE status = 1`;
+      sql = `SELECT tl.tdsledger_id, tl.voucher_id, tl.voucher_number, tl.client_name, tl.IGST, tl.CGST, tl.SGST, tl.totalamount, tl.subtotal, tl.tdsamount, tl.gst_number, tl.tds_type, DATE_FORMAT(DATE(tl.Row_updated_date), '%Y-%m-%d %H:%i:%s') AS date, tl.tds_filed, tl.payment_details, tl.description, tl.bill_details,cvm.invoice_number,CASE WHEN tl.tds_type = 'Receivable' THEN tl.tdsamount ELSE 0 END AS creditAmount, CASE WHEN tl.tds_type = 'Payable' THEN tl.tdsamount ELSE 0 END AS debitAmount,CASE WHEN cvm.Due_date IS NULL OR DATEDIFF(CURDATE(), cvm.Due_date) <= 0 THEN 0 ELSE DATEDIFF(CURDATE(), cvm.Due_date) END AS Overdue_days
+      , cvm.Overdue_days as Overdue_history,cvm.invoice_type FROM tdsledger tl JOIN clientvouchermaster cvm ON cvm.voucher_id = tl.voucher_id WHERE tl.status = 1`;
     }
 
     // Decrypt querystring
@@ -2040,7 +2089,8 @@ async function TDSLedger(billing) {
       );
     }
 
-    sql = `SELECT tdsledger_id, voucher_id, voucher_number, client_name, IGST, CGST, SGST, totalamount, subtotal, tdsamount, gst_number, tds_type, Row_updated_date, tds_filed, payment_details, description, bill_details, CASE WHEN tds_type = 'Receivable' THEN tdsamount ELSE 0 END AS creditAmount, CASE WHEN tds_type = 'Payable' THEN tdsamount ELSE 0 END AS debitAmount FROM tdsledger WHERE status = 1`;
+    sql = `SELECT tl.tdsledger_id, tl.voucher_id, tl.voucher_number, tl.client_name, tl.IGST, tl.CGST, tl.SGST, tl.totalamount, tl.subtotal, tl.tdsamount, tl.gst_number, tl.tds_type, DATE_FORMAT(DATE(tl.Row_updated_date), '%Y-%m-%d %H:%i:%s') AS date, tl.tds_filed, tl.payment_details, tl.description, tl.bill_details,cvm.invoice_number,CASE WHEN tl.tds_type = 'Receivable' THEN tl.tdsamount ELSE 0 END AS creditAmount, CASE WHEN tl.tds_type = 'Payable' THEN tl.tdsamount ELSE 0 END AS debitAmount,CASE WHEN cvm.Due_date IS NULL OR DATEDIFF(CURDATE(), cvm.Due_date) <= 0 THEN 0 ELSE DATEDIFF(CURDATE(), cvm.Due_date) END AS Overdue_days
+    , cvm.Overdue_days as Overdue_history,cvm.invoice_type FROM tdsledger tl JOIN clientvouchermaster cvm ON cvm.voucher_id = tl.voucher_id WHERE tl.status = 1`;
 
     if (
       querydata.tdstype != null &&
@@ -2048,9 +2098,9 @@ async function TDSLedger(billing) {
       querydata.tdstype != undefined
     ) {
       if (querydata.tdstype == "receivable") {
-        sql += ` and tds_type LIKE '%receivable%'`;
+        sql += ` and tl.tds_type LIKE '%receivable%'`;
       } else if (querydata.tdstype == "payable") {
-        sql += ` and tds_type LIKE '%payable%'`;
+        sql += ` and tl.tds_type LIKE '%payable%'`;
       }
     }
     if (
@@ -2059,11 +2109,11 @@ async function TDSLedger(billing) {
       querydata.invoicetype != undefined
     ) {
       if (querydata.invoicetype == "sales") {
-        sql += ` and voucher_id IN (select voucher_id from clientvouchermaster where invoice_type like '%sales%')`;
+        sql += ` and cvm.invoice_type like '%sales%'`;
       } else if (querydata.invoicetype == "subscription") {
-        sql += ` and voucher_id IN (select voucher_id from clientvouchermaster where invoice_type like '%subscription%')`;
+        sql += ` and cvm.invoice_type like '%subscription%'`;
       } else if (querydata.invoicetype == "vendor") {
-        sql += ` and voucher_id IN (select voucher_id from clientvouchermaster where invoice_type like '%vendor%')`;
+        sql += ` and cvm.invoice_type like '%vendor%'`;
       }
     }
     if (
@@ -2071,7 +2121,7 @@ async function TDSLedger(billing) {
       querydata.customerid != 0 &&
       querydata.customerid != undefined
     ) {
-      sql += ` and voucher_id IN (select voucher_id from clientvouchermaster where customer_id = ?)`;
+      sql += ` and cvm.customer_id = ?)`;
       sqlParams.push(querydata.customerid);
     }
     if (
@@ -2082,14 +2132,37 @@ async function TDSLedger(billing) {
       querydata.enddate != 0 &&
       querydata.enddate != undefined
     ) {
-      sql += ` and DATE(Row_updated_date) BETWEEN ? and ?`;
-      sqlParams.push(querydata.startdate, querydata.enddate);
-    }
+      formattedStartDate = querydata.startdate;
+      formattedEndDate = querydata.enddate;
+      if (querydata.startdate == querydata.enddate) {
+        sql += ` and DATE(tl.Row_updated_date) = ?`;
+        sqlParams.push(querydata.enddate);
+      } else {
+        sql += ` and DATE(tl.Row_updated_date) BETWEEN ? and ?`;
+        sqlParams.push(querydata.startdate, querydata.enddate);
+      }
+    } else {
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth();
+      const financialYearStart =
+        currentMonth >= 3
+          ? new Date(currentYear, 3, 1) // April 1st of the current year
+          : new Date(currentYear - 1, 3, 1); // April 1st of the previous year
+      financialYearStart.setHours(0, 0, 0, 0);
+      const financialYearEnd = new Date(now);
+      financialYearEnd.setHours(23, 59, 59, 999);
+      const formatDate = (date) => date.toISOString().split("T")[0];
+      formattedStartDate = formatDate(financialYearStart);
+      formattedEndDate = formatDate(financialYearEnd);
 
+      sql += ` and DATE(tl.Row_updated_date) BETWEEN ? and ?`;
+      sqlParams.push(formattedStartDate, formattedEndDate);
+    }
     console.log(sql);
     const query = await db.query(sql, sqlParams);
 
-    if (query) {
+    if (query.length > 0) {
       let netTdsAmount = 0;
       let totalTds = 0;
       let totalPaid = 0;
@@ -2143,16 +2216,9 @@ async function TDSLedger(billing) {
           totalReceivables: totalReceivables,
           totalPayables: totalPayables,
           netTds: totalReceivables - totalPayables,
+          startdate: formattedStartDate,
+          enddate: formattedEndDate,
         },
-        secret
-      );
-    }
-    if (query[0]) {
-      return helper.getSuccessResponse(
-        true,
-        "success",
-        "Tds Ledger fetched Successfully",
-        query,
         secret
       );
     } else {
@@ -2160,7 +2226,17 @@ async function TDSLedger(billing) {
         true,
         "success",
         "Tds Ledger fetched Successfully",
-        query,
+        {
+          tdsledger: query,
+          totalTds: 0,
+          totalPaid: 0,
+          netTdsBalance: 0,
+          totalReceivables: 0,
+          totalPayables: 0,
+          netTds: 0,
+          startdate: formattedStartDate,
+          enddate: formattedEndDate,
+        },
         secret
       );
     }
@@ -2222,13 +2298,12 @@ async function GSTLedger(billing) {
         secret
       );
     }
-    var sql,
-      query1,
-      query2,
-      sqlParams = [];
+    var sql, query1, query2, formattedStartDate, formattedEndDate;
+    sqlParams = [];
     // Check if querystring is provided
     if (!billing.hasOwnProperty("querystring")) {
-      sql = `SELECT gstledger_id,voucher_id,voucher_number,client_name,IGST,CGST,SGST,gst_number,(IGST+CGST+SGST) totalgst,gst_type,DATE(Row_updated_date) date,gst_filed,totalamount,subtotal,payment_details,description,bill_details,invoice_number FROM gstledger where status = 1`;
+      sql = `SELECT gl.gstledger_id,gl.voucher_id,gl.voucher_number,gl.client_name,gl.IGST,gl.CGST,gl.SGST,gl.gst_number,(gl.IGST+gl.CGST+gl.SGST) totalgst,gl.gst_type,DATE_FORMAT(DATE(gl.Row_updated_date), '%Y-%m-%d %H:%i:%s') AS date,gl.gst_filed,gl.totalamount,gl.subtotal,gl.payment_details,gl.description,gl.bill_details,gl.invoice_number,CASE WHEN cvm.Due_date IS NULL OR DATEDIFF(CURDATE(), cvm.Due_date) <= 0 THEN 0 ELSE DATEDIFF(CURDATE(), cvm.Due_date) END AS Overdue_days
+      , cvm.Overdue_days as Overdue_history,cvm.invoice_type FROM gstledger gl JOIN clientvouchermaster cvm ON cvm.voucher_id = gl.voucher_id where gl.status = 1`;
     }
 
     // Decrypt querystring
@@ -2257,18 +2332,19 @@ async function GSTLedger(billing) {
       );
     }
 
-    sql = `SELECT gstledger_id,voucher_id,voucher_number,client_name,IGST,CGST,SGST,gst_number,(IGST+CGST+SGST) totalgst,gst_type,DATE(Row_updated_date) date,gst_filed,totalamount,subtotal,payment_details,description,bill_details,invoice_number FROM gstledger where status = 1`;
-    query1 = `select SUM(IGST) IGST,SUM(CGST) CGST,SUM(SGST) SGST FROM gstledger WHERE status = 1 and gst_type = 'input'`;
-    query2 = `select SUM(IGST) IGST,SUM(CGST) CGST,SUM(SGST) SGST FROM gstledger WHERE status = 1 and gst_type = 'output'`;
+    sql = `SELECT gl.gstledger_id,gl.voucher_id,gl.voucher_number,gl.client_name,gl.IGST,gl.CGST,gl.SGST,gl.gst_number,(gl.IGST+gl.CGST+gl.SGST) totalgst,gl.gst_type,DATE_FORMAT(DATE(gl.Row_updated_date), '%Y-%m-%d %H:%i:%s') AS date,gl.gst_filed,gl.totalamount,gl.subtotal,gl.payment_details,gl.description,gl.bill_details,gl.invoice_number,CASE WHEN cvm.Due_date IS NULL OR DATEDIFF(CURDATE(), cvm.Due_date) <= 0 THEN 0 ELSE DATEDIFF(CURDATE(), cvm.Due_date) END AS Overdue_days
+    , cvm.Overdue_days as Overdue_history,cvm.invoice_type FROM gstledger gl JOIN clientvouchermaster cvm ON cvm.voucher_id = gl.voucher_id where gl.status = 1`;
+    query1 = `select SUM(gl.IGST) IGST,SUM(gl.CGST) CGST,SUM(gl.SGST) SGST FROM gstledger gl WHERE gl.status = 1 and gl.gst_type = 'input'`;
+    query2 = `select SUM(gl.IGST) IGST,SUM(gl.CGST) CGST,SUM(gl.SGST) SGST FROM gstledger gl WHERE gl.status = 1 and gl.gst_type = 'output'`;
     if (
       querydata.gsttype != null &&
       querydata.gsttype != 0 &&
       querydata.gsttype != undefined
     ) {
       if (querydata.gsttype == "input") {
-        sql += ` and gst_type LIKE '%input%'`;
+        sql += ` and gl.gst_type LIKE '%input%'`;
       } else if (querydata.gsttype == "output") {
-        sql += ` and gst_type LIKE '%output%'`;
+        sql += ` and gl.gst_type LIKE '%output%'`;
       } else {
       }
     }
@@ -2278,17 +2354,17 @@ async function GSTLedger(billing) {
       querydata.invoicetype != undefined
     ) {
       if (querydata.invoicetype == "sales") {
-        sql += ` and voucher_id IN (select voucher_id from clientvouchermaster where invoice_type like '%sales%')`;
-        query1 += ` and voucher_id IN (select voucher_id from clientvouchermaster where invoice_type like '%sales%')`;
-        query2 += ` and voucher_id IN (select voucher_id from clientvouchermaster where invoice_type like '%sales%')`;
+        sql += ` and cvm.invoice_type like '%sales%')`;
+        query1 += ` and gl.voucher_id IN (select voucher_id from clientvouchermaster where invoice_type like '%sales%')`;
+        query2 += ` and gl.voucher_id IN (select voucher_id from clientvouchermaster where invoice_type like '%sales%')`;
       } else if (querydata.invoicetype == "subscription") {
-        sql += ` and voucher_id IN (select voucher_id from clientvouchermaster where invoice_type like '%subscription%')`;
-        query1 += ` and voucher_id IN (select voucher_id from clientvouchermaster where invoice_type like '%subscription%')`;
-        query2 += ` and voucher_id IN (select voucher_id from clientvouchermaster where invoice_type like '%subscription%')`;
+        sql += ` and cvm.invoice_type like '%subscription%'`;
+        query1 += ` and gl.voucher_id IN (select voucher_id from clientvouchermaster where invoice_type like '%subscription%')`;
+        query2 += ` and gl.voucher_id IN (select voucher_id from clientvouchermaster where invoice_type like '%subscription%')`;
       } else if (querydata.invoicetype == "vendor") {
-        sql += ` and voucher_id IN (select voucher_id from clientvouchermaster where invoice_type like '%vendor%')`;
-        query1 += ` and voucher_id IN (select voucher_id from clientvouchermaster where invoice_type like '%vendor%')`;
-        query2 += ` and voucher_id IN (select voucher_id from clientvouchermaster where invoice_type like '%vendor%')`;
+        sql += ` and cvm.invoice_type like '%vendor%'`;
+        query1 += ` and gl.voucher_id IN (select voucher_id from clientvouchermaster where invoice_type like '%vendor%')`;
+        query2 += ` and gl.voucher_id IN (select voucher_id from clientvouchermaster where invoice_type like '%vendor%')`;
       }
     }
     if (
@@ -2296,9 +2372,9 @@ async function GSTLedger(billing) {
       querydata.customerid != 0 &&
       querydata.customerid != undefined
     ) {
-      sql += ` and voucher_id IN (select voucher_id from clientvouchermaster where customer_id = ?)`;
-      query1 += ` and voucher_id IN (select voucher_id from clientvouchermaster where customer_id = ?)`;
-      query2 += ` and voucher_id IN (select voucher_id from clientvouchermaster where customer_id = ?)`;
+      sql += ` and cvm.customer_id = ?`;
+      query1 += ` and gl.voucher_id IN (select voucher_id from clientvouchermaster where customer_id = ?)`;
+      query2 += ` and gl.voucher_id IN (select voucher_id from clientvouchermaster where customer_id = ?)`;
       sqlParams.push(querydata.customerid);
     }
     if (
@@ -2309,25 +2385,31 @@ async function GSTLedger(billing) {
       querydata.enddate != 0 &&
       querydata.enddate != undefined
     ) {
-      sql += ` and DATE(Row_updated_date) BETWEEN ? and ?`;
-      query1 += ` and DATE(Row_updated_date) BETWEEN ? and ?`;
-      query2 += ` and DATE(Row_updated_date) BETWEEN ? and ?`;
-      sqlParams.push(querydata.startdate, querydata.enddate);
+      formattedStartDate = querydata.startdate;
+      formattedEndDate = querydata.enddate;
+      if (querydata.startdate == querydata.enddate) {
+        sql += ` and DATE(gl.Row_updated_date) = ?`;
+        sqlParams.push(querydata.enddate);
+      } else {
+        sql += ` and DATE(gl.Row_updated_date) BETWEEN ? and ?`;
+        query1 += ` and DATE(gl.Row_updated_date) BETWEEN ? and ?`;
+        query2 += ` and DATE(gl.Row_updated_date) BETWEEN ? and ?`;
+        sqlParams.push(querydata.startdate, querydata.enddate);
+      }
     } else {
       const now = new Date();
-      const startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-      const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      startDate.setMinutes(
-        startDate.getMinutes() - startDate.getTimezoneOffset()
-      );
-      endDate.setMinutes(endDate.getMinutes() - endDate.getTimezoneOffset());
-      const formatDate = (date) => date.toISOString().split("T")[0];
-      const formattedStartDate = formatDate(startDate);
-      const formattedEndDate = formatDate(endDate);
+      const startDate = new Date(now);
+      startDate.setDate(now.getDate() - 45); // Subtract 100 days
+      startDate.setHours(0, 0, 0, 0); // Set to the start of the day
+      const endDate = new Date(now);
+      endDate.setHours(23, 59, 59, 999); // Set to the end of the current day
+      const formatDate = (date) => date.toISOString().split("T")[0]; // Format as 'YYYY-MM-DD'
+      formattedStartDate = formatDate(startDate);
+      formattedEndDate = formatDate(endDate);
 
-      sql += ` and DATE(Row_updated_date) BETWEEN ? and ?`;
-      query1 += ` and DATE(Row_updated_date) BETWEEN ? and ?`;
-      query2 += ` and DATE(Row_updated_date) BETWEEN ? and ?`;
+      sql += ` and DATE(gl.Row_updated_date) BETWEEN ? and ?`;
+      query1 += ` and DATE(gl.Row_updated_date) BETWEEN ? and ?`;
+      query2 += ` and DATE(gl.Row_updated_date) BETWEEN ? and ?`;
       sqlParams.push(formattedStartDate, formattedEndDate);
     }
     console.log(sql);
@@ -2385,6 +2467,8 @@ async function GSTLedger(billing) {
               inputigst: inputigst,
               outputigst: 0,
               totaligst: 0,
+              startdate: formattedStartDate,
+              enddate: formattedEndDate,
             },
             secret
           );
@@ -2407,6 +2491,8 @@ async function GSTLedger(billing) {
               inputigst: 0,
               outputigst: outputigst,
               totaligst: 0,
+              startdate: formattedStartDate,
+              enddate: formattedEndDate,
             },
             secret
           );
@@ -2429,6 +2515,8 @@ async function GSTLedger(billing) {
               inputigst: inputigst,
               outputigst: outputigst,
               totaligst: totaligst,
+              startdate: formattedStartDate,
+              enddate: formattedEndDate,
             },
             secret
           );
@@ -2452,6 +2540,8 @@ async function GSTLedger(billing) {
           inputigst: inputigst,
           outputigst: outputigst,
           totaligst: totaligst,
+          startdate: formattedStartDate,
+          enddate: formattedEndDate,
         },
         secret
       );
@@ -2474,6 +2564,8 @@ async function GSTLedger(billing) {
           inputigst: 0,
           outputigst: 0,
           totaligst: 0,
+          startdate: formattedStartDate,
+          enddate: formattedEndDate,
         },
         secret
       );
@@ -2537,7 +2629,7 @@ async function getSubscriptionCustomer(billing) {
     }
 
     const sql =
-      await db.query(`select scustomer_id customer_id, scustomer_name customer_name,scustomer_phoneno customer_phoneno,scustomer_gstno customer_gstno from enquirysubscriptionmaster where 
+      await db.query1(`select customer_id customer_id, customer_name customer_name,Contact_no customer_phoneno,gst_number customer_gstno from customermaster where 
          status = 1`);
     if (sql.length) {
       const updatedSql = sql.map((row) => ({
@@ -2652,6 +2744,479 @@ async function getSalesCustomer(billing) {
     );
   }
 }
+
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+
+async function addOverdueDetails(billing) {
+  try {
+    // Check if the session token exists
+    if (!billing.hasOwnProperty("STOKEN")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken missing. Please provide the Login sessiontoken",
+        "ADD OVERDUE DETAILS",
+        ""
+      );
+    }
+    var secret = billing.STOKEN.substring(0, 16);
+    // Validate session token length
+    if (billing.STOKEN.length > 50 || billing.STOKEN.length < 30) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
+        "ADD OVERDUE DETAILS",
+        secret
+      );
+    }
+
+    // Validate session token
+    const [result] = await db.spcall(
+      "CALL SP_STOKEN_CHECK(?,@result); SELECT @result;",
+      [billing.STOKEN]
+    );
+    const objectvalue = result[1][0];
+    const userid = objectvalue["@result"];
+
+    if (userid == null) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+        "ADD OVERDUE DETAILS",
+        secret
+      );
+    }
+
+    // Check if querystring is provided
+    if (!billing.querystring) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring missing. Please provide the querystring",
+        "ADD OVERDUE DETAILS",
+        secret
+      );
+    }
+
+    // Decrypt querystring
+    let querydata;
+    try {
+      querydata = await helper.decrypt(billing.querystring, secret);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring Invalid error. Please provide the valid querystring.",
+        "ADD OVERDUE DETAILS",
+        secret
+      );
+    }
+
+    // Parse the decrypted querystring
+    try {
+      querydata = JSON.parse(querydata);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring JSON error. Please provide valid JSON",
+        "ADD OVERDUE DETAILS",
+        secret
+      );
+    }
+
+    // Validate required fields
+    const requiredFields = [
+      { field: "voucherid", message: "Voucher id missing." },
+      { field: "date", message: "Date missing." },
+      { field: "feedback", message: "Feedback missing." },
+    ];
+    for (const { field, message } of requiredFields) {
+      if (!querydata.hasOwnProperty(field)) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          message,
+          "ADD OVERDUE DETAILS",
+          secret
+        );
+      }
+    }
+
+    const overdueEntry = {
+      date: formatDate(querydata.date),
+      feedback: querydata.feedback,
+    };
+
+    // Append overdueEntry to Overdue_days JSON array
+    const sql = await db.query(
+      `UPDATE clientvouchermaster
+       SET Overdue_days = JSON_ARRAY_APPEND(Overdue_days, '$', CAST(? AS JSON))
+       WHERE voucher_id = ?`,
+      [JSON.stringify(overdueEntry), querydata.voucherid]
+    );
+
+    if (sql.affectedRows > 0) {
+      await mqttclient.publishMqttMessage(
+        "refresh",
+        "Overdue details updated successfully"
+      );
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Overdue details updated successfully",
+        {
+          voucherid: querydata.voucherid,
+          date: querydata.date,
+          feedback: querydata.feedback,
+        },
+        secret
+      );
+    } else {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "No voucher updated. Please check the voucher id.",
+        "ADD OVERDUE DETAILS",
+        secret
+      );
+    }
+  } catch (er) {
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal Error. Please contact Administration",
+      er.message,
+      secret
+    );
+  }
+}
+const formatDate = (date) => {
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0"); // Months are 0-indexed
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+
+async function getDashboard(billing) {
+  try {
+    // Check if the session token exists
+    if (!billing.hasOwnProperty("STOKEN")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken missing. Please provide the Login sessiontoken",
+        "GET DASHBOARD DETAILS",
+        ""
+      );
+    }
+    var secret = billing.STOKEN.substring(0, 16);
+    // Validate session token length
+    if (billing.STOKEN.length > 50 || billing.STOKEN.length < 30) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
+        "GET DASHBOARD DETAILS",
+        secret
+      );
+    }
+
+    // Validate session token
+    const [result] = await db.spcall(
+      "CALL SP_STOKEN_CHECK(?,@result); SELECT @result;",
+      [billing.STOKEN]
+    );
+    const objectvalue = result[1][0];
+    const userid = objectvalue["@result"];
+
+    if (userid == null) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+        "GET DASHBOARD DETAILS",
+        secret
+      );
+    }
+
+    // Check if querystring is provided
+    if (!billing.querystring) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring missing. Please provide the querystring",
+        "GET DASHBOARD DETAILS",
+        secret
+      );
+    }
+
+    // Decrypt querystring
+    let querydata;
+    try {
+      querydata = await helper.decrypt(billing.querystring, secret);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring Invalid error. Please provide the valid querystring.",
+        "GET DASHBOARD DETAILS",
+        secret
+      );
+    }
+
+    // Parse the decrypted querystring
+    try {
+      querydata = JSON.parse(querydata);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring JSON error. Please provide valid JSON",
+        "GET DASHBOARD DETAILS",
+        secret
+      );
+    }
+
+    // Validate required fields
+    const requiredFields = [
+      { field: "voucherid", message: "Voucher id missing." },
+      { field: "date", message: "Date missing." },
+      { field: "feedback", message: "Feedback missing." },
+    ];
+    for (const { field, message } of requiredFields) {
+      if (!querydata.hasOwnProperty(field)) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          message,
+          "GET DASHBOARD DETAILS",
+          secret
+        );
+      }
+    }
+
+    const overdueEntry = {
+      date: formatDate(querydata.date),
+      feedback: querydata.feedback,
+    };
+
+    // Append overdueEntry to Overdue_days JSON array
+    const sql = await db.query(
+      `UPDATE clientvouchermaster
+       SET Overdue_days = JSON_ARRAY_APPEND(Overdue_days, '$', CAST(? AS JSON))
+       WHERE voucher_id = ?`,
+      [JSON.stringify(overdueEntry), querydata.voucherid]
+    );
+
+    if (sql.affectedRows > 0) {
+      await mqttclient.publishMqttMessage(
+        "refresh",
+        "Overdue details updated successfully"
+      );
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Overdue details updated successfully",
+        {
+          voucherid: querydata.voucherid,
+          date: querydata.date,
+          feedback: querydata.feedback,
+        },
+        secret
+      );
+    } else {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "No voucher updated. Please check the voucher id.",
+        "ADD OVERDUE DETAILS",
+        secret
+      );
+    }
+  } catch (er) {
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal Error. Please contact Administration",
+      er.message,
+      secret
+    );
+  }
+}
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+
+async function updatePaymentDetails(req, res, next) {
+  let secret, querydata, billing;
+  try {
+    try {
+      await uploadFile.uploadVoucher(req, res);
+      billing = req.body;
+      // Check if the session token exists
+      if (!billing.STOKEN) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Login sessiontoken missing. Please provide the Login sessiontoken",
+          "UPDATE PAYMENT DETAILS",
+          ""
+        );
+      }
+      secret = billing.STOKEN.substring(0, 16);
+      querydata;
+      // Validate session token length
+      if (billing.STOKEN.length > 50 || billing.STOKEN.length < 30) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
+          "UPDATE PAYMENT DETAILS",
+          secret
+        );
+      }
+    } catch (er) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        `Could not upload the file. ${er.message}`,
+        er.message,
+        secret
+      );
+    }
+    // Validate session token
+    const [result] = await db.spcall(
+      `CALL SP_STOKEN_CHECK(?,@result); SELECT @result;`,
+      [billing.STOKEN]
+    );
+    const objectvalue = result[1][0];
+    const userid = objectvalue["@result"];
+
+    if (userid == null) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+        "UPDATE PAYMENT DETAILS",
+        secret
+      );
+    }
+    // Check if querystring is provided
+    if (!billing.querystring) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring missing. Please provide the querystring",
+        "UPDATE PAYMENT DETAILS",
+        secret
+      );
+    }
+
+    // Decrypt querystring
+    try {
+      querydata = await helper.decrypt(billing.querystring, secret);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring Invalid error. Please provide the valid querystring.",
+        "UPDATE PAYMENT DETAILS",
+        secret
+      );
+    }
+
+    // Parse the decrypted querystring
+    try {
+      querydata = JSON.parse(querydata);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring JSON error. Please provide valid JSON",
+        "UPDATE PAYMENT DETAILS",
+        secret
+      );
+    }
+    const requiredFields = [
+      { field: "paymentdetails", message: "Payment Details missing." },
+      { field: "transactionid", message: "Transaction id missing." },
+      { field: "voucherid", message: "Voucher id missing." },
+      { field: "paymentmode", message: "Payment mode missing." },
+    ];
+
+    for (const { field, message } of requiredFields) {
+      if (!querydata.hasOwnProperty(field)) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          message,
+          "UPDATE PAYMENT DETAILS",
+          secret
+        );
+      }
+    }
+
+    // Append overdueEntry to Overdue_days JSON array
+    const sql = await db.query(
+      `UPDATE clientvouchermaster
+       SET Payment_details = ?
+       WHERE voucher_id = ?`,
+      [JSON.stringify(paymentdetails), querydata.voucherid]
+    );
+    var path = null;
+    if (req.file != null) {
+      path = req.file.path;
+    }
+    if (path != null) {
+      const sql3 = await db.query(
+        `Update vouchertransactions Set file_path = ?,payment_mode =? where vouchertrans_id = ?`,
+        [path, querydata.paymentmode, querydata.transactionid]
+      );
+    }
+
+    if (sql.affectedRows > 0) {
+      await mqttclient.publishMqttMessage(
+        "refresh",
+        "Payment details updated successfully"
+      );
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "Payment details updated successfully",
+        querydata.voucherid,
+        secret
+      );
+    } else {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "No voucher updated. Please check the voucher id.",
+        "UPDATE PAYMENT DETAILS",
+        secret
+      );
+    }
+  } catch (er) {
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal Error. Please contact Administration",
+      er.message,
+      secret
+    );
+  }
+}
 module.exports = {
   getSubscriptionInvoice,
   getSalesInvoice,
@@ -2666,4 +3231,7 @@ module.exports = {
   GSTLedger,
   getSubscriptionCustomer,
   getSalesCustomer,
+  addOverdueDetails,
+  getDashboard,
+  updatePaymentDetails,
 };

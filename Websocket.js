@@ -192,13 +192,13 @@ async function sendInvoice() {
     // socket.send(JSON.stringify(sql));
     // }
   } else {
-    // console.log("WebSocket not connected, skipping message.");
+    console.log("WebSocket not connected, skipping message.");
     reconnectWebSocket();
   }
 }
 
 // Cron job to start sending messages every minute after 03:14 AM
-cron.schedule("20 01 * * *", () => {
+cron.schedule("42 13 * * *", () => {
   console.log("Cron job started at 07:16 PM");
   sendInvoice();
   // if (interval) {

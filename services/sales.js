@@ -1403,7 +1403,7 @@ async function addInvoice(req, res) {
       if (sq1.length > 0) {
         const customerid = sq1[0].customer_id;
         const [sql2] = await db.spcall(
-          `CALL InsertClientVoucher(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@voucher_id,@voucher_number); select @voucher_id,@voucher_number`,
+          `CALL InsertClientVoucher(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@voucher_id,@voucher_number); select @voucher_id,@voucher_number`,
           [
             querydata.invoicegenid,
             "receipt voucher",
@@ -6757,32 +6757,30 @@ async function getBinaryFile(sales) {
         secret
       );
     }
-
+    var sql = [];
     // Validate required fields
-    if (!querydata.hasOwnProperty("eventid") || querydata.eventid == "") {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Event id missing. Please provide the event id",
-        "GET BINARY DATA FOR PDF",
-        secret
+    if (querydata.hasOwnProperty("eventid")) {
+      if (querydata.eventtype == "revisedquotation") {
+        sql = await db.query(
+          `select salesprocess_path from salesprocesslist where processid IN ( SELECT processid FROM salesprocesslist WHERE cprocess_id = ?) 
+          AND process_type IN(2,3) ORDER BY Row_updated_date DESC LIMIT 1`,
+          [querydata.eventid]
+        );
+      } else {
+        sql = await db.query(
+          `select salesprocess_path from salesprocesslist where cprocess_id = ?`,
+          [querydata.eventid]
+        );
+      }
+    }
+
+    if (querydata.hasOwnProperty("invoicenumber")) {
+      sql = await db.query(
+        `select salesprocess_path from salesprocesslist where cprocess_gene_id = ?`,
+        [querydata.invoicenumber]
       );
     }
-    var sql;
-    if (querydata.eventtype == "revisedquotation") {
-      sql = await db.query(
-        `select salesprocess_path from salesprocesslist where processid IN ( SELECT processid FROM salesprocesslist WHERE cprocess_id = ?) 
-        AND process_type IN(2,3) ORDER BY Row_updated_date DESC LIMIT 1`,
-        [querydata.eventid]
-      );
-    } else {
-      sql = await db.query(
-        `select salesprocess_path from salesprocesslist where cprocess_id = ?`,
-        [querydata.eventid]
-      );
-    }
-    var data;
-    if (sql[0]) {
+    if (sql.length > 0) {
       // Ensure file exists
       if (!fs.existsSync(sql[0].salesprocess_path)) {
         return helper.getErrorResponse(
@@ -6806,7 +6804,7 @@ async function getBinaryFile(sales) {
         true,
         "success",
         "File Binary Fetched Successfully",
-        { binarydata: data },
+        { binarydata },
         secret
       );
     }

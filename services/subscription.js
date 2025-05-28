@@ -662,7 +662,7 @@ async function addRecurringInvoice(req, res) {
             await fs.copy(file.path, newFilePath1, { overwrite: true });
           }
           if (file.path !== newFilePath) {
-            await fs.move(file.path, newFilePath, { overwrite: true });
+            await fs.copy(file.path, newFilePath, { overwrite: true });
             file.path = newFilePath; // Update file path if moved
           } else {
             console.log(
@@ -710,6 +710,13 @@ async function addRecurringInvoice(req, res) {
         }
         const { gst, subtotal, total } = billDetails;
         const { CGST, IGST, SGST } = gst;
+        const convertToISO = (dateStr) => {
+          const [day, month, year] = dateStr.split("-");
+          return `${year}-${month}-${day}`;
+        };
+
+        const isoDate = convertToISO(querydata.duedate);
+
         const [sql2] = await db.spcall(
           `CALL InsertClientVoucher(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@voucher_id,@voucher_number); select @voucher_id,@voucher_number`,
           [
@@ -730,7 +737,7 @@ async function addRecurringInvoice(req, res) {
             "subscription",
             `SB-${querydata.customerid}`,
             `Subscription Invoice created for ${querydata.clientaddressname}`,
-            querydata.duedate,
+            isoDate,
           ]
         );
         const objectvalue = sql2[1][0];
@@ -927,7 +934,7 @@ async function GetRecurredInvoice(subscription) {
     // Check if querystring is provided
     if (!subscription.querystring) {
       sql = await db.query(
-        `select subscription_generatedid recurredbillid,subscription_billid,site_Ids,client_addressname,client_address,billing_addressname,billing_address,pdf_path pdf_data,pdf_path pdfpath,Invoice_no,TotalAmount,email_id,phone_no,ccemail,Row_updated_date date from subscriptionbillgenerated where status = 1`
+        `select sbg.subscription_generatedid recurredbillid,sbg.subscription_billid,sbg.site_Ids,sbg.client_addressname,sbg.client_address,sbg.billing_addressname,sbg.billing_address,sbg.pdf_path pdf_data,sbg.pdf_path pdfpath,sbg.Invoice_no,sbg.TotalAmount,sbg.email_id,sbg.phone_no,sbg.ccemail,sbg.Row_updated_date date,cvm.voucher_id voucher_id,cvm.voucher_number voucher_number from subscriptionbillgenerated sbg JOIN clientvouchermaster cvm ON cvm.Invoice_number = sbg.Invoice_no where sbg.status = 1`
       );
     } else {
       // Decrypt querystring
@@ -965,7 +972,7 @@ async function GetRecurredInvoice(subscription) {
         );
       }
       sql = await db.query(
-        `select subscription_generatedid recurredbillid,subscription_billid,site_Ids,client_addressname,client_address,billing_addressname,billing_address,pdf_path pdf_data,pdf_path pdfpath,Invoice_no,TotalAmount,email_id,phone_no,ccemail,Row_updated_date date from subscriptionbillgenerated where status = 1 and customer_id = ?`,
+        `select sbg.subscription_generatedid recurredbillid,sbg.subscription_billid,sbg.site_Ids,sbg.client_addressname,sbg.client_address,sbg.billing_addressname,sbg.billing_address,sbg.pdf_path pdf_data,sbg.pdf_path pdfpath,sbg.Invoice_no,sbg.TotalAmount,sbg.email_id,sbg.phone_no,sbg.ccemail,sbg.Row_updated_date date,cvm.voucher_id voucher_id,cvm.voucher_number voucher_number from subscriptionbillgenerated sbg JOIN clientvouchermaster cvm ON cvm.Invoice_number = sbg.Invoice_no where sbg.status = 1 and sbg.customer_id = ?`,
         [querydata.customerid]
       );
     }
@@ -4909,26 +4916,23 @@ async function getRecurredBinaryfile(subscription) {
         secret
       );
     }
-
+    var sql = [];
     // Validate required fields
-    if (
-      !querydata.hasOwnProperty("recurredbillid") ||
-      querydata.recurredbillid == ""
-    ) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Reccurred invoice bill id missing. Please provide the recurred invoice bill id",
-        "GET BINARY DATA FOR PDF",
-        secret
+    if (querydata.hasOwnProperty("recurredbillid")) {
+      sql = await db.query(
+        `select pdf_path from subscriptionbillgenerated where subscription_generatedid = ?`,
+        [querydata.recurredbillid]
       );
     }
-    const sql = await db.query(
-      `select pdf_path from subscriptionbillgenerated where subscription_generatedid = ?`,
-      [querydata.recurredbillid]
-    );
+    if (querydata.hasOwnProperty("invoicenumber")) {
+      sql = await db.query(
+        `select pdf_path from subscriptionbillgenerated where Invoice_no = ?`,
+        [querydata.invoicenumber]
+      );
+    }
+
     var data;
-    if (sql[0]) {
+    if (sql.length > 0) {
       // Ensure file exists
       if (!fs.existsSync(sql[0].pdf_path)) {
         return helper.getErrorResponse(

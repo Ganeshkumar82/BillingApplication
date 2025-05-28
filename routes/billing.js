@@ -119,4 +119,31 @@ router.post("/getsalescustomer", async function (req, res, next) {
   }
 });
 
+router.post("/addoverduedetails", async function (req, res, next) {
+  try {
+    res.json(await billing.addOverdueDetails(req.body));
+  } catch (er) {
+    console.log(`Error while fetching the overdue details: ${er}`);
+    next(er);
+  }
+});
+
+router.post("/dashboard", async function (req, res, next) {
+  try {
+    res.json(await billing.getDashboard(req.body));
+  } catch (er) {
+    console.log(`Error while fetching the overdue details: ${er}`);
+    next(er);
+  }
+});
+
+router.post("/updatepaymentdetails", async function (req, res, next) {
+  try {
+    res.json(await billing.updatePaymentDetails(req, res, next));
+  } catch (er) {
+    console.log(`Error while updating the payment details -> ${er}`);
+    next(er);
+  }
+});
+
 module.exports = router;
