@@ -55,7 +55,7 @@ server.keepAliveTimeout = 60 * 1000; // Keep connections alive for 60 seconds
 server.headersTimeout = 65 * 1000; // Ensure this is slightly larger than keepAliveTimeout
 
 server.listen(port, async () => {
-  console.log(`App is listening at the port http://localhost:${port}`);
+  console.log(`App is listening at the port http://192.168.1.169:${port}`);
 });
 
 server.on("error", (err) => {

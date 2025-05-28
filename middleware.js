@@ -622,7 +622,7 @@ const maxSize13 = 2 * 1024 * 1024;
 let uploadFile13 = multer({
   storage: storage13,
   limits: { fileSize: maxSize13 },
-}).single("file");
+}).array("file");
 
 let uploadVoucher = util.promisify(uploadFile13);
 

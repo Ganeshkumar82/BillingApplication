@@ -87,21 +87,21 @@ function getTodayStr(offset = 0) {
   return date.toISOString().slice(0, 10);
 }
 
-// --- Run immediately ---
-(async () => {
-  await processVouchers(
-    `DATE(Due_date) = '${getTodayStr(3)}' AND fully_cleared = 0`,
-    "REM"
-  );
-  await processVouchers(
-    `DATE(Due_date) = '${getTodayStr()}' AND fully_cleared = 0`,
-    "DUE"
-  );
-  await processVouchers(
-    `DATE(Due_date) < '${getTodayStr()}' AND fully_cleared = 0`,
-    "OVERDUE"
-  );
-})();
+// // --- Run immediately ---
+// (async () => {
+//   await processVouchers(
+//     `DATE(Due_date) = '${getTodayStr(3)}' AND fully_cleared = 0`,
+//     "REM"
+//   );
+//   await processVouchers(
+//     `DATE(Due_date) = '${getTodayStr()}' AND fully_cleared = 0`,
+//     "DUE"
+//   );
+//   await processVouchers(
+//     `DATE(Due_date) < '${getTodayStr()}' AND fully_cleared = 0`,
+//     "OVERDUE"
+//   );
+// })();
 
 // --- CRON: 10:00 AM Daily - 3 Days Before (REM) ---
 cron.schedule("0 10 * * *", async () => {

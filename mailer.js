@@ -785,6 +785,181 @@ async function sendDueActionEmail(
   }
 }
 
+async function sendVoucherClearedEmail(
+  recipientName,
+  recipientEmail,
+  subject,
+  invoiceNumber,
+  clearedDate,
+  totalAmount,
+  tdsAmount,
+  gstAmount,
+  cgstAmount,
+  sgstAmount,
+  igstAmount,
+  receipt_path 
+) {
+  try {
+    const settingValueRaw = await helper.getServerSetting("VOUCHERCLEARED");
+    const settingValue = JSON.parse(settingValueRaw?.SettingValue || '{}');
+
+    const transporter = nodemailer.createTransport({
+      host: settingValue.host,
+      port: settingValue.Port,
+      secure: true,
+      auth: {
+        user: settingValue.Email,
+        pass: settingValue.password,
+      },
+      debug: true,
+    });
+
+    const handlebarOptions = {
+      viewEngine: {
+        partialsDir: path.resolve("./views/"),
+        defaultLayout: false,
+      },
+      viewPath: path.resolve("./views/"),
+    };
+
+    transporter.use("compile", hbs(handlebarOptions));
+
+    const mailOptions = {
+      from: `"${settingValue.FromName}" <${settingValue.Email}>`,
+      to: recipientEmail,
+      subject,
+      template: settingValue.Template?.replace('.html', ''),
+      context: {
+        name: recipientName,
+        invoice_number: invoiceNumber,
+        cleared_date: clearedDate,
+        total_amount: totalAmount,
+        tds_amount: tdsAmount,
+        gst_amount: gstAmount,
+        cgst_amount: cgstAmount,
+        sgst_amount: sgstAmount,
+        igst_amount: igstAmount,
+        message: "Your voucher has been cleared successfully.",
+      },
+    };
+
+    // Attach receipt if it exists
+    if (receipt_path) {
+      mailOptions.attachments = [
+        {
+          filename: path.basename(receipt_path),
+          path: receipt_path,
+        },
+      ];
+    }
+
+    return new Promise((resolve) => {
+      transporter.sendMail(mailOptions, (error, info) => {
+        if (error) {
+          console.error("Error sending voucher cleared email:", error);
+          resolve(false);
+        } else {
+          console.log("Voucher cleared message sent: " + info.response);
+          resolve(true);
+        }
+      });
+    });
+  } catch (err) {
+    console.error(`Error sending voucher cleared mail -> ${err}`);
+    return false;
+  }
+}
+
+
+async function sendConsolidatedClearedEmail(
+  recipientName,
+  recipientEmail,
+  subject,
+  invoiceNumbers,
+  clearedDate,
+  totalAmount,
+  tdsAmount,
+  igstAmount,
+  cgstAmount,
+  sgstAmount,
+  receipt_path 
+) {
+  try {
+    const settingValue = await helper.getServerSetting("CONCLEARED");
+    const SettingValue = JSON.parse(JSON.parse(JSON.stringify(settingValue)).SettingValue);
+
+    const transporter = nodemailer.createTransport({
+      host: SettingValue.host,
+      port: SettingValue.Port,
+      secure: true,
+      auth: {
+        user: SettingValue.Email,
+        pass: SettingValue.password,
+      },
+      debug: true,
+    });
+
+    // Setup handlebars options
+    const handlebarOptions = {
+      viewEngine: {
+        partialsDir: path.resolve("./views/"),
+        defaultLayout: false,
+      },
+      viewPath: path.resolve("./views/"),
+    };
+
+    transporter.use("compile", hbs(handlebarOptions));
+
+    const invoiceNums = Array.isArray(invoiceNumbers) ? invoiceNumbers : [invoiceNumbers];
+    const totalGST = (igstAmount || 0) + (cgstAmount || 0) + (sgstAmount || 0);
+
+    const mailOptions = {
+      from: `"${SettingValue.FromName}" <${SettingValue.Email}>`,
+      to: recipientEmail,
+      subject: subject,
+      template: SettingValue.Template.replace(".html", ""),
+      context: {
+        name: recipientName,
+        email: recipientEmail,
+        invoice_numbers: invoiceNums,
+        cleared_date: clearedDate,
+        total_amount: totalAmount,
+        tds_amount: tdsAmount || 0,
+        totalIGST: igstAmount || 0,
+        totalCGST: cgstAmount || 0,
+        totalSGST: sgstAmount || 0,
+        totalGST,
+        message: `Your consolidated voucher(s) for invoice(s) ${invoiceNums.join(", ")} have been cleared on ${clearedDate}.`,
+      },
+      attachments: [],
+    };
+
+    if (receipt_path) {
+      mailOptions.attachments.push({
+        filename: path.basename(receipt_path),
+        path: receipt_path,
+      });
+    }
+
+    return new Promise((resolve) => {
+      transporter.sendMail(mailOptions, (error, info) => {
+        if (error) {
+          console.error("Error sending consolidated cleared email:", error);
+          resolve(false);
+        } else {
+          console.log("Consolidated cleared message sent: " + info.response);
+          resolve(true);
+        }
+      });
+    });
+  } catch (er) {
+    console.log(`error sending consolidated cleared mail -> ${er}`);
+    return false;
+  }
+}
+
+
+
 module.exports = {
   sendPDF,
   sendEmail,
@@ -793,4 +968,6 @@ module.exports = {
   sendRecurredInvoice,
   sendQuotation,
   sendDueActionEmail,
+  sendVoucherClearedEmail,
+  sendConsolidatedClearedEmail,
 };

@@ -129,5 +129,13 @@ router.post("/addoverduedetails", async function (req, res, next) {
   }
 });
 
+router.post("/getdashboarddetails", async function (req, res, next) {
+  try {
+    res.json(await billing.getDashboardDetails(req.body));
+  } catch (er) {
+    console.log(`Error while fetching the dashboard details: ${er}`);
+    next(er);
+  }
+});
 
 module.exports = router;
