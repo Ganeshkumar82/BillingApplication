@@ -198,7 +198,7 @@ async function sendInvoice() {
 }
 
 // Cron job to start sending messages every minute after 03:14 AM
-cron.schedule("42 13 * * *", () => {
+cron.schedule("10 12 * * *", () => {
   console.log("Cron job started at 07:16 PM");
   sendInvoice();
   // if (interval) {
@@ -211,7 +211,7 @@ cron.schedule("42 13 * * *", () => {
 });
 connectWebSocket();
 
-cron.schedule("18 01 * * *", () => {
+cron.schedule("07 12 * * *", () => {
   console.log("Cron for fetching job started at 18:45 PM");
   syncConsolidatedBills();
   syncIndividualBills();
@@ -246,13 +246,13 @@ async function syncIndividualBills() {
         WHEN MAX(sct.billing_plan) = 'Prepaid' 
         THEN CONCAT(DATE_FORMAT(DATE_FORMAT(CURDATE(), '%Y-%m-01'), '%d-%b-%Y'), ' To ', DATE_FORMAT(LAST_DAY(CURDATE()), '%d-%b-%Y'))
         WHEN MAX(sct.billing_plan) = 'Postpaid' 
-        THEN CONCAT(DATE_FORMAT(DATE_FORMAT(CURDATE() - INTERVAL 1 MONTH, '%Y-%m-01'), '%d-%b-%Y'), ' To ', DATE_FORMAT(LAST_DAY(CURDATE() - INTERVAL 1 MONTH), '%d-%b-%Y'))
+        THEN CONCAT(DATE_FORMAT(DATE_FORMAT(CURDATE(), '%Y-%m-01'), '%d-%b-%Y'), ' To ', DATE_FORMAT(LAST_DAY(CURDATE()), '%d-%b-%Y'))
     END AS bill_Period,
     sct.Relationship_id,
     CONCAT('BILL-', sct.Relationship_id, '-', sct.branch_id, '-', DATE_FORMAT(CURDATE(), '%Y%m')) AS billnumber,
     sct.billing_gst AS customer_GST,
     sct.hsncode AS HSN_code,
-    'SSIPL_INV' AS Customer_po,
+    sct.Customer_po AS Customer_po,
     sct.contactperson_name AS Contact_person,
     sct.Phoneno AS Contact_number,
     JSON_ARRAYAGG(
@@ -291,9 +291,9 @@ JOIN branchmaster bm ON bm.branch_id = sct.branch_id
 WHERE sct.bill_type = 'Individual'
 GROUP BY sct.Relationship_id, sct.branch_id
 HAVING (
-    (MAX(sct.billing_plan) = 'Prepaid' AND DAY(CURDATE()) = 1)
+    (MAX(sct.billing_plan) = 'Prepaid' AND DAY(CURDATE()) = 28)
     OR
-    (MAX(sct.billing_plan) = 'Postpaid' AND CURDATE() = LAST_DAY(CURDATE()))
+    (MAX(sct.billing_plan) = 'Postpaid' AND DAY(CURDATE()) = 28)
 );
 
 `);
@@ -427,8 +427,8 @@ async function syncConsolidatedBills() {
             DATE_FORMAT(DATE_FORMAT(CURDATE(), '%Y-%m-01'), '%d-%b-%Y'), ' To ', DATE_FORMAT(LAST_DAY(CURDATE()), '%d-%b-%Y')
         )
         WHEN MAX(sct.billing_plan) = 'Postpaid' THEN CONCAT(
-            DATE_FORMAT(DATE_FORMAT(CURDATE() - INTERVAL 1 MONTH, '%Y-%m-01'), '%d-%b-%Y'), ' To ',
-            DATE_FORMAT(LAST_DAY(CURDATE() - INTERVAL 1 MONTH), '%d-%b-%Y')
+            DATE_FORMAT(DATE_FORMAT(CURDATE(), '%Y-%m-01'), '%d-%b-%Y'), ' To ',
+            DATE_FORMAT(LAST_DAY(CURDATE()), '%d-%b-%Y')
         )
     END AS bill_Period,
 
@@ -436,7 +436,7 @@ async function syncConsolidatedBills() {
     CONCAT('BILL-', sct.Relationship_id, '-', DATE_FORMAT(CURDATE(), '%Y%m')) AS billnumber,
     sct.billing_gst AS customer_GST,
     sct.hsncode AS HSN_code,
-    'SSIPL_INV' AS Customer_po,
+    sct.Customer_po AS Customer_po,
     sct.contactperson_name AS Contact_person,
     sct.Phoneno AS Contact_number,
 
@@ -471,9 +471,9 @@ JOIN branchmaster bm ON bm.branch_id = sct.branch_id
 WHERE sct.bill_type = 'Consolidate'
 GROUP BY sct.Relationship_id, sct.customer_id
 HAVING (
-    (MAX(sct.billing_plan) = 'Prepaid' AND DAY(CURDATE()) = 1)
+    (MAX(sct.billing_plan) = 'Prepaid' AND DAY(CURDATE()) = 28)
     OR
-    (MAX(sct.billing_plan) = 'Postpaid' AND CURDATE() = LAST_DAY(CURDATE()))
+    (MAX(sct.billing_plan) = 'Postpaid' AND DAY(CURDATE()) = 28)
 );`);
 
     // Loop and insert into target DB

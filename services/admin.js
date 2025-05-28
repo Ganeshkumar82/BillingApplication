@@ -1,4 +1,5 @@
 const db = require("../db");
+const uploadFile = require("../middleware");
 // const config = require('../config');
 const helper = require("../helper");
 const config = require("../config");
@@ -2369,6 +2370,299 @@ async function GetBranchList(admin) {
 //     );
 //   }
 // }
+
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+//###############################################################################################################################################################################################
+async function CustomSendPdf(req, res) {
+  try {
+    var secret;
+    try {
+      await uploadFile.uploadcustompdf(req, res);
+
+      if (!req.file) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "Please upload a file!",
+          "SEND PDF"
+        );
+      }
+    } catch (er) {
+      console.log(JSON.stringify(er.message));
+      return helper.getErrorResponse(
+        false,
+        "error",
+        `Could not upload the file. ${er.message}`,
+        er.message,
+        ""
+      );
+    }
+
+    const sales = req.body;
+    // Check if the session token exists
+    if (!sales.STOKEN) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login session token missing. Please provide the Login session token",
+        "SEND PDF",
+        ""
+      );
+    }
+    secret = sales.STOKEN.substring(0, 16);
+    var querydata;
+
+    // Validate session token length
+    if (sales.STOKEN.length > 50 || sales.STOKEN.length < 30) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login session token size invalid. Please provide the valid Session token",
+        "SEND PDF",
+        secret
+      );
+    }
+
+    // Validate session token
+    const [result] = await db.spcall(
+      "CALL SP_STOKEN_CHECK(?,@result); SELECT @result;",
+      [sales.STOKEN]
+    );
+    const objectvalue = result[1][0];
+    const userid = objectvalue["@result"];
+
+    if (userid == null) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+        "SEND PDF",
+        secret
+      );
+    }
+
+    // Check if querystring is provided
+    if (!sales.querystring) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring missing. Please provide the querystring",
+        "SEND PDF",
+        secret
+      );
+    }
+
+    // Decrypt querystring
+    try {
+      querydata = await helper.decrypt(sales.querystring, secret);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring Invalid error. Please provide the valid querystring.",
+        "SEND PDF",
+        secret
+      );
+      0;
+    }
+
+    // Parse the decrypted querystring
+    try {
+      querydata = JSON.parse(querydata);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring JSON error. Please provide valid JSON",
+        "SEND PDF",
+        secret
+      );
+    }
+    if (!querydata.hasOwnProperty("feedback")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Feedback missing. Please provide the Feedback.",
+        "SEND PDF",
+        secret
+      );
+    }
+    if (!querydata.hasOwnProperty("ccemail")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "CC Email id missing. Please provide the CC Email id",
+        "SEND PDF",
+        secret
+      );
+    }
+    if (!querydata.hasOwnProperty("emailid")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Email id missing. Please provide the Email id",
+        "SEND PDF",
+        secret
+      );
+    }
+
+    if (!querydata.hasOwnProperty("phoneno")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Contact number missing. Please provide the contact number.",
+        "SEND PDF",
+        secret
+      );
+    }
+    if (
+      !querydata.hasOwnProperty("messagetype") ||
+      querydata.messagetype == ""
+    ) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Message type missing. Please provide the message type.",
+        "SEND PDF",
+        secret
+      );
+    }
+    var WhatsappSent = 0,
+      EmailSent = 0;
+    const promises = [];
+    const phoneNumbers = querydata.phoneno
+      ? querydata.phoneno
+          .split(",")
+          .map((num) => num.trim())
+          .filter((num) => num !== "")
+      : [];
+
+    let whatsappResults = [];
+    let emailResult = false;
+
+    // Send Email or WhatsApp Message
+    if (querydata.messagetype === 1) {
+      // Send only email
+      try {
+        emailResult = await mailer.sendQuotation(
+          "",
+          querydata.emailid,
+          "PDF from Sporada Secure India Private Limited",
+          "sendpdf.html",
+          ``,
+          "SENDPDF",
+          req.file.path,
+          querydata.feedback,
+          querydata.ccemail
+        );
+        EmailSent = emailResult;
+      } catch (error) {
+        console.error("Email sending failed:", error);
+        EmailSent = false;
+      }
+    } else if (querydata.messagetype === 2) {
+      // Send only WhatsApp
+      try {
+        const whatsappPromises = phoneNumbers.map((number) =>
+          axios.post(`${config.whatsappip}/billing/sendpdf`, {
+            phoneno: number,
+            feedback: querydata.feedback,
+            pdfpath: req.file.path,
+          })
+        );
+        const responses = await Promise.all(whatsappPromises);
+        WhatsappSent = responses.filter(
+          (response) => response.data.code === true
+        ).length;
+      } catch (error) {
+        console.error("WhatsApp sending failed:", error);
+        WhatsappSent = 0;
+      }
+    } else if (querydata.messagetype === 3) {
+      // Send both email & WhatsApp
+      try {
+        const emailPromise = mailer.sendQuotation(
+          "",
+          querydata.emailid,
+          "PDF from Sporada Secure India Private Limited",
+          "sendpdf.html",
+          ``,
+          "SENDPDF",
+          req.file.path,
+          querydata.feedback,
+          querydata.ccemail
+        );
+
+        const whatsappPromises = phoneNumbers.map((number) =>
+          axios.post(`${config.whatsappip}/billing/sendpdf`, {
+            phoneno: number,
+            feedback: querydata.feedback,
+            pdfpath: req.file.path,
+          })
+        );
+
+        const [emailResult, whatsappResponses] = await Promise.all([
+          emailPromise,
+          Promise.all(whatsappPromises),
+        ]);
+
+        EmailSent = emailResult;
+        WhatsappSent = whatsappResponses.filter(
+          (response) => response.status == 200
+        ).length;
+      } catch (error) {
+        console.error("Sending failed:", error);
+        EmailSent = false;
+        WhatsappSent = 0;
+      }
+    }
+
+    let isSuccess = false;
+    if (querydata.messagetype == 1 && EmailSent) {
+      isSuccess = true;
+    } else if (
+      querydata.messagetype == 2 &&
+      WhatsappSent == phoneNumbers.length
+    ) {
+      isSuccess = true;
+    } else if (
+      querydata.messagetype === 3 &&
+      EmailSent &&
+      WhatsappSent == phoneNumbers.length
+    ) {
+      isSuccess = true;
+    }
+
+    if (isSuccess) {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "PDF sent successfully",
+        { WhatsappSent, EmailSent },
+        secret
+      );
+    } else {
+      return helper.getErrorResponse(
+        false,
+        "failure",
+        "Failed to send PDF to all intended recipients",
+        { WhatsappSent, EmailSent },
+        secret
+      );
+    }
+  } catch (er) {
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal error. Please contact Administration",
+      er.message,
+      secret
+    );
+  }
+}
+
 async function UploadLogo(admin) {
   try {
     // Check if the session token exists
@@ -4026,6 +4320,7 @@ module.exports = {
   BranchList,
   GetBranchList,
   UploadLogo,
+  CustomSendPdf,
   CreateSubscription,
   GetSubscription,
   AddUpdateCompany,

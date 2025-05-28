@@ -5490,43 +5490,8 @@ async function SendPdf(req, res) {
     // Send Email or WhatsApp Message
     if (querydata.messagetype === 1) {
       // Send only email
-      emailResult = await mailer.sendQuotation(
-        "",
-        querydata.emailid,
-        "PDF from Sporada Secure India Private Limited",
-        "sendpdf.html",
-        ``,
-        "SENDPDF",
-        req.file.path,
-        querydata.feedback,
-        querydata.ccemail
-      );
-      EmailSent = emailResult;
-    } else if (querydata.messagetype === 2) {
-      // Send only WhatsApp
-      whatsappResults = await Promise.all(
-        phoneNumbers.map(async (number) => {
-          try {
-            const response = await axios.post(
-              `${config.whatsappip}/billing/sendpdf`,
-              {
-                phoneno: number,
-                feedback: querydata.feedback,
-                pdfpath: req.file.path,
-              }
-            );
-            return response.data.code === true;
-          } catch (error) {
-            console.error(`WhatsApp Error for ${number}:`, error.message);
-            return false;
-          }
-        })
-      );
-      WhatsappSent = whatsappResults.filter(Boolean).length;
-    } else if (querydata.messagetype === 3) {
-      // Send both email & WhatsApp
-      const emailPromise = mailer
-        .sendQuotation(
+      try {
+        emailResult = await mailer.sendQuotation(
           "",
           querydata.emailid,
           "PDF from Sporada Secure India Private Limited",
@@ -5536,36 +5501,67 @@ async function SendPdf(req, res) {
           req.file.path,
           querydata.feedback,
           querydata.ccemail
-        )
-        .then((result) => {
-          EmailSent = result;
-          return result;
-        });
+        );
+        EmailSent = emailResult;
+      } catch (error) {
+        console.error("Email sending failed:", error);
+        EmailSent = false;
+      }
+    } else if (querydata.messagetype === 2) {
+      // Send only WhatsApp
+      try {
+        const whatsappPromises = phoneNumbers.map((number) =>
+          axios.post(`${config.whatsappip}/billing/sendpdf`, {
+            phoneno: number,
+            feedback: querydata.feedback,
+            pdfpath: req.file.path,
+          })
+        );
+        const responses = await Promise.all(whatsappPromises);
+        WhatsappSent = responses.filter(
+          (response) => response.data.code === true
+        ).length;
+      } catch (error) {
+        console.error("WhatsApp sending failed:", error);
+        WhatsappSent = 0;
+      }
+    } else if (querydata.messagetype === 3) {
+      // Send both email & WhatsApp
+      try {
+        const emailPromise = mailer.sendQuotation(
+          "",
+          querydata.emailid,
+          "PDF from Sporada Secure India Private Limited",
+          "sendpdf.html",
+          ``,
+          "SENDPDF",
+          req.file.path,
+          querydata.feedback,
+          querydata.ccemail
+        );
 
-      const whatsappPromise = Promise.all(
-        phoneNumbers.map(async (number) => {
-          try {
-            const response = await axios.post(
-              `${config.whatsappip}/billing/sendpdf`,
-              {
-                phoneno: number,
-                feedback: querydata.feedback,
-                pdfpath: req.file.path,
-              }
-            );
-            return response.data.code === 200;
-          } catch (error) {
-            console.error(`WhatsApp Error for ${number}:`, error.message);
-            return false;
-          }
-        })
-      ).then((results) => {
-        WhatsappSent = results.filter(Boolean).length;
-        return results;
-      });
+        const whatsappPromises = phoneNumbers.map((number) =>
+          axios.post(`${config.whatsappip}/billing/sendpdf`, {
+            phoneno: number,
+            feedback: querydata.feedback,
+            pdfpath: req.file.path,
+          })
+        );
 
-      // Wait for both to complete
-      await Promise.all([emailPromise, whatsappPromise]);
+        const [emailResult, whatsappResponses] = await Promise.all([
+          emailPromise,
+          Promise.all(whatsappPromises),
+        ]);
+
+        EmailSent = emailResult;
+        WhatsappSent = whatsappResponses.filter(
+          (response) => response.status == 200
+        ).length;
+      } catch (error) {
+        console.error("Sending failed:", error);
+        EmailSent = false;
+        WhatsappSent = 0;
+      }
     }
 
     let isSuccess = false;

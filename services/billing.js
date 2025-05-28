@@ -934,11 +934,22 @@ async function ClearVouchers(req, res, next) {
     var transactionid = 0;
     try {
       var path = null;
-      if (req.file != null) {
-        path = req.file.path;
+      var receipt_path = null;
+      if (req.files && Array.isArray(req.files)) {
+        req.files.forEach((file) => {
+          if (file && file.originalname) {
+            const fileNameLower = file.originalname.toLowerCase();
+
+            if (fileNameLower.includes("receipt")) {
+              receipt_path = file.path;
+            } else {
+              path = file.path;
+            }
+          }
+        });
       }
       const [sql50] = await db.spcall(
-        `CALL InsertVoucherTransaction(?, ?, ?, ?, ?, ?, ?,?,@transaction_id);select @transaction_id;`,
+        `CALL InsertVoucherTransaction(?, ?, ?, ?, ?, ?, ?,?,?,@transaction_id);select @transaction_id;`,
         [
           querydata.voucherid,
           querydata.vouchernumber,
@@ -948,6 +959,7 @@ async function ClearVouchers(req, res, next) {
           querydata.paymentstatus,
           querydata.tdsstatus,
           querydata.paymentmode,
+          receipt_path || null,
         ]
       );
       const objectvalue = sql50[1][0];
@@ -1210,6 +1222,48 @@ async function ClearVouchers(req, res, next) {
         "refresh",
         "Voucher Cleared Successfully"
       );
+      let tdsAmount = Number(querydata.tds) || 0;
+      let cgstAmount = Number(querydata.CGST);
+      let sgstAmount = Number(querydata.SGST);
+      let igstAmount = Number(querydata.IGST);
+
+      // Normalize 0 values (assuming 0 = don't show)
+      if (cgstAmount === 0) cgstAmount = null;
+      if (sgstAmount === 0) sgstAmount = null;
+      if (igstAmount === 0) igstAmount = null;
+
+      // Calculate total GST amount
+      let gstAmount = 0;
+      if (igstAmount) {
+        gstAmount = igstAmount;
+      } else {
+        if (cgstAmount) gstAmount += cgstAmount;
+        if (sgstAmount) gstAmount += sgstAmount;
+      }
+      if (gstAmount === 0) gstAmount = undefined;
+
+      // Send email
+      const args = [
+        querydata.clientaddressname || "Customer",
+        "kishorekkumar34@gmail.com",
+        `Voucher Cleared: ${querydata.invoicenumber}`,
+        querydata.invoicenumber,
+        querydata.date,
+        querydata.grossamount,
+        tdsAmount > 0 ? tdsAmount : undefined,
+        gstAmount,
+        cgstAmount,
+        sgstAmount,
+        igstAmount,
+      ];
+
+      // Only push receipt_path if it exists
+      if (receipt_path) {
+        args.push(receipt_path);
+      }
+
+      await mailer.sendVoucherClearedEmail(...args);
+
       return helper.getSuccessResponse(
         true,
         "success",
@@ -1354,11 +1408,22 @@ async function ClearConsolidateVouchers(req, res, next) {
     var transactionid = 0;
     try {
       var path = null;
-      if (req.file != null) {
-        path = req.file.path;
+      var receipt_path = null;
+      if (req.files && Array.isArray(req.files)) {
+        req.files.forEach((file) => {
+          if (file && file.originalname) {
+            const fileNameLower = file.originalname.toLowerCase();
+
+            if (fileNameLower.includes("receipt")) {
+              receipt_path = file.path;
+            } else {
+              path = file.path;
+            }
+          }
+        });
       }
       const [sql50] = await db.spcall(
-        `CALL InsertVoucherTransaction(?, ?, ?, ?, ?, ?, ?,?,@transaction_id);select @transaction_id;`,
+        `CALL InsertVoucherTransaction(?, ?, ?, ?, ?, ?, ?,?,?,@transaction_id);select @transaction_id;`,
         [
           JSON.stringify(querydata1.voucherids),
           JSON.stringify(querydata1.vouchernumbers),
@@ -1368,6 +1433,7 @@ async function ClearConsolidateVouchers(req, res, next) {
           `complete`,
           querydata1.tdsstatus,
           querydata1.paymentmode,
+          receipt_path || null,
         ]
       );
       const objectvalue = sql50[1][0];
@@ -1424,6 +1490,27 @@ async function ClearConsolidateVouchers(req, res, next) {
       let IGST = querydata.IGST || 0;
       let CGST = querydata.CGST || 0;
       let SGST = querydata.SGST || 0;
+      // Collect all invoice numbers from the voucherlist
+      invoiceNumbers = querydata2.map((q) => q.invoicenumber);
+
+      // 1. Check all vouchers are for the same company (by gstnumber, or clientaddressname)
+      firstGstNumber = querydata2[0].gstnumber;
+      const allSameCompany = querydata2.every(
+        (q) => q.gstnumber === firstGstNumber
+      );
+      if (!allSameCompany) {
+        const sql7 = await db.query(
+          `DELETE FROM vouchertransactions WHERE vouchertrans_id = ?`,
+          [transactionid]
+        );
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "All vouchers must belong to the same company for consolidated clearance.",
+          "CLEAR CONSOLIDATE VOUCHERS",
+          secret
+        );
+      }
 
       try {
         if (querydata1.paymentstatus == "complete") {
@@ -1613,6 +1700,86 @@ async function ClearConsolidateVouchers(req, res, next) {
       "refresh",
       "Consolidated voucher Cleared Successfully"
     );
+    console.log("Query Data GST breakdown:");
+    querydata2.forEach((q, i) => {
+      console.log(
+        `Row ${i + 1}: IGST: ${q.IGST}, CGST: ${q.CGST}, SGST: ${q.SGST}`
+      );
+    });
+
+    let totalIGST = 0,
+      totalCGST = 0,
+      totalSGST = 0;
+    let tdsAmount = 0;
+
+    // Sum up the GST and TDS amounts safely
+    for (const q of querydata2) {
+      totalIGST += parseFloat(q.IGST) || 0;
+      totalCGST += parseFloat(q.CGST) || 0;
+      totalSGST += parseFloat(q.SGST) || 0;
+      tdsAmount += parseFloat(q.tds) || 0;
+    }
+
+    const totalGST = totalIGST + totalCGST + totalSGST;
+
+    console.log("Total CGST Amount:", totalCGST);
+    console.log("Total SGST Amount:", totalSGST);
+    console.log("Total IGST Amount:", totalIGST);
+    console.log("Total GST Amount:", totalGST);
+    console.log("Total TDS Amount:", tdsAmount);
+
+    // GST type consistency check across vouchers
+    let gstType = null;
+
+    const allIGST = querydata2.every(
+      (q) =>
+        (parseFloat(q.IGST) || 0) > 0 &&
+        (parseFloat(q.CGST) || 0) === 0 &&
+        (parseFloat(q.SGST) || 0) === 0
+    );
+
+    const allCGSTSGST = querydata2.every(
+      (q) =>
+        (parseFloat(q.IGST) || 0) === 0 &&
+        (parseFloat(q.CGST) || 0) > 0 &&
+        (parseFloat(q.SGST) || 0) > 0
+    );
+
+    if (allIGST) {
+      gstType = "IGST";
+    } else if (allCGSTSGST) {
+      gstType = "CGST + SGST";
+    } else {
+      console.error("GST Type mismatch across vouchers. Raw data:", querydata2);
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "All vouchers must have the same GST type (IGST or CGST+SGST) for consolidated clearance.",
+        "CLEAR CONSOLIDATE VOUCHERS",
+        secret
+      );
+    }
+
+    const args = [
+      firstClientName || "Customer", // recipientName
+      "kishorekkumar34@gmail.com", // recipientEmail
+      `Consolidated Voucher Cleared: ${invoiceNumbers.join(", ")}`, // subject
+      invoiceNumbers, // invoiceNumbers
+      querydata1.date, // clearedDate
+      querydata1.totalpaidamount, // totalAmount
+      tdsAmount > 0 ? tdsAmount : undefined, // tdsAmount
+      totalIGST, // igstAmount
+      totalCGST, // cgstAmount
+      totalSGST, // sgstAmount
+    ];
+
+    // Add receipt_path only if it exists
+    if (receipt_path) {
+      args.push(receipt_path);
+    }
+
+    await mailer.sendConsolidatedClearedEmail(...args);
+
     return helper.getSuccessResponse(
       true,
       "success",

@@ -28,7 +28,7 @@ const config = {
     multipleStatements: true,
   },
   whatsappip: process.env.WHATSAPP_IP,
-  filestorage: `\\\\192.168.0.156\\Backup_ganesh`,
+  filestorage: `\\\\192.168.0.156\\Backup_ganesh\\invoices`,
   printpath: `\\\\192.168.0.156\\Venkat\\Print\\New Invoices - print`,
   serverurl: process.env.SERVER_URL,
   apikey: process.env.API_KEY,

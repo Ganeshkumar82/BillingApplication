@@ -127,11 +127,12 @@ router.post("/branchlist", async function (req, res, next) {
 });
 
 //API to fetch the list of customers
-router.post("/fhf", async function (req, res, next) {
+router.post("/sendpdf", async function (req, res, next) {
   try {
-    res.json(await admin.FHF(req.body));
+    res.json(await admin.CustomSendPdf(req, res, next));
   } catch (er) {
-    console.error(`Error while Getting the FHF list -> ${er.message}`);
+    console.log(`Error while sending the pdf : ${er}`);
+    next(er);
   }
 });
 
