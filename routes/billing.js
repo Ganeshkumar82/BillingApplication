@@ -31,7 +31,7 @@ router.post("/getvoucher", async function (req, res, next) {
 
 router.post("/clearvoucher", async function (req, res, next) {
   try {
-    res.json(await billing.ClearVouchers(req, res, next));
+    await billing.ClearVouchers(req, res, next);
   } catch (er) {
     console.log(`Error while clearing the vouchers: ${er}`);
     next(er);
@@ -40,7 +40,7 @@ router.post("/clearvoucher", async function (req, res, next) {
 
 router.post("/clearconsolidatevoucher", async function (req, res, next) {
   try {
-    res.json(await billing.ClearConsolidateVouchers(req, res, next));
+    await billing.ClearConsolidateVouchers(req, res, next);
   } catch (er) {
     console.log(`Error while clearing the consolidate vouchers: ${er}`);
     next(er);
@@ -128,11 +128,11 @@ router.post("/addoverduedetails", async function (req, res, next) {
   }
 });
 
-router.post("/dashboard", async function (req, res, next) {
+router.post("/getdashboard", async function (req, res, next) {
   try {
-    res.json(await billing.getDashboard(req.body));
+    res.json(await billing.getDashboardDetails(req.body));
   } catch (er) {
-    console.log(`Error while fetching the overdue details: ${er}`);
+    console.log(`Error while fetching the dashboard details: ${er}`);
     next(er);
   }
 });

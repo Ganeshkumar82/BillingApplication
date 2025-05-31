@@ -17,6 +17,157 @@ const { el } = require("date-fns/locale");
 //################################################################################################################################################################################################
 //################################################################################################################################################################################################
 
+// async function getSubscriptionInvoice(billing) {
+//   try {
+//     if (!billing.STOKEN) {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         "Login session token missing. Please provide the Login session token",
+//         "FETCH SUBSCRIPTION INVOICE",
+//         ""
+//       );
+//     }
+//     secret = billing.STOKEN.substring(0, 16);
+//     var querydata;
+
+//     // Validate session token length
+//     if (billing.STOKEN.length > 50 || billing.STOKEN.length < 30) {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         "Login session token size invalid. Please provide the valid Session token",
+//         "FETCH SUBSCRIPTION INVOICE",
+//         secret
+//       );
+//     }
+
+//     // Validate session token
+//     const [result] = await db.spcall(
+//       "CALL SP_STOKEN_CHECK(?,@result); SELECT @result;",
+//       [billing.STOKEN]
+//     );
+//     const objectvalue = result[1][0];
+//     const userid = objectvalue["@result"];
+
+//     if (userid == null) {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+//         "FETCH SUBSCRIPTION INVOICE",
+//         secret
+//       );
+//     }
+//     var sql = [];
+//     // Check if querystring is provided
+//     if (!billing.querystring) {
+//       sql = await db.query(
+//         `select sbg.subscription_generatedid recurredbillid,sbm.subscription_billid,sbm.site_Ids,sbm.client_addressname,sbm.client_address,sbm.billing_addressname,sbm.billing_address
+//         ,sbg.pdf_path pdf_data,sbg.Invoice_no,sbg.TotalAmount,sbm.email_id,sbg.phone_no,sbg.ccemail,sbm.bill_date date,sbm.customer_GST gstnumber,DATE_FORMAT(cvm.Due_date, '%Y-%m-%d %H:%i:%s') AS Due_date,sbm.hsn_code,sbm.plantype,sbm.billmode,sbg.payment_status,sbm.pendingPayments,sbm.plan_name,cvm.voucher_id,cvm.voucher_number,CASE WHEN cvm.fully_cleared = 1 THEN NULL WHEN cvm.Due_date IS NULL OR DATEDIFF(CURDATE(), cvm.Due_date) <= 0 THEN 0 ELSE DATEDIFF(CURDATE(), cvm.Due_date) END AS Overdue_days
+//         , cvm.Overdue_days as Overdue_history from subscriptionbillmaster sbm JOIN subscriptionbillgenerated sbg ON sbm.subscription_billid = sbg.subscription_billid JOIN clientvouchermaster cvm ON cvm.invoice_number = sbg.Invoice_no where sbm.Email_sent = 1 and sbm.status = 1`
+//       );
+//     } else {
+//       // Decrypt querystring
+//       try {
+//         querydata = await helper.decrypt(billing.querystring, secret);
+//       } catch (ex) {
+//         return helper.getErrorResponse(
+//           false,
+//           "error",
+//           "Querystring Invalid error. Please provide the valid querystring.",
+//           "ADD RECURRING INVOICE",
+//           secret
+//         );
+//       }
+
+//       // Parse the decrypted querystring
+//       try {
+//         querydata = JSON.parse(querydata);
+//       } catch (ex) {
+//         return helper.getErrorResponse(
+//           false,
+//           "error",
+//           "Querystring JSON error. Please provide valid JSON",
+//           "ADD RECURRING INVOICE",
+//           secret
+//         );
+//       }
+//       var sqlParams = [];
+//       let query = `select sbg.subscription_generatedid recurredbillid,sbm.subscription_billid,sbm.site_Ids,sbm.client_addressname,sbm.client_address,sbm.billing_addressname,sbm.billing_address
+//     ,sbg.pdf_path pdf_data,sbg.Invoice_no,sbg.TotalAmount,sbm.email_id,sbg.phone_no,sbg.ccemail,sbm.bill_date date,sbm.customer_GST gstnumber,DATE_FORMAT(cvm.Due_date, '%Y-%m-%d %H:%i:%s') AS Due_date,sbm.hsn_code,sbm.plantype,sbm.billmode,sbg.payment_status,sbm.pendingPayments,sbm.plan_name,cvm.voucher_id,cvm.voucher_number,CASE WHEN cvm.fully_cleared = 1 THEN NULL WHEN cvm.Due_date IS NULL OR DATEDIFF(CURDATE(), cvm.Due_date) <= 0 THEN 0 ELSE DATEDIFF(CURDATE(), cvm.Due_date) END AS Overdue_days
+//     , cvm.Overdue_days as Overdue_history from subscriptionbillmaster sbm
+//     JOIN subscriptionbillgenerated sbg ON sbm.subscription_billid = sbg.subscription_billid JOIN clientvouchermaster cvm ON cvm.invoice_number = sbg.Invoice_no where sbm.Email_sent = 1 and sbm.status = 1`;
+//       if (
+//         querydata.customerid != 0 &&
+//         querydata.customerid != undefined &&
+//         querydata.customerid != null
+//       ) {
+//         query += ` AND Processid in(select cprocess_id from salesprocessmaster where customer_id = ?)`;
+//         sqlParams.push(querydata.customerid);
+//       }
+//       if (
+//         querydata.startdate != null &&
+//         querydata.startdata != 0 &&
+//         querydata.startdate != undefined &&
+//         querydata.enddate != null &&
+//         querydata.enddate != 0 &&
+//         querydata.enddate != undefined
+//       ) {
+//         query += ` AND salesprocess_date BETWEEN ? and ?`;
+//         sqlParams.push(querydata.startdate, querydata.enddate);
+//       }
+//       if (
+//         querydata.paymentstatus != null &&
+//         querydata.paymentstatus != undefined
+//       ) {
+//         if (querydata.paymentstatus == 0) {
+//           query += ` AND salesprocess_date BETWEEN ? and ?`;
+//           sqlParams.push(querydata.startdate, querydata.enddate);
+//         } else if (querydata.paymentstatus == 1) {
+//           query += ` AND salesprocess_date BETWEEN ? and ?`;
+//           sqlParams.push(querydata.startdate, querydata.enddate);
+//         }
+//       }
+//       if (
+//         querydata.duedays != null &&
+//         querydata.duedays != undefined &&
+//         querydata.duedays > 0
+//       ) {
+//         query += ` AND DATEDIFF(CURDATE(), sbm.Due_date) >= ?`;
+//         sqlParams.push(querydata.duedays);
+//       }
+//       sql = await db.query(query, sqlParams);
+//     }
+
+//     if (sql.length > 0) {
+//       return helper.getSuccessResponse(
+//         true,
+//         "success",
+//         "The generated Recurring Invoice is successfully fetched.",
+//         sql,
+//         secret
+//       );
+//     } else {
+//       return helper.getSuccessResponse(
+//         true,
+//         "success",
+//         "The generated Recurring Invoice is successfully fetched.",
+//         sql,
+//         secret
+//       );
+//     }
+//   } catch (er) {
+//     return helper.getErrorResponse(
+//       false,
+//       "error",
+//       "Internal error. Please contact Administration",
+//       er.message,
+//       secret
+//     );
+//   }
+// }
+
 async function getSubscriptionInvoice(billing) {
   try {
     if (!billing.STOKEN) {
@@ -64,8 +215,7 @@ async function getSubscriptionInvoice(billing) {
     if (!billing.querystring) {
       sql = await db.query(
         `select sbg.subscription_generatedid recurredbillid,sbm.subscription_billid,sbm.site_Ids,sbm.client_addressname,sbm.client_address,sbm.billing_addressname,sbm.billing_address
-        ,sbg.pdf_path pdf_data,sbg.Invoice_no,sbg.TotalAmount,sbm.email_id,sbg.phone_no,sbg.ccemail,sbm.bill_date date,sbm.customer_GST gstnumber,DATE_FORMAT(cvm.Due_date, '%Y-%m-%d %H:%i:%s') AS Due_date,sbm.hsn_code,sbm.plantype,sbm.billmode,sbg.payment_status,sbm.pendingPayments,sbm.plan_name,cvm.voucher_id,cvm.voucher_number,CASE WHEN cvm.fully_cleared = 1 THEN NULL WHEN cvm.Due_date IS NULL OR DATEDIFF(CURDATE(), cvm.Due_date) <= 0 THEN 0 ELSE DATEDIFF(CURDATE(), cvm.Due_date) END AS Overdue_days
-        , cvm.Overdue_days as Overdue_history from subscriptionbillmaster sbm JOIN subscriptionbillgenerated sbg ON sbm.subscription_billid = sbg.subscription_billid JOIN clientvouchermaster cvm ON cvm.invoice_number = sbg.Invoice_no where sbm.Email_sent = 1 and sbm.status = 1`
+        ,sbg.pdf_path pdf_data,sbg.Invoice_no,sbg.TotalAmount,sbm.email_id,sbg.phone_no,sbg.ccemail,sbm.bill_date date,sbm.customer_GST gstnumber,sbm.Due_date,sbm.hsn_code,sbm.plantype,sbm.billmode,sbg.payment_status,sbm.pendingPayments,sbm.plan_name,cvm.voucher_id,cvm.voucher_number,CASE WHEN CURDATE() > sbm.Due_date THEN DATEDIFF(CURDATE(), sbm.Due_date) ELSE 0 END AS overdue_days,CASE WHEN CURDATE() > sbm.Due_date THEN 1 ELSE 0 END AS is_overdue from subscriptionbillmaster sbm JOIN subscriptionbillgenerated sbg ON sbm.subscription_billid = sbg.subscription_billid JOIN clientvouchermaster cvm ON cvm.invoice_number = sbg.Invoice_no where sbm.Email_sent = 1 and sbm.status = 1`
       );
     } else {
       // Decrypt querystring
@@ -95,17 +245,47 @@ async function getSubscriptionInvoice(billing) {
       }
       var sqlParams = [];
       let query = `select sbg.subscription_generatedid recurredbillid,sbm.subscription_billid,sbm.site_Ids,sbm.client_addressname,sbm.client_address,sbm.billing_addressname,sbm.billing_address
-    ,sbg.pdf_path pdf_data,sbg.Invoice_no,sbg.TotalAmount,sbm.email_id,sbg.phone_no,sbg.ccemail,sbm.bill_date date,sbm.customer_GST gstnumber,DATE_FORMAT(cvm.Due_date, '%Y-%m-%d %H:%i:%s') AS Due_date,sbm.hsn_code,sbm.plantype,sbm.billmode,sbg.payment_status,sbm.pendingPayments,sbm.plan_name,cvm.voucher_id,cvm.voucher_number,CASE WHEN cvm.fully_cleared = 1 THEN NULL WHEN cvm.Due_date IS NULL OR DATEDIFF(CURDATE(), cvm.Due_date) <= 0 THEN 0 ELSE DATEDIFF(CURDATE(), cvm.Due_date) END AS Overdue_days
-    , cvm.Overdue_days as Overdue_history from subscriptionbillmaster sbm
+    ,sbg.pdf_path pdf_data,sbg.Invoice_no,sbg.TotalAmount,sbm.email_id,sbg.phone_no,sbg.ccemail,sbm.bill_date date,sbm.customer_GST gstnumber,sbm.Due_date,sbm.hsn_code,sbm.plantype,sbm.billmode,sbg.payment_status,sbm.pendingPayments,sbm.plan_name,cvm.voucher_id,cvm.voucher_number,CASE WHEN CURDATE() > sbm.Due_date THEN DATEDIFF(CURDATE(), sbm.Due_date) ELSE 0 END AS overdue_days,CASE WHEN CURDATE() > sbm.Due_date THEN 1 ELSE 0 END AS is_overdue from subscriptionbillmaster sbm
     JOIN subscriptionbillgenerated sbg ON sbm.subscription_billid = sbg.subscription_billid JOIN clientvouchermaster cvm ON cvm.invoice_number = sbg.Invoice_no where sbm.Email_sent = 1 and sbm.status = 1`;
       if (
         querydata.customerid != 0 &&
         querydata.customerid != undefined &&
         querydata.customerid != null
       ) {
-        query += ` AND Processid in(select cprocess_id from salesprocessmaster where customer_id = ?)`;
+        query += ` AND cvm.customer_id = ?`;
         sqlParams.push(querydata.customerid);
       }
+      if (
+        querydata.plantype != null &&
+        querydata.plantype != undefined &&
+        querydata.plantype !== ""
+      ) {
+        query += ` AND LOWER(sbm.plantype) = LOWER(?)`;
+        sqlParams.push(querydata.plantype);
+      }
+
+      // if (querydata.planname && querydata.planname.trim() !== "") {
+      //   const planName = querydata.planname.trim();
+
+      //   // Check if the plan name exists in DB
+      //   const checkPlanQuery = `SELECT COUNT(*) as count FROM subscriptionbillmaster WHERE TRIM(plan_name) = ?`;
+      //   const [checkResult] = await db.query(checkPlanQuery, [planName]);
+
+      //   if (checkResult.count === 0) {
+      //     // Plan name not found, throw error
+      //     return helper.getErrorResponse(
+      //       false,
+      //       "error",
+      //       "Plan doesn't exist or subscribed",
+      //       "ADD RECURRING INVOICE",
+      //       secret
+      //     );
+      //   }
+
+      //   // Plan exists, add filter to main query
+      //   query += ` AND sbm.plan_name = ?`;
+      //   sqlParams.push(planName);
+      // }
       if (
         querydata.startdate != null &&
         querydata.startdata != 0 &&
@@ -114,29 +294,28 @@ async function getSubscriptionInvoice(billing) {
         querydata.enddate != 0 &&
         querydata.enddate != undefined
       ) {
-        query += ` AND salesprocess_date BETWEEN ? and ?`;
+        query += ` AND DATE(sbm.Row_updated_date) BETWEEN ? and ?`;
         sqlParams.push(querydata.startdate, querydata.enddate);
       }
-      if (
-        querydata.paymentstatus != null &&
-        querydata.paymentstatus != undefined
-      ) {
-        if (querydata.paymentstatus == 0) {
-          query += ` AND salesprocess_date BETWEEN ? and ?`;
-          sqlParams.push(querydata.startdate, querydata.enddate);
-        } else if (querydata.paymentstatus == 1) {
-          query += ` AND salesprocess_date BETWEEN ? and ?`;
-          sqlParams.push(querydata.startdate, querydata.enddate);
+      if (querydata.paymentstatus) {
+        if (querydata.paymentstatus === "paid") {
+          query += ` AND cvm.fully_cleared = 1`;
+        } else if (querydata.paymentstatus === "partial") {
+          query += ` AND cvm.fully_cleared = 0 AND cvm.partially_cleared = 1`;
+        } else if (querydata.paymentstatus === "unpaid") {
+          query += ` AND cvm.fully_cleared = 0 AND cvm.partially_cleared = 0`;
         }
       }
-      if (
-        querydata.duedays != null &&
-        querydata.duedays != undefined &&
-        querydata.duedays > 0
-      ) {
-        query += ` AND DATEDIFF(CURDATE(), sbm.Due_date) >= ?`;
-        sqlParams.push(querydata.duedays);
-      }
+
+      // if (
+      //   querydata.duedays != null &&
+      //   querydata.duedays != undefined &&
+      //   querydata.duedays > 0
+      // ) {
+      //   query += ` AND DATEDIFF(CURDATE(), sbm.Due_date) >= ?`;
+      //   sqlParams.push(querydata.duedays);
+      // }
+      console.log(query);
       sql = await db.query(query, sqlParams);
     }
 
@@ -273,17 +452,16 @@ async function getSalesInvoice(billing) {
       ) {
         query += ` AND spl.salesprocess_date BETWEEN ? and ?`;
         sqlParams.push(querydata.startdate, querydata.enddate);
-      } else if (
-        querydata.paymentstatus != null &&
-        querydata.paymentstatus != undefined
-      ) {
-        if (querydata.paymentstatus == 0) {
-          query += ` AND spl.payment_status = 0`;
-        } else if (querydata.paymentstatus == 1) {
-          query += ` AND spl.payment_status = 1`;
+      } else if (querydata.paymentstatus) {
+        if (querydata.paymentstatus === "paid") {
+          query += ` AND cvm.fully_cleared = 1`;
+        } else if (querydata.paymentstatus === "partial") {
+          query += ` AND cvm.fully_cleared = 0 AND cvm.partially_cleared = 1`;
+        } else if (querydata.paymentstatus === "unpaid") {
+          query += ` AND cvm.fully_cleared = 0 AND cvm.partially_cleared = 0`;
         }
+        sql = await db.query(query, sqlParams);
       }
-      sql = await db.query(query, sqlParams);
     }
 
     if (sql.length > 0) {
@@ -684,6 +862,22 @@ async function getVouchers(billing) {
 , Overdue_days as Overdue_history FROM clientvouchermaster WHERE status = 1`;
 
     if (
+      querydata.vouchernumber != null &&
+      querydata.vouchernumber != 0 &&
+      querydata.vouchernumber != undefined
+    ) {
+      sql += ` and voucher_number = ?`;
+      sqlParams.push(querydata.vouchernumber);
+    }
+    if (
+      querydata.voucherid != null &&
+      querydata.voucherid != 0 &&
+      querydata.voucherid != undefined
+    ) {
+      sql += ` and voucher_id = ?`;
+      sqlParams.push(querydata.voucherid);
+    }
+    if (
       querydata.vouchertype != null &&
       querydata.vouchertype != 0 &&
       querydata.vouchertype != undefined
@@ -790,7 +984,7 @@ async function getVouchers(billing) {
 //###############################################################################################################################################################################################
 //###############################################################################################################################################################################################
 //#####
-async function ClearVouchers(req, res, next) {
+async function ClearVouchers(req, res) {
   let secret, querydata, billing;
   try {
     try {
@@ -1245,7 +1439,7 @@ async function ClearVouchers(req, res, next) {
       // Send email
       const args = [
         querydata.clientaddressname || "Customer",
-        "kishorekkumar34@gmail.com",
+        querydata.emailid,
         `Voucher Cleared: ${querydata.invoicenumber}`,
         querydata.invoicenumber,
         querydata.date,
@@ -1762,7 +1956,7 @@ async function ClearConsolidateVouchers(req, res, next) {
 
     const args = [
       firstClientName || "Customer", // recipientName
-      "kishorekkumar34@gmail.com", // recipientEmail
+      querydata1.emailid, // recipientEmail
       `Consolidated Voucher Cleared: ${invoiceNumbers.join(", ")}`, // subject
       invoiceNumbers, // invoiceNumbers
       querydata1.date, // clearedDate
@@ -3074,8 +3268,7 @@ const formatDate = (date) => {
 //###############################################################################################################################################################################################
 //###############################################################################################################################################################################################
 //###############################################################################################################################################################################################
-
-async function getDashboard(billing) {
+async function getDashboardDetails(billing) {
   try {
     // Check if the session token exists
     if (!billing.hasOwnProperty("STOKEN")) {
@@ -3117,49 +3310,164 @@ async function getDashboard(billing) {
       );
     }
 
-    // Append overdueEntry to Overdue_days JSON array
-    const sql = await db.query(
-      `UPDATE clientvouchermaster
-       SET Overdue_days = JSON_ARRAY_APPEND(Overdue_days, '$', CAST(? AS JSON))
-       WHERE voucher_id = ?`,
-      [JSON.stringify(overdueEntry), querydata.voucherid]
-    );
-
-    if (sql.length > 0) {
-      return helper.getSuccessResponse(
-        true,
-        "success",
-        "Overdue details updated successfully",
-        {
-          voucherid: querydata.voucherid,
-          date: querydata.date,
-          feedback: querydata.feedback,
-        },
-        secret
-      );
-    } else {
+    // Check if querystring is provided
+    if (!billing.querystring) {
       return helper.getErrorResponse(
         false,
         "error",
-        "No voucher updated. Please check the voucher id.",
-        "ADD OVERDUE DETAILS",
+        "Querystring missing. Please provide the querystring",
+        "GET DASHBOARD DETAILS",
         secret
       );
     }
-  } catch (er) {
+
+    // Decrypt querystring
+    let querydata;
+    try {
+      querydata = await helper.decrypt(billing.querystring, secret);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring Invalid error. Please provide the valid querystring.",
+        "GET DASHBOARD DETAILS",
+        secret
+      );
+    }
+
+    // Parse the decrypted querystring
+    try {
+      querydata = JSON.parse(querydata);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring JSON error. Please provide valid JSON",
+        "GET DASHBOARD DETAILS",
+        secret
+      );
+    }
+
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+    function formatDate(date) {
+      const yyyy = date.getFullYear();
+      const mm = String(date.getMonth() + 1).padStart(2, "0");
+      const dd = String(date.getDate()).padStart(2, "0");
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    const fromDate = querydata.fromDate || formatDate(firstDay);
+    const toDate =
+      querydata.toDate ||
+      (querydata.fromDate ? formatDate(now) : formatDate(lastDay));
+
+    const inputType = querydata.type ? querydata.type.toLowerCase().trim() : "";
+
+    let filterCondition = "";
+    let types = [];
+
+    if (inputType === "receivables") {
+      filterCondition = "voucher_type = 'receipt voucher'";
+    } else if (inputType === "payables") {
+      filterCondition = "voucher_type = 'payment voucher'";
+    } else {
+      types =
+        inputType === "all" || inputType === ""
+          ? ["sales", "subscription", "purchase"]
+          : [inputType];
+      const placeholders = types.map(() => "?").join(", ");
+      filterCondition = `invoice_type IN (${placeholders})`;
+    }
+
+    // Dynamically adjust params for query
+    const params = [...types, fromDate, toDate].filter(Boolean);
+
+    const sql = `
+  SELECT 
+    COUNT(*) AS totalInvoices,
+    SUM(CAST(Total_amount AS DECIMAL)) AS totalAmount,
+
+    COUNT(CASE
+        WHEN
+            CAST(pending_amount AS DECIMAL) = 0
+            AND (fully_cleared = 1 OR partially_cleared = 1)
+        THEN 1
+    END) AS paidInvoices,
+
+    SUM(CASE
+        WHEN
+            CAST(paid_amount AS DECIMAL) > 0
+            AND CAST(pending_amount AS DECIMAL) = 0
+            AND (fully_cleared = 1 OR partially_cleared = 1)
+        THEN CAST(paid_amount AS DECIMAL)
+        ELSE 0
+    END) AS paidAmount,
+
+    COUNT(CASE
+        WHEN NOT (
+            CAST(pending_amount AS DECIMAL) = 0
+            AND (fully_cleared = 1 OR partially_cleared = 1)
+        )
+        THEN 1
+    END) AS pendingInvoices,
+
+    SUM(CASE
+        WHEN NOT (
+            CAST(paid_amount AS DECIMAL) > 0
+            AND CAST(pending_amount AS DECIMAL) = 0
+            AND (fully_cleared = 1 OR partially_cleared = 1)
+        )
+        THEN CAST(pending_amount AS DECIMAL)
+        ELSE 0
+    END) AS pendingAmount
+
+  FROM clientvouchermaster
+  WHERE status = 1
+    AND ${filterCondition}
+    AND DATE(created_at) BETWEEN ? AND ?
+`;
+
+    const [rows] = await db.query(sql, params);
+
+    // Check if data exists
+    if (!rows || rows.length === 0) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "No dashboard data found for the user.",
+        "GET DASHBOARD DETAILS",
+        secret
+      );
+    }
+
+    return helper.getSuccessResponse(
+      true,
+      "success",
+      "Dashboard details retrieved successfully.",
+      {
+        dashboard: rows, // only return the single object
+      },
+      secret
+    );
+  } catch (error) {
+    console.error("DASHBOARD ERROR:", error); // optional log for debugging
     return helper.getErrorResponse(
       false,
       "error",
-      "Internal Error. Please contact Administration",
-      er.message,
+      "Internal server error.",
+      "GET DASHBOARD DETAILS",
       secret
     );
   }
 }
-//###############################################################################################################################################################################################
-//###############################################################################################################################################################################################
-//###############################################################################################################################################################################################
-//###############################################################################################################################################################################################
+
+//#################################################################################################################################################################################
+//#################################################################################################################################################################################
+//#################################################################################################################################################################################
+//#################################################################################################################################################################################
 
 async function updatePaymentDetails(req, res, next) {
   let secret, querydata, billing;
@@ -3274,7 +3582,7 @@ async function updatePaymentDetails(req, res, next) {
     const sql = await db.query(
       `UPDATE clientvouchermaster
        SET Payment_details = ?
-       WHERE voucher_id = ?`,
+       WHERE voucher_id = ? where Payment_details IS NOT NULL`,
       [JSON.stringify(paymentdetails), querydata.voucherid]
     );
     var path = null;
@@ -3334,6 +3642,6 @@ module.exports = {
   getSubscriptionCustomer,
   getSalesCustomer,
   addOverdueDetails,
-  getDashboard,
+  getDashboardDetails,
   updatePaymentDetails,
 };

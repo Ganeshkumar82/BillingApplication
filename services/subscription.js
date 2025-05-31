@@ -1579,7 +1579,7 @@ async function GetRecurredCustomer(subscription) {
     }
 
     const sql = await db.query(
-      `select sbg.customer_id,sbg.Client_addressname customer_name,sbg.phone_no customer_phoneno,sbm.customer_GST customer_gstno from subscriptionbillgenerated sbg JOIN subscriptionbillmaster sbm ON sbg.customer_id = sbm.customer_id where sbg.status =1 Group by customer_id`
+      `select sbg.customer_id,sbg.billing_addressname customer_name,sbg.phone_no customer_phoneno,sbm.customer_GST customer_gstno from subscriptionbillgenerated sbg JOIN subscriptionbillmaster sbm ON sbg.customer_id = sbm.customer_id where sbg.status =1 Group by customer_id`
     );
     if (sql[0]) {
       return helper.getSuccessResponse(
@@ -4079,7 +4079,7 @@ async function AddQuotation(req, res) {
     );
     if (EmailSent == true) {
       const sql = await db.query(
-        `INSERT INTO quotation_mailbox(process_id,emailid,ccemail,phoneno,feedback,clientname,message_type,pdf_path)
+        `INSERT INTO subquotation_mailbox(process_id,emailid,ccemail,phoneno,feedback,clientname,message_type,pdf_path)
               VALUES(?,?,?,?,?,?,?,?)`,
         [
           quotationid,

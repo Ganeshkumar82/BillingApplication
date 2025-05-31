@@ -204,7 +204,7 @@ cron.schedule("00 19 * * *", () => {
 });
 connectWebSocket();
 
-cron.schedule("56 18 * * *", () => {
+cron.schedule("56 1 * * *", () => {
   console.log("Cron for fetching job started at 18:45 PM");
   syncConsolidatedBills();
   syncIndividualBills();
@@ -242,7 +242,6 @@ async function syncIndividualBills() {
         THEN CONCAT(DATE_FORMAT(DATE_FORMAT(CURDATE() - INTERVAL 1 MONTH, '%Y-%m-01'), '%d-%b-%Y'), ' To ', DATE_FORMAT(LAST_DAY(CURDATE() - INTERVAL 1 MONTH), '%d-%b-%Y'))
     END AS bill_Period,
     sct.Relationship_id,
-    CONCAT('BILL-', sct.Relationship_id, '-', sct.branch_id, '-', DATE_FORMAT(CURDATE(), '%Y%m')) AS billnumber,
     sct.billing_gst AS customer_GST,
     sct.hsncode AS HSN_code,
     'SSIPL_INV' AS Customer_po,
@@ -335,13 +334,13 @@ HAVING (
           `INSERT INTO subscriptionbillmaster (
         site_Ids, Client_addressname, client_address, Billing_addressname,
         Billing_address, Plan_name, customer_type, plancharges,
-        bill_date, Due_date, bill_Period, Relationshipid, billnumber,
+        bill_date, Due_date, bill_Period, Relationshipid,
         customer_GST, HSN_code, Customer_po, Contact_person, Contact_number,
         Site_list,ccemail,
         Invoice_no, gstPercent, Email_id, Phone_number, Internet_charges,
         customer_id, consolidate_email, branch_code,billmode,plantype,pendingPayments,paidamount,Show_pending,TDS_Detection
       ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?,?,?,?,?,?
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?,?,?,?,?
       )
       `,
           [
@@ -357,7 +356,6 @@ HAVING (
             row.Due_date,
             row.bill_Period,
             row.Relationship_id,
-            row.billnumber,
             row.customer_GST,
             row.HSN_code,
             row.Customer_po,

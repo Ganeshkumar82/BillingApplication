@@ -1770,16 +1770,16 @@ async function GetCompany(admin) {
         querydata.organizationid != 0
       ) {
         sql = await db.query1(
-          `select customer_id companyid,customer_name companyname,Email_id emailid,customer_name client_addressname,address client_address,customer_name billing_addressname,billing_address billing_addressname, contact_no contactnumber,gst_number from customermaster where status =1 and deleted_flag =0`
+          `select customer_id companyid,customer_name companyname,Email_id emailid,customer_name client_addressname,address client_address,customer_name billing_addressname,billing_address, contact_no contactnumber,gst_number from customermaster where status =1 and deleted_flag =0`
         );
       }
       sql = await db.query1(
-        `select customer_id companyid,customer_name companyname,Email_id emailid,customer_name client_addressname,address client_address,customer_name billing_addressname,billing_address billing_addressname, contact_no contactnumber,gst_number from customermaster where status =1 and deleted_flag =0 and Organization_id = ?`,
+        `select customer_id companyid,customer_name companyname,Email_id emailid,customer_name client_addressname,address client_address,customer_name billing_addressname,billing_address, contact_no contactnumber,gst_number from customermaster where status =1 and deleted_flag =0 and Organization_id = ?`,
         [querydata.organizationid]
       );
     } else {
       sql = await db.query1(
-        `select customer_id companyid,customer_name companyname,Email_id emailid,customer_name client_addressname,address client_address,customer_name billing_addressname,billing_address billing_addressname, contact_no contactnumber,gst_number from customermaster where status =1 and deleted_flag =0`
+        `select customer_id companyid,customer_name companyname,Email_id emailid,customer_name client_addressname,address client_address,customer_name billing_addressname,billing_address, contact_no contactnumber,gst_number from customermaster where status =1 and deleted_flag =0`
       );
     }
 

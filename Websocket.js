@@ -83,6 +83,7 @@ async function sendInvoice() {
 ) AS invoiceNo,
       bill_date ,
       IFNULL(gstPercent, 18) AS gstPercent,
+
       CASE
           WHEN EXISTS (
               SELECT 1
@@ -139,16 +140,28 @@ async function sendInvoice() {
       ) AS contactdetails,
 
       (
-          SELECT JSON_ARRAYAGG(
-              JSON_OBJECT(
-                  'invoiceid', sbg2.invoice_No,
-                  'duedate', sbm2.Due_date,
-                  'overduedays', DATEDIFF(NOW(), sbm2.Due_date),
-                  'charges', sbm2.plancharges,
-                  'paidamount', sbm2.paidamount,
-                  'pendingamount', sbm2.plancharges - sbm2.paidamount
-              )
+        SELECT JSON_ARRAYAGG(
+          JSON_OBJECT(
+            'invoiceid', sbg2.invoice_No,
+            'duedate', sbm2.Due_date,
+            'overduedays', DATEDIFF(NOW(), sbm2.Due_date),
+            'charges', sbm2.plancharges,
+            'paidamount', sbm2.paidamount,
+            'pendingamount', sbm2.plancharges - sbm2.paidamount
           )
+        )
+        FROM subscriptionbillmaster sbm2
+        JOIN subscriptionbillgenerated sbg2
+          ON sbm2.subscription_billid = sbg2.subscription_billid
+        WHERE sbg2.payment_status IN (0, 2)
+          AND sbm2.status = 1
+          AND sbm2.subscription_billid <> sbm.subscription_billid
+          AND sbm2.Site_list = sbm.Site_list
+          AND DATE_FORMAT(sbm2.bill_date, '%Y-%m') < DATE_FORMAT(sbm.bill_date, '%Y-%m')
+      )
+       AS previousPendingInvoices,
+        (
+          SELECT IFNULL(SUM(sbm2.plancharges - sbm2.paidamount), 0)
           FROM subscriptionbillmaster sbm2
           JOIN subscriptionbillgenerated sbg2
             ON sbm2.subscription_billid = sbg2.subscription_billid
@@ -157,25 +170,8 @@ async function sendInvoice() {
             AND sbm2.subscription_billid <> sbm.subscription_billid
             AND sbm2.Site_list = sbm.Site_list
             AND DATE_FORMAT(sbm2.bill_date, '%Y-%m') < DATE_FORMAT(sbm.bill_date, '%Y-%m')
-      ) AS previousPendingInvoices,
-      (
-          SELECT IFNULL(SUM(sbm2.plancharges), 0)
-          FROM subscriptionbillmaster sbm2
-          JOIN subscriptionbillgenerated sbg2
-            ON sbm2.subscription_billid = sbg2.subscription_billid
-          WHERE sbg2.payment_status IN (0, 2)
-            AND sbm2.status = 1
-            AND sbm2.subscription_billid <> sbm.subscription_billid
-            AND sbm2.Site_list = sbm.Site_list
-            AND DATE_FORMAT(sbm2.bill_date, '%Y-%m') < DATE_FORMAT(sbm.bill_date, '%Y-%m')
-      ) AS totalPreviousPendingAmount,
-      (
-        select IFNULL(SUM(cvm.paid_amount),0) from
-        clientvouchermaster cvm JOIN subscriptionbillgenerated sbg2
-        ON cvm.invoice_number = sbg2.invoice_no where sbg2.payment_status = 1
-        and cvm.cleared_date = 
-        AND DATE_FORMAT(sbm2.bill_date, '%Y-%m') < 31)
-      ) as paid amount
+        ) AS totalPreviousPendingAmount
+
   FROM NumberedInvoices sbm;`);
     // for (let i = 0; i < sql.length; i++) {
     const formattedSql = sql.map((row) => ({
@@ -201,7 +197,7 @@ async function sendInvoice() {
 }
 
 // Cron job to start sending messages every minute after 03:14 AM
-cron.schedule("10 12 * * *", () => {
+cron.schedule("32 12 * * *", () => {
   console.log("Cron job started at 07:16 PM");
   sendInvoice();
   // if (interval) {
@@ -214,7 +210,7 @@ cron.schedule("10 12 * * *", () => {
 });
 connectWebSocket();
 
-cron.schedule("07 12 * * *", () => {
+cron.schedule("31 12 * * *", () => {
   console.log("Cron for fetching job started at 18:45 PM");
   syncConsolidatedBills();
   syncIndividualBills();
@@ -249,8 +245,6 @@ SELECT
     sct.from_date,
     sct.to_date,
     sct.Billing_Status,
-
-    -- Calculate the number of plan days
     CASE
         WHEN MONTH(sct.from_date) = MONTH(CURDATE()) AND YEAR(sct.from_date) = YEAR(CURDATE())
              AND MONTH(sct.to_date) = MONTH(CURDATE()) AND YEAR(sct.to_date) = YEAR(CURDATE()) THEN
@@ -262,23 +256,18 @@ SELECT
         ELSE
             DAY(LAST_DAY(CURDATE()))
     END AS plan_days,
-
-    -- Calculate the per-day charge and then multiply by plan_days
 ROUND(
     (sct.Amount)
 ) AS plancharges,
 
     DATE(CURDATE()) AS bill_date,
 
-    -- Due date calculation for current month
     CASE 
         WHEN MAX(sct.billing_plan) = 'Prepaid' THEN 
             DATE_FORMAT(DATE_ADD(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 6 DAY), '%d-%m-%Y')
         WHEN MAX(sct.billing_plan) = 'Postpaid' THEN 
             DATE_FORMAT(DATE_ADD(LAST_DAY(CURDATE()), INTERVAL 7 DAY), '%d-%m-%Y')
     END AS Due_date,
-    
--- Plan period calculation using effective start and end dates (with month as number)
 CONCAT(
     DATE_FORMAT(
         DATE(
@@ -301,26 +290,19 @@ CONCAT(
         ),
         '%d-%m-%Y'
     )
-) AS plan_period,
-
-
-    -- Bill period calculation for current month
+) AS bill_period,
     CASE 
         WHEN MAX(sct.billing_plan) = 'Prepaid' THEN 
             CONCAT(DATE_FORMAT(DATE_FORMAT(CURDATE(), '%Y-%m-01'), '%d-%m-%Y'), ' To ', DATE_FORMAT(LAST_DAY(CURDATE()), '%d-%m-%Y'))
         WHEN MAX(sct.billing_plan) = 'Postpaid' THEN 
             CONCAT(DATE_FORMAT(DATE_FORMAT(CURDATE(), '%Y-%m-01'), '%d-%m-%Y'), ' To ', DATE_FORMAT(LAST_DAY(CURDATE()), '%d-%m-%Y'))
     END AS bill_Period,
-
     sct.Relationship_id,
-    CONCAT('BILL-', sct.Relationship_id, '-', sct.branch_id, '-', DATE_FORMAT(CURDATE(), '%Y%m')) AS billnumber,
     sct.billing_gst AS customer_GST,
     sct.hsncode AS HSN_code,
     sct.Customer_po AS Customer_po,
     sct.contactperson_name AS Contact_person,
     sct.Phoneno AS Contact_number,
-
-    -- Aggregating site information
     JSON_ARRAYAGG(
         JSON_OBJECT(
             'site_id', sct.branch_id,
@@ -344,7 +326,6 @@ CONCAT(
             'branchcode', sct.branchcode
         )
     ) AS Site_list,
-
     CURRENT_TIMESTAMP() AS Row_updated_date,
     1 AS Status, 
     0 AS Invoice_status, 
@@ -372,37 +353,36 @@ JOIN branchmaster bm ON bm.branch_id = sct.branch_id
 WHERE sct.bill_type = 'Individual' AND sct.Billing_Status = 1 AND bm.Site_type = 0
 GROUP BY sct.Relationship_id, sct.branch_id
 HAVING (
-        (MAX(sct.billing_plan) = 'Prepaid' AND DAY(CURDATE()) = 28)
-        OR
-        (MAX(sct.billing_plan) = 'Postpaid' AND DAY(CURDATE()) = 28)
+  (MAX(sct.billing_plan) = 'Prepaid' AND DAY(CURDATE()) = 1)
+  OR
+  (MAX(sct.billing_plan) = 'Postpaid' AND CURDATE() = LAST_DAY(CURDATE()))
     );
-
     `);
 
     let insertedCount = 0;
     for (const row of rows) {
       try {
         const [existing] = await db.query(
-          `SELECT 1 FROM subscriptionbillmaster_test 
-           WHERE Branch_code = ? AND plan_period = ? 
+          `SELECT 1 FROM subscriptionbillmaster 
+           WHERE Branch_code = ? AND bill_period = ? 
            LIMIT 1`,
-          [row.branchcode, row.plan_period]
+          [row.branchcode, row.bill_period]
         );
 
         if (!existing || existing.length === 0) {
           // Safe to insert
           await db.query(
-            `INSERT INTO subscriptionbillmaster_test (
+            `INSERT INTO subscriptionbillmaster (
               site_Ids, Client_addressname, client_address, Billing_addressname,
               Billing_address, Plan_name, customer_type, plancharges,
-              bill_date, Due_date, bill_Period, Relationshipid, billnumber,
+              bill_date, Due_date, Relationshipid,
               customer_GST, HSN_code, Customer_po, Contact_person, Contact_number,
               Site_list, ccemail, Invoice_no, gstPercent, Email_id, Phone_number,
               Internet_charges, customer_id, consolidate_email, Branch_code, billmode,
               plantype, pendingPayments, paidamount, Show_pending, TDS_Detection,
-              plan_days, plan_period, Billing_Status
+              plan_days, bill_period
             ) VALUES (
-              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?
+              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )`,
             [
               row.site_Ids,
@@ -415,9 +395,7 @@ HAVING (
               row.plancharges,
               row.bill_date,
               row.Due_date,
-              row.plan_period,
               row.Relationship_id,
-              row.billnumber,
               row.customer_GST,
               row.HSN_code,
               row.Customer_po,
@@ -440,19 +418,18 @@ HAVING (
               row.Show_pending,
               row.TDS_Detection,
               row.plan_days,
-              row.plan_period,
-              row.Billing_Status,
+              row.bill_period,
             ]
           );
 
           console.log(
-            `Inserted bill for branch_code: ${row.branchcode} and period: ${row.plan_period} for individual bills`
+            `Inserted bill for branch_code: ${row.branchcode} and period: ${row.bill_period} for individual bills`
           );
           insertedCount++;
         } else {
-          console.log(
-            `Skipping insert — already exists for branch_code: ${row.branchcode} and plan_period: ${row.plan_period} for individual bills`
-          );
+          // console.log(
+          // `Skipping insert — already exists for branch_code: ${row.branchcode} and bill_period: ${row.bill_period} for individual bills`
+          // );
         }
       } catch (rowErr) {
         console.error(
@@ -518,17 +495,13 @@ async function syncConsolidatedBills() {
     WHEN MAX(sct.billing_plan) = 'Postpaid' THEN DATE_FORMAT(DATE_ADD(LAST_DAY(CURDATE()), INTERVAL 7 DAY), '%d-%m-%Y')
    END AS Due_date,
     CASE 
-        WHEN MAX(sct.billing_plan) = 'Prepaid' THEN CONCAT(
-            DATE_FORMAT(DATE_FORMAT(CURDATE(), '%Y-%m-01'), '%d-%m-%Y'), ' To ', DATE_FORMAT(LAST_DAY(CURDATE()), '%d-%m-%Y')
-        )
-        WHEN MAX(sct.billing_plan) = 'Postpaid' THEN CONCAT(
-            DATE_FORMAT(DATE_FORMAT(CURDATE(), '%Y-%m-01'), '%d-%m-%Y'), ' To ',
-            DATE_FORMAT(LAST_DAY(CURDATE(), '%d-%m-%Y')
-        )
+        WHEN MAX(sct.billing_plan) = 'Prepaid' THEN 
+            CONCAT(DATE_FORMAT(DATE_FORMAT(CURDATE(), '%Y-%m-01'), '%d-%m-%Y'), ' To ', DATE_FORMAT(LAST_DAY(CURDATE()), '%d-%m-%Y'))
+        WHEN MAX(sct.billing_plan) = 'Postpaid' THEN 
+            CONCAT(DATE_FORMAT(DATE_FORMAT(CURDATE(), '%Y-%m-01'), '%d-%m-%Y'), ' To ', DATE_FORMAT(LAST_DAY(CURDATE()), '%d-%m-%Y'))
     END AS bill_Period,
  
     sct.Relationship_id,
-    CONCAT('BILL-', sct.Relationship_id, '-', DATE_FORMAT(CURDATE(), '%Y%m')) AS billnumber,
     sct.billing_gst AS customer_GST,
     sct.hsncode AS HSN_code,
     sct.Customer_po AS Customer_po,
@@ -593,9 +566,9 @@ JOIN branchmaster bm ON bm.branch_id = sct.branch_id
 WHERE sct.bill_type = 'Consolidate' AND sct.Billing_Status = 1 AND bm.Site_type = 0
 GROUP BY sct.Relationship_id, sct.customer_id
 HAVING (
-    (MAX(sct.billing_plan) = 'Prepaid' AND DAY(CURDATE()) = 28)
-    OR
-    (MAX(sct.billing_plan) = 'Postpaid' AND DAY(CURDATE()) = 28)
+  (MAX(sct.billing_plan) = 'Prepaid' AND DAY(CURDATE()) = 1)
+  OR
+  (MAX(sct.billing_plan) = 'Postpaid' AND CURDATE() = LAST_DAY(CURDATE()))
 );
     `);
 
@@ -603,7 +576,7 @@ HAVING (
     for (const row of rows) {
       try {
         const result = await db.query(
-          `SELECT 1 FROM subscriptionbillmaster_test 
+          `SELECT 1 FROM subscriptionbillmaster
            WHERE Branch_code = ? AND bill_Period = ? 
            LIMIT 1`,
           [row.branchcode, row.bill_Period]
@@ -611,16 +584,16 @@ HAVING (
 
         if (!result || result.length === 0) {
           await db.query(
-            `INSERT INTO subscriptionbillmaster_test (
+            `INSERT INTO subscriptionbillmaster (
               site_Ids, Client_addressname, client_address, Billing_addressname,
               Billing_address, Plan_name, customer_type, plancharges,
-              bill_date, Due_date, bill_Period, Relationshipid, billnumber,
+              bill_date, Due_date, Relationshipid,
               customer_GST, HSN_code, Customer_po, Contact_person, Contact_number,
               Site_list,ccemail,
               Invoice_no, gstPercent, Email_id, Phone_number, Internet_charges,
-              customer_id, consolidate_email, branch_code,billmode,plantype,pendingPayments,paidamount,Show_pending,TDS_Detection,Billing_Status
+              customer_id, consolidate_email, branch_code,billmode,plantype,pendingPayments,paidamount,Show_pending,TDS_Detection,bill_period
             ) VALUES (
-              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?,?,?,?,?,?,?
+              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?,?,?,?,?
             )
           `,
             [
@@ -634,9 +607,7 @@ HAVING (
               row.plancharges,
               row.bill_date,
               row.Due_date,
-              row.bill_Period,
               row.Relationship_id,
-              row.billnumber,
               row.customer_GST,
               row.HSN_code,
               row.Customer_po,
@@ -658,7 +629,7 @@ HAVING (
               row.paid_amount,
               row.Show_pending,
               row.TDS_Detection,
-              row.Billing_Status,
+              row.bill_Period,
             ]
           );
           console.log(
