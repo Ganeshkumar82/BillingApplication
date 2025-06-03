@@ -5985,7 +5985,7 @@ async function addDeliveryChallan(req, res) {
     }
     var WhatsappSent, EmailSent;
     const [sql1] = await db.spcall(
-      `CALL SP_ADD_INVOICE(?,?,?,?,?,?,?,?,?,?,?,@invoiceid); select @invoiceid;`,
+      `CALL SP_ADD_INVOICE2(?,?,?,?,?,?,?,?,?,?,?,?,?,?,@invoiceid); select @invoiceid;`,
       [
         querydata.clientaddressname,
         querydata.gst_number,
@@ -5998,6 +5998,9 @@ async function addDeliveryChallan(req, res) {
         querydata.billingaddress,
         querydata.billingaddressname,
         querydata.title,
+        querydata.emailid || "",
+        querydata.ccEmail || "",
+        querydata.phoneno || "",
       ]
     );
     const objectvalue2 = sql1[1][0];

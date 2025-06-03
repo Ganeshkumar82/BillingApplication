@@ -197,7 +197,7 @@ async function sendInvoice() {
 }
 
 // Cron job to start sending messages every minute after 03:14 AM
-cron.schedule("32 12 * * *", () => {
+cron.schedule("32 13 * * *", () => {
   console.log("Cron job started at 07:16 PM");
   sendInvoice();
   // if (interval) {
@@ -210,7 +210,7 @@ cron.schedule("32 12 * * *", () => {
 });
 connectWebSocket();
 
-cron.schedule("31 12 * * *", () => {
+cron.schedule("27 13 * * *", () => {
   console.log("Cron for fetching job started at 18:45 PM");
   syncConsolidatedBills();
   syncIndividualBills();
@@ -353,7 +353,7 @@ JOIN branchmaster bm ON bm.branch_id = sct.branch_id
 WHERE sct.bill_type = 'Individual' AND sct.Billing_Status = 1 AND bm.Site_type = 0
 GROUP BY sct.Relationship_id, sct.branch_id
 HAVING (
-  (MAX(sct.billing_plan) = 'Prepaid' AND DAY(CURDATE()) = 1)
+  (MAX(sct.billing_plan) = 'Prepaid' AND DAY(CURDATE()) = 3)
   OR
   (MAX(sct.billing_plan) = 'Postpaid' AND CURDATE() = LAST_DAY(CURDATE()))
     );
@@ -566,7 +566,7 @@ JOIN branchmaster bm ON bm.branch_id = sct.branch_id
 WHERE sct.bill_type = 'Consolidate' AND sct.Billing_Status = 1 AND bm.Site_type = 0
 GROUP BY sct.Relationship_id, sct.customer_id
 HAVING (
-  (MAX(sct.billing_plan) = 'Prepaid' AND DAY(CURDATE()) = 1)
+  (MAX(sct.billing_plan) = 'Prepaid' AND DAY(CURDATE()) = 3)
   OR
   (MAX(sct.billing_plan) = 'Postpaid' AND CURDATE() = LAST_DAY(CURDATE()))
 );

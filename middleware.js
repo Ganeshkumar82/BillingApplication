@@ -612,7 +612,7 @@ let storage13 = multer.diskStorage({
     const timestamp = Date.now();
     const date = new Date(timestamp);
 
-    cb(null, `${timestamp}_${file.originalname}`); // Use timestamp to avoid duplicate filenames
+    cb(null, `${file.originalname}`); // Use timestamp to avoid duplicate filenames
   },
 });
 

@@ -31,7 +31,8 @@ router.post("/getvoucher", async function (req, res, next) {
 
 router.post("/clearvoucher", async function (req, res, next) {
   try {
-    await billing.ClearVouchers(req, res, next);
+    // await billing.ClearVouchers(req, res, next);
+    res.json(await billing.ClearVouchers(req, res, next));
   } catch (er) {
     console.log(`Error while clearing the vouchers: ${er}`);
     next(er);
@@ -40,7 +41,7 @@ router.post("/clearvoucher", async function (req, res, next) {
 
 router.post("/clearconsolidatevoucher", async function (req, res, next) {
   try {
-    await billing.ClearConsolidateVouchers(req, res, next);
+    res.json(await billing.ClearConsolidateVouchers(req, res, next));
   } catch (er) {
     console.log(`Error while clearing the consolidate vouchers: ${er}`);
     next(er);
@@ -142,6 +143,15 @@ router.post("/updatepaymentdetails", async function (req, res, next) {
     res.json(await billing.updatePaymentDetails(req, res, next));
   } catch (er) {
     console.log(`Error while updating the payment details -> ${er}`);
+    next(er);
+  }
+});
+
+router.post("/getreceiptfile", async function (req, res, next) {
+  try {
+    res.json(await billing.getReceiptFile(req.body));
+  } catch (er) {
+    console.log(`Error while fetching the receipt file: ${er}`);
     next(er);
   }
 });

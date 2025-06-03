@@ -430,9 +430,9 @@ async function getSalesInvoice(billing) {
         );
       }
       var sqlParams = [];
-      let query = `select spl.cprocess_id event_id,spl.cprocess_gene_id invoicenumber,spl.custsales_name client_addressname, spl.client_address, spl.billingaddress_name billing_addressname,spl.billing_address,spl.gst_number gstnumber,spl.email_id,
-      spl.phone_number phone_no, spl.ccemail, spl.invoice_amount, spl.processid,spl.salesprocess_date date,cvm.voucher_id,cvm.voucher_number,CASE WHEN cvm.Due_date IS NULL OR DATEDIFF(CURDATE(), cvm.Due_date) <= 0 THEN 0 ELSE DATEDIFF(CURDATE(), cvm.Due_date) END AS Overdue_days
-      , cvm.Overdue_days as Overdue_history,cvm.Due_date from
+      let query = `select spl.cprocess_id event_id,spl.cprocess_gene_id invoicenumber,spl.custsales_name client_addressname, spl.client_address, spl.billingaddress_name billing_addressname,spl.billing_address,spl.gst_number gstnumber,spl.email_id,spl.payment_status,
+      spl.phone_number, spl.ccemail, spl.invoice_amount, spl.processid,spl.salesprocess_date date,cvm.voucher_id,cvm.voucher_number,CASE WHEN cvm.Due_date IS NULL OR DATEDIFF(CURDATE(), cvm.Due_date) <= 0 THEN 0 ELSE DATEDIFF(CURDATE(), cvm.Due_date) END AS Overdue_days
+      , cvm.Overdue_days as Overdue_history,cvm.Due_date  from
       salesprocesslist spl JOIN clientvouchermaster cvm ON cvm.invoice_number = spl.cprocess_gene_id where spl.process_type = 4 and spl.status = 1`;
 
       if (
@@ -460,8 +460,8 @@ async function getSalesInvoice(billing) {
         } else if (querydata.paymentstatus === "unpaid") {
           query += ` AND cvm.fully_cleared = 0 AND cvm.partially_cleared = 0`;
         }
-        sql = await db.query(query, sqlParams);
       }
+      sql = await db.query(query, sqlParams);
     }
 
     if (sql.length > 0) {
@@ -1142,6 +1142,14 @@ async function ClearVouchers(req, res) {
           }
         });
       }
+      if (req.file) {
+        const fileNameLower = req.file.originalname.toLowerCase();
+        if (fileNameLower.includes("receipt")) {
+          receipt_path = req.file.path;
+        } else {
+          path = req.file.path;
+        }
+      }
       const [sql50] = await db.spcall(
         `CALL InsertVoucherTransaction(?, ?, ?, ?, ?, ?, ?,?,?,@transaction_id);select @transaction_id;`,
         [
@@ -1416,17 +1424,16 @@ async function ClearVouchers(req, res) {
         "refresh",
         "Voucher Cleared Successfully"
       );
+
       let tdsAmount = Number(querydata.tds) || 0;
       let cgstAmount = Number(querydata.CGST);
       let sgstAmount = Number(querydata.SGST);
       let igstAmount = Number(querydata.IGST);
 
-      // Normalize 0 values (assuming 0 = don't show)
       if (cgstAmount === 0) cgstAmount = null;
       if (sgstAmount === 0) sgstAmount = null;
       if (igstAmount === 0) igstAmount = null;
 
-      // Calculate total GST amount
       let gstAmount = 0;
       if (igstAmount) {
         gstAmount = igstAmount;
@@ -1436,10 +1443,9 @@ async function ClearVouchers(req, res) {
       }
       if (gstAmount === 0) gstAmount = undefined;
 
-      // Send email
       const args = [
         querydata.clientaddressname || "Customer",
-        querydata.emailid,
+        "kishorekkumar34@gmail.com",
         `Voucher Cleared: ${querydata.invoicenumber}`,
         querydata.invoicenumber,
         querydata.date,
@@ -1451,7 +1457,6 @@ async function ClearVouchers(req, res) {
         igstAmount,
       ];
 
-      // Only push receipt_path if it exists
       if (receipt_path) {
         args.push(receipt_path);
       }
@@ -1465,7 +1470,14 @@ async function ClearVouchers(req, res) {
         querydata.vouchernumber,
         secret
       );
-    } finally {
+    } catch (er) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Error Sending the Receipt",
+        querydata.vouchernumber,
+        secret
+      );
     }
   } catch (er) {
     return helper.getErrorResponse(
@@ -1583,6 +1595,7 @@ async function ClearConsolidateVouchers(req, res, next) {
       { field: "voucherlist", message: "Voucher list missing." },
       { field: "paymentstatus", message: "Payment status missing." },
       { field: "paymentmode", message: "Payment mode missing." },
+      { field: "customerids", message: "Customer ids missing." },
     ];
     for (const { field, message } of requiredFields1) {
       if (!querydata1.hasOwnProperty(field)) {
@@ -1615,6 +1628,14 @@ async function ClearConsolidateVouchers(req, res, next) {
             }
           }
         });
+      }
+      if (req.file) {
+        const fileNameLower = req.file.originalname.toLowerCase();
+        if (fileNameLower.includes("receipt")) {
+          receipt_path = req.file.path;
+        } else {
+          path = req.file.path;
+        }
       }
       const [sql50] = await db.spcall(
         `CALL InsertVoucherTransaction(?, ?, ?, ?, ?, ?, ?,?,?,@transaction_id);select @transaction_id;`,
@@ -1686,13 +1707,14 @@ async function ClearConsolidateVouchers(req, res, next) {
       let SGST = querydata.SGST || 0;
       // Collect all invoice numbers from the voucherlist
       invoiceNumbers = querydata2.map((q) => q.invoicenumber);
+      // 1. Check all vouchers are for the same company (by Customer_id)
+      const firstCustomerId = querydata1.customerids[0]; // Assuming customerids is an array and we take the first one
 
-      // 1. Check all vouchers are for the same company (by gstnumber, or clientaddressname)
-      firstGstNumber = querydata2[0].gstnumber;
-      const allSameCompany = querydata2.every(
-        (q) => q.gstnumber === firstGstNumber
+      const allSameCustomer = querydata1.customerids.every(
+        (id) => id === firstCustomerId
       );
-      if (!allSameCompany) {
+
+      if (!allSameCustomer) {
         const sql7 = await db.query(
           `DELETE FROM vouchertransactions WHERE vouchertrans_id = ?`,
           [transactionid]
@@ -1956,7 +1978,7 @@ async function ClearConsolidateVouchers(req, res, next) {
 
     const args = [
       firstClientName || "Customer", // recipientName
-      querydata1.emailid, // recipientEmail
+      "kishorekkumar34@gmail.com", // recipientEmail
       `Consolidated Voucher Cleared: ${invoiceNumbers.join(", ")}`, // subject
       invoiceNumbers, // invoiceNumbers
       querydata1.date, // clearedDate
@@ -3627,6 +3649,142 @@ async function updatePaymentDetails(req, res, next) {
     );
   }
 }
+
+async function getReceiptFile(subscription) {
+  try {
+    // Check if the session token exists
+    if (!subscription.hasOwnProperty("STOKEN")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken missing. Please provide the Login sessiontoken",
+        "GET RECEIPT DATA FOR PDF",
+        ""
+      );
+    }
+    var secret = subscription.STOKEN.substring(0, 16);
+    var querydata;
+    // Validate session token length
+    if (subscription.STOKEN.length > 50 || subscription.STOKEN.length < 30) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
+        "GET RECEIPT DATA FOR PDF",
+        secret
+      );
+    }
+
+    // Validate session token
+    const [result] = await db.spcall(
+      `CALL SP_STOKEN_CHECK(?,@result); SELECT @result;`,
+      [subscription.STOKEN]
+    );
+    const objectvalue = result[1][0];
+    const userid = objectvalue["@result"];
+
+    if (userid == null) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+        "GET RECEIPT DATA FOR PDF",
+        secret
+      );
+    }
+
+    // Check if querystring is provided
+    if (!subscription.hasOwnProperty("querystring")) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring missing. Please provide the querystring",
+        "GET RECEIPT DATA FOR PDF",
+        secret
+      );
+    }
+
+    // Decrypt querystring
+    try {
+      querydata = await helper.decrypt(subscription.querystring, secret);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring Invalid error. Please provide the valid querystring.",
+        "GET RECEIPT DATA FOR PDF",
+        secret
+      );
+    }
+
+    // Parse the decrypted querystring
+    try {
+      querydata = JSON.parse(querydata);
+    } catch (ex) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Querystring JSON error. Please provide valid JSON",
+        "GET RECEIPT DATA FOR PDF",
+        secret
+      );
+    }
+
+    if (
+      !querydata.hasOwnProperty("transactionid") ||
+      querydata.transactionid == ""
+    ) {
+      return helper.getErrorResponse(
+        false,
+        "error",
+        "Transaction id missing. Please provide the transaction id",
+        "GET RECEIPT DATA FOR PDF",
+        secret
+      );
+    }
+    const sql = await db.query(
+      `select receipt_path from vouchertransactions where vouchertrans_id = ?`,
+      [querydata.transactionid]
+    );
+    var data;
+    if (sql[0]) {
+      // Ensure file exists
+      if (!fs.existsSync(sql[0].receipt_path)) {
+        return helper.getErrorResponse(
+          false,
+          "error",
+          "File does not exist",
+          "GET RECEIPT DATA FOR PDF",
+          secret
+        );
+      }
+      binarydata = await helper.convertFileToBinary(sql[0].receipt_path);
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "File Binary Fetched Successfully",
+        binarydata,
+        secret
+      );
+    } else {
+      return helper.getSuccessResponse(
+        true,
+        "success",
+        "File Binary Fetched Successfully",
+        { binarydata: data },
+        secret
+      );
+    }
+  } catch (er) {
+    return helper.getErrorResponse(
+      false,
+      "error",
+      "Internal Error. Please contact Administration",
+      er.message,
+      secret
+    );
+  }
+}
 module.exports = {
   getSubscriptionInvoice,
   getSalesInvoice,
@@ -3644,4 +3802,5 @@ module.exports = {
   addOverdueDetails,
   getDashboardDetails,
   updatePaymentDetails,
+  getReceiptFile,
 };

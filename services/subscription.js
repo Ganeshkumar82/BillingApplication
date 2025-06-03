@@ -698,9 +698,7 @@ async function addRecurringInvoice(req, res) {
       await db.query(
         `Update Generatesubinvoiceid set status = 0 where subinvoice_id IN('${querydata.invoicegenid}')`
       );
-      const sql4 = await db.query(
-        `Update subscriptionbillmaster set Email_sent = 1 where subscription_billid = ${querydata.subscriptionbillid}`
-      );
+
       try {
         let billDetails;
         if (typeof querydata.billdetails === "string") {
@@ -801,12 +799,12 @@ async function addRecurringInvoice(req, res) {
     if (plantype === "Prepaid") {
       invoiceMonth = moment(); // current month
     } else if (plantype === "Postpaid") {
-      invoiceMonth = moment().add(1, "month"); // next month
+      invoiceMonth = moment(); // next month
     }
 
     const subject = `Sporada Secure - Invoice for the Month of ${invoiceMonth.format(
       "MMMM"
-    )} ${invoiceMonth.format("YYYY")}`;
+    )} ${invoiceMonth.format("YYYY")} - ${billingaddressname}`;
 
     const pdfPaths = fileList
       .map((file) => (typeof file === "string" ? file : file.path))
@@ -843,7 +841,7 @@ async function addRecurringInvoice(req, res) {
             const response = await axios.post(
               `${config.whatsappip}/billing/sendpdf`,
               {
-                phoneno: number,
+                phoneno: "8248650039",
                 feedback,
                 pdfpath: pdfPaths,
               }
@@ -3974,11 +3972,11 @@ async function AddQuotation(req, res) {
         var subscriptiontype = 0,
           subscriptionid = 0;
         if (subscription1.subscriptionid == 0) {
-          if (subscription1.subscriptiontype == "global") {
+          if (subscription1.subscriptiontype == `global`) {
             subscriptiontype = 1;
-          } else if (subscription1.subscriptionttype == "company") {
+          } else if (subscription1.subscriptiontype == `company`) {
             const [rows] = await db.spcall1(
-              ` CALL InsertSubscription(?, ?, ?, ?, ?, ?, ?,?,?, @subscriptionid);SELECT @subscriptionid;`,
+              ` CALL InsertSubscription(?, ?, ?, ?, ?, ?, ?,?,?,?, @subscriptionid);SELECT @subscriptionid;`,
               [
                 subscriptiontype,
                 subscription1.name,
@@ -3989,13 +3987,14 @@ async function AddQuotation(req, res) {
                 subscription1.description,
                 querydata.companyid,
                 userid,
+                querydata.processid,
               ]
             );
             const objectvalue1 = rows[1][0];
             subscriptionid = objectvalue1["@subscriptionid"];
-          } else if (subscription1.subscriptiontype == "current") {
+          } else if (subscription1.subscriptiontype == `current`) {
             const [rows] = await db.spcall1(
-              ` CALL InsertSubscription(?, ?, ?, ?, ?, ?, ?,?,?, @subscriptionid);SELECT @subscriptionid;`,
+              ` CALL InsertSubscription(?, ?, ?, ?, ?, ?, ?,?,?,?,  @subscriptionid);SELECT @subscriptionid;`,
               [
                 subscriptiontype,
                 subscription1.name,
@@ -4006,6 +4005,7 @@ async function AddQuotation(req, res) {
                 subscription1.description,
                 0,
                 userid,
+                querydata.processid,
               ]
             );
             const objectvalue1 = rows[1][0];
@@ -5041,7 +5041,7 @@ async function IntQuotationApproval(req, res) {
     if (sql1.affectedRows) {
       if (subscription.s == 1) {
         const sql = await db.query(
-          `SELECT q.emailid, q.ccemail, q.clientname, q.phoneno, q.feedback,q.message_type, q.pdf_path, a.secret FROM quotation_mailbox q CROSS JOIN apikey a
+          `SELECT q.emailid, q.ccemail, q.clientname, q.phoneno, q.feedback,q.message_type, q.pdf_path, a.secret FROM subquotation_mailbox q CROSS JOIN apikey a
           WHERE q.status = 1 AND q.process_id = ? AND a.status = 1;`,
           [subscription.quoteid]
         );
