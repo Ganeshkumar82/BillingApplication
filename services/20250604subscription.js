@@ -833,8 +833,7 @@ async function addRecurringInvoice(req, res) {
         ccemail,
         feedback,
         billperiod,
-        duedate,
-        allSitenames
+        duedate
       );
     }
 

@@ -473,8 +473,7 @@ async function sendRecurredInvoice(
   ccemail,
   feedback,
   billperiod,
-  duedate,
-  allSitenames
+  duedate
 ) {
   try {
     // initialize nodemailer
@@ -577,7 +576,6 @@ async function sendRecurredInvoice(
         billperiod: billperiod,
         duedate: duedate,
         notes: feedback && feedback.trim() !== "" ? feedback : null,
-        sitenames: allSitenames,
       },
       attachments: attachments,
     };

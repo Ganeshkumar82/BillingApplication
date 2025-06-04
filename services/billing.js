@@ -3569,9 +3569,12 @@ async function updatePaymentDetails(req, res, next) {
       );
     }
 
-    // Parse the decrypted querystring
+    // Parse and assign
+    let paymentdetails = null;
+
     try {
       querydata = JSON.parse(querydata);
+      paymentdetails = querydata.paymentdetails || {};
     } catch (ex) {
       return helper.getErrorResponse(
         false,
@@ -3581,11 +3584,14 @@ async function updatePaymentDetails(req, res, next) {
         secret
       );
     }
+
+    // Now you can safely access like:
+    const mode = paymentdetails.paymentmode;
     const requiredFields = [
       { field: "paymentdetails", message: "Payment Details missing." },
       { field: "transactionid", message: "Transaction id missing." },
       { field: "voucherid", message: "Voucher id missing." },
-      { field: "paymentmode", message: "Payment mode missing." },
+      // { field: "paymentmode", message: "Payment mode missing." },
     ];
 
     for (const { field, message } of requiredFields) {
@@ -3604,7 +3610,7 @@ async function updatePaymentDetails(req, res, next) {
     const sql = await db.query(
       `UPDATE clientvouchermaster
        SET Payment_details = ?
-       WHERE voucher_id = ? where Payment_details IS NOT NULL`,
+       WHERE voucher_id = ? AND Payment_details IS NOT NULL`,
       [JSON.stringify(paymentdetails), querydata.voucherid]
     );
     var path = null;
@@ -3614,7 +3620,7 @@ async function updatePaymentDetails(req, res, next) {
     if (path != null) {
       const sql3 = await db.query(
         `Update vouchertransactions Set file_path = ?,payment_mode =? where vouchertrans_id = ?`,
-        [path, querydata.paymentmode, querydata.transactionid]
+        [path, mode, querydata.transactionid]
       );
     }
 
