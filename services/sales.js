@@ -7059,7 +7059,7 @@ async function DeleteProcess(sales) {
       .map((id) => `'${id}'`)
       .join(",");
     const sql = await db.query(
-      `UPDATE salesprocessmaster SET status = 0, deleted_flag = 0, active_status = 0 WHERE cprocess_id IN (${processIdsString})`
+      `UPDATE salesprocessmaster SET status = 0, deleted_flag = 1, active_status = 0 WHERE cprocess_id IN (${processIdsString})`
     );
     if (sql.affectedRows) {
       return helper.getSuccessResponse(

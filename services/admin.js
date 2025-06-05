@@ -2070,7 +2070,8 @@ async function BranchList(admin) {
           cst.billing_gst AS gst_number,cst.contactperson_name contact_person,cst.emailid AS emailid, cst.Phoneno AS contact_number, cst.billing_address, 
           cst.billingaddress_name AS billing_addressname, 
                 CASE WHEN bm.Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type, 
-                bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode, cst.from_date, cst.to_date, cst.Amount, cst.billingperiod 
+                bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode,DATE_FORMAT(DATE(cst.from_date), '%Y-%m-%d') AS from_date, 
+                DATE_FORMAT(DATE(cst.to_date), '%Y-%m-%d') AS to_date, cst.Amount, cst.billingperiod 
             FROM branchmaster bm 
             LEFT JOIN subscriptioncustomertrans cst ON cst.branch_id = bm.Branch_id 
             WHERE bm.site_type = 0 AND bm.status = 1 AND bm.deleted_flag = 0 AND bm.Customer_id = ?`,
@@ -2082,7 +2083,8 @@ async function BranchList(admin) {
           cst.billing_gst AS gst_number,cst.contactperson_name contact_person,cst.emailid AS emailid, cst.Phoneno AS contact_number, cst.billing_address, 
           cst.billingaddress_name AS billing_addressname, 
           CASE WHEN bm.Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type, 
-          bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode, cst.from_date, cst.to_date, cst.Amount, cst.billingperiod 
+          bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode,DATE_FORMAT(DATE(cst.from_date), '%Y-%m-%d') AS from_date, 
+          DATE_FORMAT(DATE(cst.to_date), '%Y-%m-%d') AS to_date, cst.Amount, cst.billingperiod 
             FROM branchmaster bm 
             LEFT JOIN subscriptioncustomertrans cst ON cst.branch_id = bm.Branch_id 
             WHERE bm.site_type = 1 AND bm.status = 1 AND bm.deleted_flag = 0 AND bm.Customer_id = ?`,
@@ -2097,7 +2099,8 @@ async function BranchList(admin) {
           cst.billing_gst AS gst_number,cst.contactperson_name contact_person,cst.emailid AS emailid, cst.Phoneno AS contact_number, cst.billing_address, 
           cst.billingaddress_name AS billing_addressname, 
           CASE WHEN bm.Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type, 
-          bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode, cst.from_date, cst.to_date, cst.Amount, cst.billingperiod 
+          bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode ,DATE_FORMAT(DATE(cst.from_date), '%Y-%m-%d') AS from_date, 
+          DATE_FORMAT(DATE(cst.to_date), '%Y-%m-%d') AS to_date, cst.Amount, cst.Amount, cst.billingperiod 
             FROM branchmaster bm 
             LEFT JOIN subscriptioncustomertrans cst ON cst.branch_id = bm.Branch_id 
             WHERE bm.site_type = 0 AND bm.status = 1 AND bm.deleted_flag = 0 
@@ -2110,7 +2113,8 @@ async function BranchList(admin) {
           cst.billing_gst AS gst_number,cst.contactperson_name contact_person,cst.emailid AS emailid, cst.Phoneno AS contact_number, cst.billing_address, 
           cst.billingaddress_name AS billing_addressname,  
           CASE WHEN bm.Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type, 
-          bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode, cst.from_date, cst.to_date, cst.Amount, cst.billingperiod 
+          bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode, DATE_FORMAT(DATE(cst.from_date), '%Y-%m-%d') AS from_date, 
+          DATE_FORMAT(DATE(cst.to_date), '%Y-%m-%d') AS to_date, cst.Amount, cst.Amount, cst.billingperiod 
             FROM branchmaster bm 
             LEFT JOIN subscriptioncustomertrans cst ON cst.branch_id = bm.Branch_id 
             WHERE bm.site_type = 1 AND bm.status = 1 AND bm.deleted_flag = 0 
@@ -2124,7 +2128,8 @@ async function BranchList(admin) {
         cst.billing_gst AS gst_number,cst.contactperson_name contact_person,cst.emailid AS emailid, cst.Phoneno AS contact_number, cst.billing_address, 
         cst.billingaddress_name AS billing_addressname, 
         CASE WHEN bm.Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type, 
-        bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode, cst.from_date, cst.to_date, cst.Amount, cst.billingperiod 
+        bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode,DATE_FORMAT(DATE(cst.from_date), '%Y-%m-%d') AS from_date, 
+        DATE_FORMAT(DATE(cst.to_date), '%Y-%m-%d') AS to_date, cst.Amount, cst.Amount, cst.billingperiod 
             FROM branchmaster bm 
             LEFT JOIN subscriptioncustomertrans cst ON cst.branch_id = bm.Branch_id 
             WHERE bm.site_type = 0 AND bm.status = 1 AND bm.deleted_flag = 0`
@@ -2135,7 +2140,8 @@ async function BranchList(admin) {
         cst.billing_gst AS gst_number,cst.contactperson_name contact_person, cst.emailid AS emailid, cst.Phoneno AS contact_number, cst.billing_address, 
         cst.billingaddress_name AS billing_addressname, 
         CASE WHEN bm.Site_type = 0 THEN 'live' ELSE 'demo' END AS site_type, 
-        bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode, cst.from_date, cst.to_date, cst.Amount, cst.billingperiod 
+        bm.Branch_Logo, cst.Subscription_ID, cst.billing_plan, cst.Bill_mode, DATE_FORMAT(DATE(cst.from_date), '%Y-%m-%d') AS from_date, 
+        DATE_FORMAT(DATE(cst.to_date), '%Y-%m-%d') AS to_date, cst.Amount, cst.billingperiod 
             FROM branchmaster bm 
             LEFT JOIN subscriptioncustomertrans cst ON cst.branch_id = bm.Branch_id 
             WHERE bm.site_type = 1 AND bm.status = 1 AND bm.deleted_flag = 0`

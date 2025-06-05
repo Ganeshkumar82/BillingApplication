@@ -1321,30 +1321,30 @@ async function ClearVouchers(req, res) {
             }
           } else if (querydata.invoicetype == "vendor") {
           }
-          const [sql5] = await db.spcall(
-            `CALL upsert_gstledger(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-            [
-              querydata.voucherid,
-              querydata.vouchernumber,
-              querydata.clientaddressname,
-              querydata.IGST,
-              querydata.CGST,
-              querydata.SGST,
-              querydata.grossamount,
-              querydata.subtotal,
-              querydata.gstnumber,
-              "output",
-              description,
-              JSON.stringify(paymentdetails),
-              JSON.stringify({
-                gst: { IGST: IGST, SGST: SGST, CGST: CGST },
-                tds: tdsamount || 0,
-                total: totalamount || 0,
-                subtotal: subtotal || 0,
-              }),
-              querydata.invoicenumber,
-            ]
-          );
+          // const [sql5] = await db.spcall(
+          //   `CALL upsert_gstledger(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          //   [
+          //     querydata.voucherid,
+          //     querydata.vouchernumber,
+          //     querydata.clientaddressname,
+          //     querydata.IGST,
+          //     querydata.CGST,
+          //     querydata.SGST,
+          //     querydata.grossamount,
+          //     querydata.subtotal,
+          //     querydata.gstnumber,
+          //     "output",
+          //     description,
+          //     JSON.stringify(paymentdetails),
+          //     JSON.stringify({
+          //       gst: { IGST: IGST, SGST: SGST, CGST: CGST },
+          //       tds: tdsamount || 0,
+          //       total: totalamount || 0,
+          //       subtotal: subtotal || 0,
+          //     }),
+          //     querydata.invoicenumber,
+          //   ]
+          // );
         } else {
           return helper.getErrorResponse(
             false,
@@ -1495,7 +1495,12 @@ async function ClearVouchers(req, res) {
 //###############################################################################################################################################################################################
 //#####
 async function ClearConsolidateVouchers(req, res, next) {
-  let secret, querydata1, querydata2, billing;
+  let secret,
+    querydata1,
+    querydata2,
+    billing,
+    emailid = null,
+    clientaddressname = null;
   try {
     try {
       await uploadFile.uploadVoucher(req, res);
@@ -1662,7 +1667,7 @@ async function ClearConsolidateVouchers(req, res, next) {
     } else {
       querydata2 = querydata1.voucherlist;
     }
-
+    const firstClientName = querydata2[0]?.clientaddressname || "customer";
     for (const querydata of querydata2) {
       const requiredFields = [
         { field: "voucherid", message: "Voucher id missing." },
@@ -1705,6 +1710,7 @@ async function ClearConsolidateVouchers(req, res, next) {
       let IGST = querydata.IGST || 0;
       let CGST = querydata.CGST || 0;
       let SGST = querydata.SGST || 0;
+      clientaddressname = querydata.clientaddressname || "";
       // Collect all invoice numbers from the voucherlist
       invoiceNumbers = querydata2.map((q) => q.invoicenumber);
       // 1. Check all vouchers are for the same company (by Customer_id)
@@ -1715,10 +1721,10 @@ async function ClearConsolidateVouchers(req, res, next) {
       );
 
       if (!allSameCustomer) {
-        const sql7 = await db.query(
-          `DELETE FROM vouchertransactions WHERE vouchertrans_id = ?`,
-          [transactionid]
-        );
+        // const sql7 = await db.query(
+        //   `DELETE FROM vouchertransactions WHERE vouchertrans_id = ?`,
+        //   [transactionid]
+        // );
         return helper.getErrorResponse(
           false,
           "error",
@@ -1756,7 +1762,7 @@ async function ClearConsolidateVouchers(req, res, next) {
               querydata1.transactiondetails,
               transactionid,
               querydata1.feedback,
-              querydata.paymentmode,
+              querydata1.paymentmode,
               formatDate(querydata1.date),
               querydata.voucherid,
               querydata.paidamount,
@@ -1764,6 +1770,7 @@ async function ClearConsolidateVouchers(req, res, next) {
             ]
           );
           if (sql.changedRows > 0) {
+            emailid = `${emailid},${querydata.emailid}`;
             const sql43 = await db.query(
               `select payment_details from clientvouchermaster where voucher_id = ?`,
               [querydata.voucherid]
@@ -1978,7 +1985,7 @@ async function ClearConsolidateVouchers(req, res, next) {
 
     const args = [
       firstClientName || "Customer", // recipientName
-      "kishorekkumar34@gmail.com", // recipientEmail
+      "kishorekkumar34@gmail.com", // emailid, // recipientEmail
       `Consolidated Voucher Cleared: ${invoiceNumbers.join(", ")}`, // subject
       invoiceNumbers, // invoiceNumbers
       querydata1.date, // clearedDate
@@ -3012,8 +3019,8 @@ async function getSubscriptionCustomer(billing) {
     }
 
     const sql =
-      await db.query1(`select customer_id customer_id, customer_name customer_name,Contact_no customer_phoneno,gst_number customer_gstno from customermaster where 
-         status = 1`);
+      await db.query1(`select cm.customer_id customer_id, cm.customer_name customer_name,scm.Phoneno customer_phoneno,scm.billing_gst customer_gstno,cm.customer_pan,scm.Billing_address from customermaster cm JOIN branchmaster bm ON bm.customer_id = cm.customer_id JOIN subscriptioncustomertrans scm 
+      ON bm.branch_id = scm.Branch_id where cm.status = 1 GROUP by cm.customer_id order by cm.customer_id;`);
     if (sql.length) {
       const updatedSql = sql.map((row) => ({
         ...row,
@@ -3448,6 +3455,7 @@ async function getDashboardDetails(billing) {
 
   FROM clientvouchermaster
   WHERE status = 1
+    AND Deleted_flag = 0
     AND ${filterCondition}
     AND DATE(created_at) BETWEEN ? AND ?
 `;

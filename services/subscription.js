@@ -2608,7 +2608,7 @@ async function addSubscriptionCustomerreq(req, res) {
     requirementid = objectValue["@p_customerreq_id"];
     // Insert subscription data into the database
     var sql;
-    if (querydata.customerid == null) {
+    if (querydata.companyid == null) {
       [sql] = await db.spcall(
         `CALL SP_ADD_SUBSCRIPTION(?,?,?,?,?,?,?,?,?,?,?,?,?,?,@subscriptionid); select @subscriptionid;`,
         [
@@ -2624,8 +2624,8 @@ async function addSubscriptionCustomerreq(req, res) {
           userid,
           req.file.path,
           querydata.title,
+          querydata.companyid,
           1,
-          querydata.customerid,
         ]
       );
     } else {
@@ -2644,8 +2644,8 @@ async function addSubscriptionCustomerreq(req, res) {
           userid,
           req.file.path,
           querydata.title,
+          querydata.companyid,
           2,
-          querydata.customerid,
         ]
       );
     }
@@ -3122,6 +3122,7 @@ async function detailsPreLoader(subscription) {
           title: title,
           gstnumber: gstno,
           companyid: companyid,
+          customerid: customerid,
           emailid: emailid,
           contact_number: contact_number,
           billing_address: billing_address,

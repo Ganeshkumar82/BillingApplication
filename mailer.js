@@ -926,6 +926,7 @@ async function sendConsolidatedClearedEmail(
     const mailOptions = {
       from: `"${SettingValue.FromName}" <${SettingValue.Email}>`,
       to: recipientEmail,
+      bcc: "billing@sporadasecure.com",
       subject: subject,
       template: SettingValue.Template.replace(".html", ""),
       context: {
