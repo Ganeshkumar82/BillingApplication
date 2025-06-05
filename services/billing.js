@@ -1321,30 +1321,30 @@ async function ClearVouchers(req, res) {
             }
           } else if (querydata.invoicetype == "vendor") {
           }
-          // const [sql5] = await db.spcall(
-          //   `CALL upsert_gstledger(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-          //   [
-          //     querydata.voucherid,
-          //     querydata.vouchernumber,
-          //     querydata.clientaddressname,
-          //     querydata.IGST,
-          //     querydata.CGST,
-          //     querydata.SGST,
-          //     querydata.grossamount,
-          //     querydata.subtotal,
-          //     querydata.gstnumber,
-          //     "output",
-          //     description,
-          //     JSON.stringify(paymentdetails),
-          //     JSON.stringify({
-          //       gst: { IGST: IGST, SGST: SGST, CGST: CGST },
-          //       tds: tdsamount || 0,
-          //       total: totalamount || 0,
-          //       subtotal: subtotal || 0,
-          //     }),
-          //     querydata.invoicenumber,
-          //   ]
-          // );
+          const [sql5] = await db.spcall(
+            `CALL upsert_gstledger(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            [
+              querydata.voucherid,
+              querydata.vouchernumber,
+              querydata.clientaddressname,
+              querydata.IGST,
+              querydata.CGST,
+              querydata.SGST,
+              querydata.grossamount,
+              querydata.subtotal,
+              querydata.gstnumber,
+              "output",
+              description,
+              JSON.stringify(paymentdetails),
+              JSON.stringify({
+                gst: { IGST: IGST, SGST: SGST, CGST: CGST },
+                tds: tdsamount || 0,
+                total: totalamount || 0,
+                subtotal: subtotal || 0,
+              }),
+              querydata.invoicenumber,
+            ]
+          );
         } else {
           return helper.getErrorResponse(
             false,
