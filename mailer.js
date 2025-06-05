@@ -1,9 +1,15 @@
 const hbs = require("nodemailer-express-handlebars");
 const nodemailer = require("nodemailer");
+const Handlebars = require("handlebars");
 const path = require("path");
 const helper = require("./helper");
 
 const config = require("./config");
+// Register helpers
+Handlebars.registerHelper("lt", (a, b) => a < b);
+Handlebars.registerHelper("eq", (a, b) => a === b);
+Handlebars.registerHelper("mod", (a, b) => a % b);
+Handlebars.registerHelper("subtract", (a, b) => a - b);
 
 async function sendPDF(
   senderName,
@@ -558,14 +564,14 @@ async function sendRecurredInvoice(
 
     var mailOptions = {
       from: '"' + qFromName + '" <' + qEmail + ">", // sender address
-      to: "kishorekkumar34@gmail.com",
+      to: "kishore.k@sporadasecure.com",
       // to: senderEmail, // list of receivers
       subject: subjectstr,
       // cc:
       //   ccemail && ccemail.trim() !== ""
       //     ? [ccemail.trim(), "sales@sporadasecure.com"]
       //     : ["sales@sporadasecure.com"],
-      bcc: "kishorekkumar34@gmail.com",
+      bcc: "kishore.k@sporadasecure.com",
       template: qTemplate, // the name of the template file i.e email.handlebars
       context: {
         subject: subjectstr,

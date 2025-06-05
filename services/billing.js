@@ -1662,6 +1662,9 @@ async function ClearConsolidateVouchers(req, res, next) {
     } else {
       querydata2 = querydata1.voucherlist;
     }
+    // get first client address name
+    const firstClientName = querydata2[0].clientaddressname;
+
 
     for (const querydata of querydata2) {
       const requiredFields = [

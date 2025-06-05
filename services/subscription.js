@@ -558,6 +558,7 @@ async function addRecurringInvoice(req, res) {
     const querydataArray = Array.isArray(querydata1)
       ? querydata1
       : [querydata1];
+      console.log("querydataArray:", querydataArray);
     const fileList = req.files || [];
     const firstEntry = querydataArray[0];
     const allSitenames = []; // to collect all sitenames
@@ -591,8 +592,9 @@ async function addRecurringInvoice(req, res) {
         "gstnumber",
       ];
       if (Array.isArray(querydata.sitenames)) {
-        allSitenames.push(...querydata.sitenames);
-      }
+  allSitenames.push(...querydata.sitenames);
+}
+
 
       for (let field of requiredFields) {
         if (!querydata.hasOwnProperty(field)) {
