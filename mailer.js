@@ -558,14 +558,14 @@ async function sendRecurredInvoice(
 
     var mailOptions = {
       from: '"' + qFromName + '" <' + qEmail + ">", // sender address
-      to: "kishorekkumar34@gmail.com",
+      to: "ganeshkumar.m@sporadasecure.com",
       // to: senderEmail, // list of receivers
       subject: subjectstr,
       // cc:
       //   ccemail && ccemail.trim() !== ""
       //     ? [ccemail.trim(), "sales@sporadasecure.com"]
       //     : ["sales@sporadasecure.com"],
-      bcc: "kishorekkumar34@gmail.com",
+      bcc: "ganeshkumar.m@sporadasecure.com",
       template: qTemplate, // the name of the template file i.e email.handlebars
       context: {
         subject: subjectstr,

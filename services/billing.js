@@ -1321,30 +1321,34 @@ async function ClearVouchers(req, res) {
             }
           } else if (querydata.invoicetype == "vendor") {
           }
-          const [sql5] = await db.spcall(
-            `CALL upsert_gstledger(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-            [
-              querydata.voucherid,
-              querydata.vouchernumber,
-              querydata.clientaddressname,
-              querydata.IGST,
-              querydata.CGST,
-              querydata.SGST,
-              querydata.grossamount,
-              querydata.subtotal,
-              querydata.gstnumber,
-              "output",
-              description,
-              JSON.stringify(paymentdetails),
-              JSON.stringify({
-                gst: { IGST: IGST, SGST: SGST, CGST: CGST },
-                tds: tdsamount || 0,
-                total: totalamount || 0,
-                subtotal: subtotal || 0,
-              }),
-              querydata.invoicenumber,
-            ]
+          const sql5 = await db.query(
+            `Update gstledger SET payment_details = ? where voucher_id = ?`,
+            [JSON.stringify(paymentdetails), querydata.voucherid]
           );
+          // const [sql5] = await db.spcall(
+          //   `CALL upsert_gstledger(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          //   [
+          //     querydata.voucherid,
+          //     querydata.vouchernumber,
+          //     querydata.clientaddressname,
+          //     querydata.IGST,
+          //     querydata.CGST,
+          //     querydata.SGST,
+          //     querydata.grossamount,
+          //     querydata.subtotal,
+          //     querydata.gstnumber,
+          //     "output",
+          //     description,
+          //     JSON.stringify(paymentdetails),
+          //     JSON.stringify({
+          //       gst: { IGST: IGST, SGST: SGST, CGST: CGST },
+          //       tds: tdsamount || 0,
+          //       total: totalamount || 0,
+          //       subtotal: subtotal || 0,
+          //     }),
+          //     querydata.invoicenumber,
+          //   ]
+          // );
         } else {
           return helper.getErrorResponse(
             false,
@@ -1457,11 +1461,11 @@ async function ClearVouchers(req, res) {
         igstAmount,
       ];
 
-      if (receipt_path) {
-        args.push(receipt_path);
-      }
+      // if (receipt_path) {
+      //   args.push(receipt_path);
+      // }
 
-      await mailer.sendVoucherClearedEmail(...args);
+      // await mailer.sendVoucherClearedEmail(...args);
 
       return helper.getSuccessResponse(
         true,
@@ -1820,30 +1824,34 @@ async function ClearConsolidateVouchers(req, res, next) {
               }
             } else if (querydata.invoicetype == "vendor") {
             }
-            const [sql5] = await db.spcall(
-              `CALL upsert_gstledger(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-              [
-                querydata.voucherid,
-                querydata.vouchernumber,
-                querydata.clientaddressname,
-                querydata.IGST,
-                querydata.CGST,
-                querydata.SGST,
-                querydata.grossamount,
-                querydata.subtotal,
-                querydata.gstnumber,
-                "output",
-                description,
-                JSON.stringify(paymentdetails),
-                JSON.stringify({
-                  gst: { IGST: IGST, SGST: SGST, CGST: CGST },
-                  tds: tdsamount || 0,
-                  total: totalamount || 0,
-                  subtotal: subtotal || 0,
-                }),
-                querydata.invoicenumber,
-              ]
+            const sql5 = await db.query(
+              `Update gstledger SET payment_details = ? where voucher_id = ?`,
+              [JSON.stringify(paymentdetails), querydata.voucherid]
             );
+            // const [sql5] = await db.spcall(
+            //   `CALL upsert_gstledger(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+            //   [
+            //     querydata.voucherid,
+            //     querydata.vouchernumber,
+            //     querydata.clientaddressname,
+            //     querydata.IGST,
+            //     querydata.CGST,
+            //     querydata.SGST,
+            //     querydata.grossamount,
+            //     querydata.subtotal,
+            //     querydata.gstnumber,
+            //     "output",
+            //     description,
+            //     JSON.stringify(paymentdetails),
+            //     JSON.stringify({
+            //       gst: { IGST: IGST, SGST: SGST, CGST: CGST },
+            //       tds: tdsamount || 0,
+            //       total: totalamount || 0,
+            //       subtotal: subtotal || 0,
+            //     }),
+            //     querydata.invoicenumber,
+            //   ]
+            // );
           } else {
             return helper.getErrorResponse(
               false,
@@ -3415,17 +3423,20 @@ async function getDashboardDetails(billing) {
     const params = [...types, fromDate, toDate].filter(Boolean);
 
     const sql = `
-  SELECT 
+    SELECT 
     COUNT(*) AS totalInvoices,
-    SUM(CAST(Total_amount AS DECIMAL)) AS totalAmount,
-
+    SUM(
+        CAST(sub_total AS DECIMAL) +
+        CAST(IGST AS DECIMAL) +
+        CAST(CGST AS DECIMAL) +
+        CAST(SGST AS DECIMAL)
+    ) AS totalAmount,
     COUNT(CASE
         WHEN
             CAST(pending_amount AS DECIMAL) = 0
             AND (fully_cleared = 1 OR partially_cleared = 1)
         THEN 1
     END) AS paidInvoices,
-
     SUM(CASE
         WHEN
             CAST(paid_amount AS DECIMAL) > 0
@@ -3434,7 +3445,6 @@ async function getDashboardDetails(billing) {
         THEN CAST(paid_amount AS DECIMAL)
         ELSE 0
     END) AS paidAmount,
-
     COUNT(CASE
         WHEN NOT (
             CAST(pending_amount AS DECIMAL) = 0
@@ -3442,22 +3452,22 @@ async function getDashboardDetails(billing) {
         )
         THEN 1
     END) AS pendingInvoices,
-
-    SUM(CASE
-        WHEN NOT (
-            CAST(paid_amount AS DECIMAL) > 0
-            AND CAST(pending_amount AS DECIMAL) = 0
-            AND (fully_cleared = 1 OR partially_cleared = 1)
+    SUM(
+        GREATEST(
+            ( 
+                CAST(sub_total AS DECIMAL) +
+                CAST(IGST AS DECIMAL) +
+                CAST(CGST AS DECIMAL) +
+                CAST(SGST AS DECIMAL)
+            ) - CAST(paid_amount AS DECIMAL),
+            0
         )
-        THEN CAST(pending_amount AS DECIMAL)
-        ELSE 0
-    END) AS pendingAmount
-
-  FROM clientvouchermaster
-  WHERE status = 1
+    ) AS pendingAmount
+FROM clientvouchermaster
+WHERE status = 1
     AND Deleted_flag = 0
     AND ${filterCondition}
-    AND DATE(created_at) BETWEEN ? AND ?
+    AND DATE(created_at) BETWEEN ? AND ?           
 `;
 
     const [rows] = await db.query(sql, params);

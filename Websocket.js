@@ -67,7 +67,6 @@ async function sendInvoice() {
               AND sbm2.status = 1
         )
   )
-
   SELECT
   CONCAT(
     Branch_code, '/',
@@ -80,7 +79,7 @@ async function sendInvoice() {
         '%y%m'
     ),
     LPAD(invoice_sequence, 2, '0')
-) AS invoiceNo,
+  ) AS invoiceNo,
       bill_date ,
       IFNULL(gstPercent, 18) AS gstPercent,
 
@@ -197,7 +196,7 @@ async function sendInvoice() {
 }
 
 // Cron job to start sending messages every minute after 03:14 AM
-cron.schedule("32 13 * * *", () => {
+cron.schedule("42 16 * * *", () => {
   console.log("Cron job started at 07:16 PM");
   sendInvoice();
   // if (interval) {
@@ -210,7 +209,7 @@ cron.schedule("32 13 * * *", () => {
 });
 connectWebSocket();
 
-cron.schedule("27 13 * * *", () => {
+cron.schedule("04 16 * * *", () => {
   console.log("Cron for fetching job started at 18:45 PM");
   syncConsolidatedBills();
   syncIndividualBills();
@@ -234,7 +233,7 @@ async function syncIndividualBills() {
 
     // Fetch data from source DB
     const rows = await db.query1(`
-SELECT
+    SELECT
     JSON_ARRAYAGG(sct.branch_id) AS site_Ids,
     sct.clientaddress_name AS Client_addressname,
     sct.customer_address AS client_address,
@@ -353,7 +352,7 @@ JOIN branchmaster bm ON bm.branch_id = sct.branch_id
 WHERE sct.bill_type = 'Individual' AND sct.Billing_Status = 1 AND bm.Site_type = 0
 GROUP BY sct.Relationship_id, sct.branch_id
 HAVING (
-  (MAX(sct.billing_plan) = 'Prepaid' AND DAY(CURDATE()) = 3)
+  (MAX(sct.billing_plan) = 'Prepaid' AND DAY(CURDATE()) = 5)
   OR
   (MAX(sct.billing_plan) = 'Postpaid' AND CURDATE() = LAST_DAY(CURDATE()))
     );
@@ -566,7 +565,7 @@ JOIN branchmaster bm ON bm.branch_id = sct.branch_id
 WHERE sct.bill_type = 'Consolidate' AND sct.Billing_Status = 1 AND bm.Site_type = 0
 GROUP BY sct.Relationship_id, sct.customer_id
 HAVING (
-  (MAX(sct.billing_plan) = 'Prepaid' AND DAY(CURDATE()) = 3)
+  (MAX(sct.billing_plan) = 'Prepaid' AND DAY(CURDATE()) = 5)
   OR
   (MAX(sct.billing_plan) = 'Postpaid' AND CURDATE() = LAST_DAY(CURDATE()))
 );
@@ -577,9 +576,9 @@ HAVING (
       try {
         const result = await db.query(
           `SELECT 1 FROM subscriptionbillmaster
-           WHERE Branch_code = ? AND bill_Period = ? 
+           WHERE Relationshipid = ? AND bill_Period = ? 
            LIMIT 1`,
-          [row.branchcode, row.bill_Period]
+          [row.Relationship_id, row.bill_Period]
         );
 
         if (!result || result.length === 0) {
@@ -633,12 +632,12 @@ HAVING (
             ]
           );
           console.log(
-            `Inserted bill for branch_code: ${row.branchcode} and period: ${row.bill_Period} for consolidated bills`
+            `Inserted bill for branch_code: ${row.Relationship_id} and period: ${row.bill_Period} for consolidated bills`
           );
           insertedCount++;
         } else {
           console.log(
-            `Skipped (already exists) — branch_code: ${row.branchcode}, bill_Period: ${row.bill_Period} for consolidated bills`
+            `Skipped (already exists) — branch_code: ${row.Relationship_id}, bill_Period: ${row.bill_Period} for consolidated bills`
           );
         }
         await db.query1(
@@ -671,3 +670,23 @@ HAVING (
 module.exports = {
   startWebSocketClient: connectWebSocket,
 };
+
+// SELECT
+// CONCAT(
+//   Branch_code, '/',
+//   DATE_FORMAT(
+//       CASE
+//           WHEN plantype = 'Prepaid' THEN bill_date
+//           WHEN plantype = 'Postpaid' THEN bill_date
+//           ELSE plantype
+//       END,
+//       '%y%m'
+//   ),
+//   LPAD(invoice_sequence, 2, '0')
+// ) AS invoiceNo,
+
+// SELECT
+//   CONCAT(
+//     Branch_code, '/2505',
+//     LPAD(invoice_sequence, 2, '0')
+//   ) AS invoiceNo,

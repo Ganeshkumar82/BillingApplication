@@ -1394,7 +1394,7 @@ async function addInvoice(req, res) {
       } else {
         billDetails = querydata.billdetails;
       }
-      const { gst, subtotal, total } = billDetails;
+      const { gst, subtotal, total, tdsamount } = billDetails;
       const { CGST, IGST, SGST } = gst;
       const sq1 = await db.query(
         `select customer_id from salesprocessmaster where cprocess_id = ?`,
@@ -1413,7 +1413,7 @@ async function addInvoice(req, res) {
             querydata.clientaddressname,
             querydata.clientaddress,
             JSON.stringify(querydata.billdetails),
-            querydata.gstnumber,
+            querydata.gst_number,
             total,
             subtotal,
             IGST,
@@ -1428,6 +1428,31 @@ async function addInvoice(req, res) {
         const objectvalue = sql2[1][0];
         const voucherid = objectvalue["@voucher_id"];
         const vouchernumber = objectvalue["@voucher_number"];
+        var paymentdetails = [];
+        const [sql5] = await db.spcall(
+          `CALL upsert_gstledger(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [
+            voucherid,
+            vouchernumber,
+            querydata.clientaddressname,
+            IGST,
+            CGST,
+            SGST,
+            total,
+            subtotal,
+            querydata.gst_number,
+            "output",
+            `Sales Invoice created for ${querydata.clientaddressname}`,
+            JSON.stringify(paymentdetails),
+            JSON.stringify({
+              gst: { IGST: IGST, SGST: SGST, CGST: CGST },
+              tds: tdsamount || 0,
+              total: total || 0,
+              subtotal: subtotal || 0,
+            }),
+            querydata.invoicegenid,
+          ]
+        );
         const [sql3] = await db.spcall(
           `CALL SP_DEBIT_CLIENT_LEDGER(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@ledgerid); select @ledgerid`,
           [

@@ -554,7 +554,7 @@ async function addRecurringInvoice(req, res) {
         secret
       );
     }
-
+    var paymentdetails = [];
     const querydataArray = Array.isArray(querydata1)
       ? querydata1
       : [querydata1];
@@ -675,7 +675,18 @@ async function addRecurringInvoice(req, res) {
           }
         })
       );
-
+      let billDetails;
+      if (typeof querydata.billdetails === "string") {
+        billDetails = JSON.parse(querydata.billdetails);
+      } else {
+        billDetails = querydata.billdetails;
+      }
+      const { gst, subtotal, total, tdsamount } = billDetails;
+      const { CGST, IGST, SGST } = gst;
+      const convertToISO = (dateStr) => {
+        const [day, month, year] = dateStr.split("-");
+        return `${year}-${month}-${day}`;
+      };
       // Call DB stored procedure
       const [sql1] = await db.spcall(
         `CALL SP_ADD_RECURRING_INVOICE(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@sprocessid); select @sprocessid;`,
@@ -689,7 +700,7 @@ async function addRecurringInvoice(req, res) {
           fileList[i]?.path || "",
           fileList[i + 1]?.path || "", // optional second file
           querydata.invoicegenid,
-          querydata.totalamount,
+          subtotal + IGST + CGST + SGST,
           2,
           querydata.emailid,
           querydata.phoneno,
@@ -704,19 +715,6 @@ async function addRecurringInvoice(req, res) {
       );
 
       try {
-        let billDetails;
-        if (typeof querydata.billdetails === "string") {
-          billDetails = JSON.parse(querydata.billdetails);
-        } else {
-          billDetails = querydata.billdetails;
-        }
-        const { gst, subtotal, total } = billDetails;
-        const { CGST, IGST, SGST } = gst;
-        const convertToISO = (dateStr) => {
-          const [day, month, year] = dateStr.split("-");
-          return `${year}-${month}-${day}`;
-        };
-
         const isoDate = convertToISO(querydata.duedate);
 
         const [sql2] = await db.spcall(
@@ -731,7 +729,7 @@ async function addRecurringInvoice(req, res) {
             querydata.clientaddress,
             JSON.stringify(querydata.billdetails),
             querydata.gstnumber,
-            total,
+            subtotal + IGST + CGST + SGST,
             subtotal,
             IGST,
             CGST,
@@ -745,6 +743,30 @@ async function addRecurringInvoice(req, res) {
         const objectvalue = sql2[1][0];
         const voucherid = objectvalue["@voucher_id"];
         const vouchernumber = objectvalue["@voucher_number"];
+        const [sql5] = await db.spcall(
+          `CALL upsert_gstledger(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [
+            voucherid,
+            vouchernumber,
+            querydata.clientaddressname,
+            IGST,
+            CGST,
+            SGST,
+            subtotal + IGST + CGST + SGST,
+            subtotal,
+            querydata.gstnumber,
+            "output",
+            `Subscription Invoice created for ${querydata.clientaddressname}`,
+            JSON.stringify(paymentdetails),
+            JSON.stringify({
+              gst: { IGST: IGST, SGST: SGST, CGST: CGST },
+              tds: tdsamount || 0,
+              total: total || 0,
+              subtotal: subtotal || 0,
+            }),
+            querydata.invoicegenid,
+          ]
+        );
         const [sql3] = await db.spcall(
           `CALL SP_DEBIT_CLIENT_LEDGER(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@ledgerid); select @ledgerid;`,
           [
@@ -758,7 +780,7 @@ async function addRecurringInvoice(req, res) {
               feedback: null,
             }),
             querydata.gstnumber,
-            total,
+            subtotal + IGST + CGST + SGST,
             subtotal,
             IGST,
             CGST,
@@ -806,6 +828,13 @@ async function addRecurringInvoice(req, res) {
       invoiceMonth = moment(); // next month
     }
 
+    // const subject = `Sporada Secure - Invoice for the Month of ${invoiceMonth.format(
+    //   "MMMM"
+    // )} ${invoiceMonth.format("YYYY")} - ${billingaddressname}`;
+    // Get the previous month
+    // invoiceMonth = moment().subtract(1, "month");
+
+    // Format the subject with the previous month's name and year
     const subject = `Sporada Secure - Invoice for the Month of ${invoiceMonth.format(
       "MMMM"
     )} ${invoiceMonth.format("YYYY")} - ${billingaddressname}`;
@@ -820,7 +849,7 @@ async function addRecurringInvoice(req, res) {
     if (messagetype === 1 || messagetype === 3) {
       // Email or Both
       EmailSent = await mailer.sendRecurredInvoice(
-        clientaddressname,
+        billingaddressname,
         emailid,
         subject,
         "recurredinvoicepdf.html",
@@ -846,7 +875,8 @@ async function addRecurringInvoice(req, res) {
             const response = await axios.post(
               `${config.whatsappip}/billing/sendpdf`,
               {
-                phoneno: "8248650039",
+                // phoneno: phoneno,
+                phoneno: `8248650039`,
                 feedback,
                 pdfpath: pdfPaths,
               }
@@ -863,7 +893,7 @@ async function addRecurringInvoice(req, res) {
     // await mqttclient.publishMqttMessage("refresh", "Invoice created");
     await mqttclient.publishMqttMessage(
       "Notification",
-      `Recurring invoice created for ${clientaddressname}`
+      `Recurring invoice created for ${billingaddressname}`
     );
 
     return helper.getSuccessResponse(
