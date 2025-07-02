@@ -29,7 +29,7 @@ app.use((req, res, next) => {
 });
 
 // Fallback for client-side routing: serve index.html for all unknown routes
-app.get("/", (req, res) => {
+app.get("/verify", (req, res) => {
   res.sendFile(path.join(__dirname, "./mailpage", "index.html"));
 });
 // app.get("/", (req, res) => {
@@ -38,9 +38,9 @@ app.get("/", (req, res) => {
 app.use("/admin", adminRouter);
 app.use("/vendor", vendorRouter);
 app.use("/sales", salesRouter);
+app.use("/subscription", SubscriptionRouter);
 app.use("/product", productRouter);
 app.use("/verification", verificaitonRouter);
-app.use("/subscription", SubscriptionRouter);
 app.use("/billing", billingRouter);
 /* Error handler middleware */
 app.use((err, req, res, next) => {

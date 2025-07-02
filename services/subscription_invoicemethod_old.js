@@ -10,6 +10,8 @@ const axios = require("axios");
 const path = require("path");
 const mqttclient = require("../mqttclient");
 const { Console } = require("console");
+const apiserver = config.apiserver;
+const apiserver1 = config.apiserver1;
 // const { OrganizationList, CompanyList } = require("./admin");
 // const { addFeedback } = require("./subscription");
 //###############################################################################################################################################################################################
@@ -669,9 +671,9 @@ async function addRecurringInvoice(req, res) {
             await fs.copy(file.path, newFilePath, { overwrite: true });
             file.path = newFilePath; // Update file path if moved
           } else {
-            console.log(
-              `Skipping move for ${file.filename}: source and destination are the same.`
-            );
+            // console.log(
+            //   `Skipping move for ${file.filename}: source and destination are the same.`
+            // );
           }
         })
       );
@@ -689,7 +691,7 @@ async function addRecurringInvoice(req, res) {
       };
       // Call DB stored procedure
       const [sql1] = await db.spcall(
-        `CALL SP_ADD_RECURRING_INVOICE_BEFOREAPPROVAL(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@sprocessid); select @sprocessid;`,
+        `CALL SP_ADD_RECURRING_INVOICE(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@sprocessid); select @sprocessid;`,
         [
           querydata.subscriptionbillid,
           JSON.stringify(querydata.siteids),
@@ -707,409 +709,13 @@ async function addRecurringInvoice(req, res) {
           querydata.ccemail,
           querydata.customerid,
           JSON.stringify(querydata.billdetails),
-          JSON.stringify(querydata),
         ]
       );
 
       await db.query(
         `Update Generatesubinvoiceid set status = 0 where subinvoice_id IN('${querydata.invoicegenid}')`
       );
-      // await mqttclient.publishMqttMessage(
-      //   "refresh",
-      //   `Recurring invoice created for ${querydata.billingaddressname}`
-      // );
-      await mqttclient.publishMqttMessage(
-        "Notification",
-        `Recurring invoice created for ${querydata.billingaddressname}`
-      );
 
-      // try {
-      // const isoDate = convertToISO(querydata.duedate);
-
-      // const [sql2] = await db.spcall(
-      //   `CALL InsertClientVoucher(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@voucher_id,@voucher_number); select @voucher_id,@voucher_number`,
-      //   [
-      //     querydata.invoicegenid,
-      //     "receipt voucher",
-      //     querydata.clientaddressname,
-      //     querydata.emailid,
-      //     querydata.phoneno,
-      //     querydata.clientaddressname,
-      //     querydata.clientaddress,
-      //     JSON.stringify(querydata.billdetails),
-      //     querydata.gstnumber,
-      //     subtotal + IGST + CGST + SGST,
-      //     subtotal,
-      //     IGST,
-      //     CGST,
-      //     SGST,
-      //     "subscription",
-      //     `SB-${querydata.customerid}`,
-      //     `Subscription Invoice created for ${querydata.clientaddressname}`,
-      //     isoDate,
-      //   ]
-      // );
-      // const objectvalue = sql2[1][0];
-      // const voucherid = objectvalue["@voucher_id"];
-      // const vouchernumber = objectvalue["@voucher_number"];
-      // const [sql5] = await db.spcall(
-      //   `CALL upsert_gstledger(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      //   [
-      //     voucherid,
-      //     vouchernumber,
-      //     querydata.clientaddressname,
-      //     IGST,
-      //     CGST,
-      //     SGST,
-      //     subtotal + IGST + CGST + SGST,
-      //     subtotal,
-      //     querydata.gstnumber,
-      //     "output",
-      //     `Subscription Invoice created for ${querydata.clientaddressname}`,
-      //     JSON.stringify(paymentdetails),
-      //     JSON.stringify({
-      //       gst: { IGST: IGST, SGST: SGST, CGST: CGST },
-      //       tds: tdsamount || 0,
-      //       total: total || 0,
-      //       subtotal: subtotal || 0,
-      //     }),
-      //     querydata.invoicegenid,
-      //   ]
-      // );
-      // const [sql3] = await db.spcall(
-      //   `CALL SP_DEBIT_CLIENT_LEDGER(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@ledgerid); select @ledgerid;`,
-      //   [
-      //     querydata.invoicegenid,
-      //     querydata.clientaddressname,
-      //     JSON.stringify(querydata.billdetails),
-      //     JSON.stringify({
-      //       amount: 0,
-      //       transactiondetails: null,
-      //       date: null,
-      //       feedback: null,
-      //     }),
-      //     querydata.gstnumber,
-      //     subtotal + IGST + CGST + SGST,
-      //     subtotal,
-      //     IGST,
-      //     CGST,
-      //     SGST,
-      //     0,
-      //     "subscription",
-      //     voucherid,
-      //     vouchernumber,
-      //     "receivable",
-      //     `Subscription Invoice created for ${querydata.clientaddressname}`,
-      //   ]
-      // );
-      // } catch (er) {
-      //   console.log(`Invoice number not exits ${er.message}`);
-      // }
-    }
-
-    return helper.getSuccessResponse(
-      true,
-      "success",
-      "Recurring Invoices added and sent successfully",
-      {
-        EmailSent: 0,
-        WhatsappSent: 0,
-      },
-      secret
-    );
-    // Extract details from the first entry
-    // const {
-    //   clientaddressname,
-    //   billingaddressname,
-    //   emailid,
-    //   ccemail,
-    //   phoneno,
-    //   feedback,
-    //   invoicegenid,
-    //   date,
-    //   totalamount,
-    //   messagetype,
-    //   plantype,
-    //   duedate,
-    //   billperiod,
-    // } = firstEntry;
-
-    // const formattedDate = new Date(date).toISOString().split("T")[0];
-    // const phoneNumbers = phoneno
-    //   .split(",")
-    //   .map((num) => num.trim())
-    //   .filter((n) => n !== "");
-    // console.log("billmode:", plantype);
-    // let invoiceMonth;
-    // if (plantype === "Prepaid") {
-    //   invoiceMonth = moment(); // current month
-    // } else if (plantype === "Postpaid") {
-    //   invoiceMonth = moment(); // next month
-    // }
-
-    // const subject = `Sporada Secure - Invoice for the Month of ${invoiceMonth.format(
-    //   "MMMM"
-    // )} ${invoiceMonth.format("YYYY")} - ${billingaddressname}`;
-    // Get the previous month
-    // invoiceMonth = moment().subtract(1, "month");
-
-    // Format the subject with the previous month's name and year
-    // const subject = `Sporada Secure - Invoice for the Month of ${invoiceMonth.format(
-    //   "MMMM"
-    // )} ${invoiceMonth.format("YYYY")} - ${billingaddressname}`;
-
-    // const pdfPaths = fileList
-    //   .map((file) => (typeof file === "string" ? file : file.path))
-    //   .filter((p) => p) // removes empty/undefined/null paths
-    //   .join(",");
-    // let EmailSent = null;
-    // let WhatsappSent = [];
-
-    // if (messagetype === 1 || messagetype === 3) {
-    //   // Email or Both
-    //   EmailSent = await mailer.sendRecurredInvoice(
-    //     billingaddressname,
-    //     emailid,
-    //     subject,
-    //     "recurredinvoicepdf.html",
-    //     "",
-    //     "RECURRED_INVOICE_PDF_SEND",
-    //     pdfPaths,
-    //     invoicegenid,
-    //     formattedDate,
-    //     totalamount,
-    //     ccemail,
-    //     feedback,
-    //     billperiod,
-    //     duedate,
-    //     allSitenames
-    //   );
-    // }
-
-    // if (messagetype === 2 || messagetype === 3) {
-    //   // WhatsApp or Both
-    //   WhatsappSent = await Promise.all(
-    //     phoneNumbers.map(async (number) => {
-    //       try {
-    //         const response = await axios.post(
-    //           `${config.whatsappip}/billing/sendpdf`,
-    //           {
-    //             // phoneno: phoneno,
-    //             phoneno: `8248650039`,
-    //             feedback,
-    //             pdfpath: pdfPaths,
-    //           }
-    //         );
-    //         return response.data.code;
-    //       } catch (error) {
-    //         console.error("WhatsApp error:", error.message);
-    //         return false;
-    //       }
-    // })
-    // );
-    // }
-
-    // await mqttclient.publishMqttMessage("refresh", "Invoice created");
-  } catch (er) {
-    console.error("Final error:", er);
-    return helper.getErrorResponse(
-      false,
-      "error",
-      "Something went wrong: " + er.message,
-      "ADD RECURRING INVOICE",
-      secret
-    );
-  }
-}
-//##########################################################################################################################################################################################
-//##########################################################################################################################################################################################
-//##########################################################################################################################################################################################
-//##########################################################################################################################################################################################
-
-async function sendInvoiceEmail(subscription) {
-  let secret = "";
-  try {
-    let querydata1;
-
-    if (!subscription.hasOwnProperty("STOKEN")) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login sessiontoken missing. Please provide the Login sessiontoken",
-        "ADD FEEDBACK FOR EVENTS",
-        ""
-      );
-    }
-    secret = subscription.STOKEN.substring(0, 16);
-    var querydata;
-    // Validate session token length
-    if (subscription.STOKEN.length > 50 || subscription.STOKEN.length < 30) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
-        "ADD FEEDBACK FOR EVENTS",
-        secret
-      );
-    }
-
-    // Validate session token
-    const [result] = await db.spcall(
-      `CALL SP_STOKEN_CHECK(?,@result); SELECT @result;`,
-      [subscription.STOKEN]
-    );
-    const objectvalue = result[1][0];
-    const userid = objectvalue["@result"];
-
-    if (userid == null) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
-        "ADD FEEDBACK FOR EVENTS",
-        secret
-      );
-    }
-    if (!subscription.querystring) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Missing querystring.",
-        "ADD RECURRING INVOICE",
-        secret
-      );
-    }
-
-    try {
-      querydata1 = await helper.decrypt(subscription.querystring, secret);
-    } catch (ex) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Querystring decryption failed.",
-        "ADD RECURRING INVOICE",
-        secret
-      );
-    }
-
-    try {
-      querydata1 = JSON.parse(querydata1);
-    } catch (ex) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Querystring JSON parsing error.",
-        "ADD RECURRING INVOICE",
-        secret
-      );
-    }
-    var paymentdetails = [];
-
-    const querydataArray = Array.isArray(querydata1)
-      ? querydata1
-      : [querydata1];
-    var fileList = [];
-    const firstEntry = querydataArray[0];
-    const allSitenames = []; // to collect all sitenames
-
-    for (let i = 0; i < querydataArray.length; i++) {
-      const querydata = querydataArray[i];
-
-      const requiredFields = [
-        "siteids",
-        "sitenames",
-        "subscriptionbillid",
-        "clientaddressname",
-        "clientaddress",
-        "billingaddressname",
-        "billingaddress",
-        "planname",
-        "emailid",
-        "ccemail",
-        "phoneno",
-        "totalamount",
-        "invoicegenid",
-        "date",
-        "messagetype",
-        "feedback",
-        "customerid",
-        "billmode",
-        "plantype",
-        "duedate",
-        "billperiod",
-        "billdetails",
-        "gstnumber",
-        "pdfpath",
-      ];
-      if (Array.isArray(querydata.sitenames)) {
-        allSitenames.push(...querydata.sitenames);
-      }
-
-      for (let field of requiredFields) {
-        if (!querydata.hasOwnProperty(field)) {
-          return helper.getErrorResponse(
-            false,
-            "error",
-            `${field} missing in entry ${i + 1}`,
-            "ADD RECURRING INVOICE",
-            secret
-          );
-        }
-      }
-      var SiteName, cleanSiteName;
-      if (
-        Array.isArray(querydata.sitenames) &&
-        querydata.sitenames.length === 1
-      ) {
-        SiteName = querydata.sitenames[0] || "UnknownCompany";
-        cleanSiteName = SiteName.replace(/[^a-z0-9]/gi, "_").toLowerCase();
-      }
-      if (querydata.pdfpath) {
-        if (typeof querydata.pdfpath === "string") {
-          // If it's a comma-separated string
-          fileList.push(...querydata.pdfpath.split(",").map((p) => p.trim()));
-        } else if (Array.isArray(querydata.pdfpath)) {
-          // If it's already an array
-          fileList.push(...querydata.pdfpath);
-        }
-      }
-
-      let billDetails;
-      if (typeof querydata.billdetails === "string") {
-        billDetails = JSON.parse(querydata.billdetails);
-      } else {
-        billDetails = querydata.billdetails;
-      }
-      const { gst, subtotal, total, tdsamount } = billDetails;
-      const { CGST, IGST, SGST } = gst;
-      const convertToISO = (dateStr) => {
-        const [day, month, year] = dateStr.split("-");
-        return `${year}-${month}-${day}`;
-      };
-      const [sql1] = await db.spcall(
-        `CALL SP_ADD_RECURRING_INVOICE(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,@sprocessid); select @sprocessid;`,
-        [
-          querydata.subscriptionbillid,
-          JSON.stringify(querydata.siteids),
-          querydata.clientaddressname,
-          querydata.clientaddress,
-          querydata.billingaddress,
-          querydata.billingaddressname,
-          fileList[i] || "",
-          fileList[i] || "", // optional second file
-          querydata.invoicegenid,
-          subtotal + IGST + CGST + SGST,
-          2,
-          querydata.emailid,
-          querydata.phoneno,
-          querydata.ccemail,
-          querydata.customerid,
-          JSON.stringify(querydata.billdetails),
-        ]
-      );
-      await db.query(
-        `Update subscriptionbillmaster set Email_sent = 1 where subscription_billid IN('${querydata.subscriptionbillid}')`
-      );
       try {
         const isoDate = convertToISO(querydata.duedate);
 
@@ -1132,7 +738,7 @@ async function sendInvoiceEmail(subscription) {
             SGST,
             "subscription",
             `SB-${querydata.customerid}`,
-            `Subscription Invoice created for ${querydata.clientaddressname} with invoice number ${querydata.invoicegenid}`,
+            `Subscription Invoice created for ${querydata.clientaddressname}`,
             isoDate,
           ]
         );
@@ -1152,7 +758,7 @@ async function sendInvoiceEmail(subscription) {
             subtotal,
             querydata.gstnumber,
             "output",
-            `Subscription Invoice created for ${querydata.clientaddressname} with invoice number ${querydata.invoicegenid}`,
+            `Subscription Invoice created for ${querydata.clientaddressname}`,
             JSON.stringify(paymentdetails),
             JSON.stringify({
               gst: { IGST: IGST, SGST: SGST, CGST: CGST },
@@ -1186,11 +792,11 @@ async function sendInvoiceEmail(subscription) {
             voucherid,
             vouchernumber,
             "receivable",
-            `Subscription Invoice created for ${querydata.clientaddressname} with invoice number ${querydata.invoicegenid}`,
+            `Subscription Invoice created for ${querydata.clientaddressname}`,
           ]
         );
       } catch (er) {
-        console.log(`Invoice number not exits ${er.message}`);
+        // console.log(`Invoice number not exits ${er.message}`);
       }
     }
 
@@ -1216,7 +822,7 @@ async function sendInvoiceEmail(subscription) {
       .split(",")
       .map((num) => num.trim())
       .filter((n) => n !== "");
-    console.log("billmode:", plantype);
+    // console.log("billmode:", plantype);
     let invoiceMonth;
     if (plantype === "Prepaid") {
       invoiceMonth = moment(); // current month
@@ -1235,6 +841,10 @@ async function sendInvoiceEmail(subscription) {
       "MMMM"
     )} ${invoiceMonth.format("YYYY")} - ${billingaddressname}`;
 
+    const pdfPaths = fileList
+      .map((file) => (typeof file === "string" ? file : file.path))
+      .filter((p) => p) // removes empty/undefined/null paths
+      .join(",");
     let EmailSent = null;
     let WhatsappSent = [];
 
@@ -1247,7 +857,7 @@ async function sendInvoiceEmail(subscription) {
         "recurredinvoicepdf.html",
         "",
         "RECURRED_INVOICE_PDF_SEND",
-        fileList,
+        pdfPaths,
         invoicegenid,
         formattedDate,
         totalamount,
@@ -1270,7 +880,7 @@ async function sendInvoiceEmail(subscription) {
                 // phoneno: phoneno,
                 phoneno: `8248650039`,
                 feedback,
-                pdfpath: fileList,
+                pdfpath: pdfPaths,
               }
             );
             return response.data.code;
@@ -1285,7 +895,7 @@ async function sendInvoiceEmail(subscription) {
     // await mqttclient.publishMqttMessage("refresh", "Invoice created");
     await mqttclient.publishMqttMessage(
       "Notification",
-      `Recurring invoice Sent for ${billingaddressname}`
+      `Recurring invoice created for ${billingaddressname}`
     );
 
     return helper.getSuccessResponse(
@@ -1302,128 +912,6 @@ async function sendInvoiceEmail(subscription) {
       "error",
       "Something went wrong: " + er.message,
       "ADD RECURRING INVOICE",
-      secret
-    );
-  }
-}
-//##########################################################################################################################################################################################
-//##########################################################################################################################################################################################
-//##########################################################################################################################################################################################
-//##########################################################################################################################################################################################
-
-async function GetapprovalInvoice(subscription) {
-  try {
-    // Check if the session token exists
-    if (!subscription.STOKEN) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login session token missing. Please provide the Login session token",
-        "FETCH RECURRED INVOICE",
-        ""
-      );
-    }
-    secret = subscription.STOKEN.substring(0, 16);
-    var querydata;
-
-    // Validate session token length
-    if (subscription.STOKEN.length > 50 || subscription.STOKEN.length < 30) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login session token size invalid. Please provide the valid Session token",
-        "FETCH RECURRED INVOICE",
-        secret
-      );
-    }
-
-    // Validate session token
-    const [result] = await db.spcall(
-      "CALL SP_STOKEN_CHECK(?,@result); SELECT @result;",
-      [subscription.STOKEN]
-    );
-    const objectvalue = result[1][0];
-    const userid = objectvalue["@result"];
-
-    if (userid == null) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
-        "FETCH RECURRED INVOICE",
-        secret
-      );
-    }
-    var sql = [];
-    // Check if querystring is provided
-    if (!subscription.querystring) {
-      sql = await db.query(
-        `select sbg.subscription_generatedid recurredbillid,sbg.subscription_billid,sbg.site_Ids,sbg.client_addressname,sbg.client_address,sbg.billing_addressname,sbg.billing_address,sbg.pdf_path pdf_data,sbg.Invoice_no invoicenumber,sbm.Site_list,sbg.TotalAmount,sbg.email_id,sbg.phone_no,sbg.ccemail,sbm.bill_date,sbm.due_date,sbm.bill_period,sbg.bill_details,sbm.customer_id,sbg.postdata from subscriptionbillgenerated_beforeapproval sbg JOIN subscriptionbillmaster sbm ON sbm.subscription_billid = sbg.subscription_billid where sbg.status = 1 and sbm.Email_sent = 0`
-      );
-    } else {
-      // Decrypt querystring
-      try {
-        querydata = await helper.decrypt(subscription.querystring, secret);
-      } catch (ex) {
-        return helper.getErrorResponse(
-          false,
-          "error",
-          "Querystring Invalid error. Please provide the valid querystring.",
-          "ADD RECURRING INVOICE",
-          secret
-        );
-      }
-
-      // Parse the decrypted querystring
-      try {
-        querydata = JSON.parse(querydata);
-      } catch (ex) {
-        return helper.getErrorResponse(
-          false,
-          "error",
-          "Querystring JSON error. Please provide valid JSON",
-          "ADD RECURRING INVOICE",
-          secret
-        );
-      }
-      if (querydata.hasOwnProperty("customerid") == false) {
-        return helper.getErrorResponse(
-          false,
-          "error",
-          "Customer id missing. Please provide the customer id",
-          "ADD RECURRING INVOICE",
-          secret
-        );
-      }
-      sql = await db.query(
-        `select sbg.subscription_generatedid recurredbillid,sbg.subscription_billid,sbg.site_Ids,sbg.client_addressname,sbg.client_address,sbg.billing_addressname,sbg.billing_address,sbg.pdf_path pdf_data,sbg.Invoice_no invoicenumber,sbm.Site_list,sbg.TotalAmount,sbg.email_id,sbg.phone_no,sbg.ccemail,sbm.bill_date,sbm.due_date,sbm.bill_period,sbg.bill_details,sbm.customer_id,sbg.postdata from subscriptionbillgenerated_beforeapproval sbg JOIN subscriptionbillmaster sbm ON sbm.subscription_billid = sbg.subscription_billid where sbg.status = 1 and sbm.Email_sent = 0 and sbg.customer_id = ?`,
-        [querydata.customerid]
-      );
-    }
-
-    if (sql.length > 0) {
-      return helper.getSuccessResponse(
-        true,
-        "success",
-        "The generated Recurring Invoice is successfully fetched.",
-        sql,
-        secret
-      );
-    } else {
-      return helper.getSuccessResponse(
-        true,
-        "success",
-        "The generated Recurring Invoice is successfully fetched.",
-        sql,
-        secret
-      );
-    }
-  } catch (er) {
-    return helper.getErrorResponse(
-      false,
-      "error",
-      "Internal error. Please contact Administration",
-      er.message,
       secret
     );
   }
@@ -1551,6 +1039,7 @@ async function GetRecurredInvoice(subscription) {
     );
   }
 }
+
 //##########################################################################################################################################################################################
 //##########################################################################################################################################################################################
 //##########################################################################################################################################################################################
@@ -2155,84 +1644,6 @@ async function GetRecurredCustomer(subscription) {
   }
 }
 
-//#########################################################################################################################################################################################
-//#########################################################################################################################################################################################
-//#########################################################################################################################################################################################
-//#########################################################################################################################################################################################
-
-async function GetApprovalCustomer(subscription) {
-  try {
-    // Check if the session token exists
-    if (!subscription.hasOwnProperty("STOKEN")) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login sessiontoken missing. Please provide the Login sessiontoken",
-        "GET PROCESS CUSTOMER",
-        ""
-      );
-    }
-    var secret = subscription.STOKEN.substring(0, 16);
-    // Validate session token length
-    if (subscription.STOKEN.length > 50 || subscription.STOKEN.length < 30) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
-        "GET PROCESS CUSTOMER",
-        secret
-      );
-    }
-
-    // Validate session token
-    const [result] = await db.spcall(
-      "CALL SP_STOKEN_CHECK(?,@result); SELECT @result;",
-      [subscription.STOKEN]
-    );
-    const objectvalue = result[1][0];
-    const userid = objectvalue["@result"];
-
-    if (userid == null) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
-        "GET PROCESS CUSTOMER",
-        secret
-      );
-    }
-
-    const sql = await db.query(
-      `select sbg.customer_id,sbg.billing_addressname customer_name,sbg.phone_no customer_phoneno,sbm.customer_GST customer_gstno from subscriptionbillgenerated_beforeapproval sbg JOIN subscriptionbillmaster sbm ON sbg.customer_id = sbm.customer_id where sbg.status =1 Group by customer_id`
-    );
-    if (sql[0]) {
-      return helper.getSuccessResponse(
-        true,
-        "success",
-        "Recurred customer Fetched Successfully",
-        sql,
-        secret
-      );
-    } else {
-      return helper.getErrorResponse(
-        true,
-        "success",
-        "Recurred customer Fetched Successfully",
-        sql,
-        secret
-      );
-    }
-  } catch (er) {
-    return helper.getErrorResponse(
-      false,
-      "error",
-      "Internal Error. Please contact Administration",
-      er.message,
-      secret
-    );
-  }
-}
-
 //###############################################################################################################################################################################################
 //###############################################################################################################################################################################################
 //###############################################################################################################################################################################################
@@ -2738,7 +2149,7 @@ async function clientProfile(subscription) {
     let startDate;
     sql = await db.query(
       `SELECT scustomer_name customer_name, scustomer_mailid customer_mailid, scustomer_phoneno customer_phoneno, scustomer_gstno customer_gstno, 
-      Address, Billing_address, billingadddress_name, Customer_type,Exist_customerid
+      Address, Billing_address, billingadddress_name, Customer_type,Exist_customerid,
       (SELECT COUNT(*) FROM subscriptionprocessmaster WHERE customer_id = c.scustomer_id AND status = 1) AS total_process,
       (SELECT COUNT(*) FROM subscriptionprocessmaster WHERE customer_id = c.scustomer_id AND active_status = 1 AND status = 1) AS active_process,
       (SELECT COUNT(*) FROM subscriptionprocessmaster WHERE customer_id = c.scustomer_id AND active_status = 0 AND status = 1) AS inactive_process
@@ -2962,11 +2373,11 @@ async function approvedQuotation(subscription) {
       // ,ceo@sporadasecure.com.ramachadran.m@sporadasecure.com',
       `Action Required!!! Received Quotation Approve Request for ${name}`,
       "apporvequotation.html",
-      `http://192.168.0.200:8081/subscription/quoteapprove?quoteid=${querydata.eventid}&STOKEN=${subscription.STOKEN}&s=1&feedback='Apporved'`,
+      `${apiserver}/subscription/quoteapprove?quoteid=${querydata.eventid}&STOKEN=${subscription.STOKEN}&s=1&feedback='Apporved'`,
       "APPROVEQUOTATION_SEND",
       name,
       "QUOTATION APPROVAL",
-      `http://192.168.0.200:8081/subscription/quoteapprove?quoteid=${querydata.eventid}&STOKEN=${subscription.STOKEN}&s=3`,
+      `${apiserver}/subscription/quoteapprove?quoteid=${querydata.eventid}&STOKEN=${subscription.STOKEN}&s=3`,
       pdfpath
     );
     if (EmailSent == true) {
@@ -4218,7 +3629,7 @@ async function AddRevisedQuotation(req, res) {
     );
     const objectvalue2 = sql1[1][0];
     quotationid = objectvalue2["@prolistid"];
-    console.log(quotationid);
+    // console.log(quotationid);
     for (const subscription1 of querydata.packagedetails) {
       if (
         !subscription1.name ||
@@ -4334,11 +3745,11 @@ async function AddRevisedQuotation(req, res) {
       emailid,
       `Action Required!!! Received Quotation Approve Request for ${querydata.clientaddressname}`,
       "apporvequotation.html",
-      `http://192.168.0.200:8081/subscription/intquoteapprove?quoteid=${quotationid}&STOKEN=${secret1}&s=1&feedback='Apporved'`,
+      `${apiserver}/subscription/intquoteapprove?quoteid=${quotationid}&STOKEN=${secret1}&s=1&feedback='Apporved'`,
       "APPROVEQUOTATION_SEND",
       querydata.clientaddressname,
       "QUOTATION APPROVAL",
-      `http://192.168.0.200:8081/subscription/intquoteapprove?quoteid=${quotationid}&STOKEN=${secret1}&s=3`,
+      `${apiserver}/subscription/intquoteapprove?quoteid=${quotationid}&STOKEN=${secret1}&s=3`,
       req.file.path
     );
     if (EmailSent == true) {
@@ -4577,7 +3988,7 @@ async function AddQuotation(req, res) {
     );
     const objectvalue2 = sql1[1][0];
     quotationid = objectvalue2["@prolistid"];
-    console.log(quotationid);
+    // console.log(quotationid);
     for (const subscription1 of querydata.packagedetails) {
       if (
         !subscription1.name ||
@@ -4697,11 +4108,11 @@ async function AddQuotation(req, res) {
       emailid,
       `Action Required!!! Received Quotation Approve Request for ${querydata.clientaddressname}`,
       "apporvequotation.html",
-      `http://192.168.0.200:8081/subscription/intquoteapprove?quoteid=${quotationid}&STOKEN=${secret1}&s=1&feedback='Apporved'`,
+      `${apiserver}/subscription/intquoteapprove?quoteid=${quotationid}&STOKEN=${secret1}&s=1&feedback='Apporved'`,
       "APPROVEQUOTATION_SEND",
       querydata.clientaddressname,
       "QUOTATION APPROVAL",
-      `http://192.168.0.200:8081/subscription/intquoteapprove?quoteid=${quotationid}&STOKEN=${secret1}&s=3`,
+      `${apiserver}/subscription/intquoteapprove?quoteid=${quotationid}&STOKEN=${secret1}&s=3`,
       req.file.path
     );
     if (EmailSent == true) {
@@ -5597,145 +5008,6 @@ async function getRecurredBinaryfile(subscription) {
     );
   }
 }
-
-//#########################################################################################################################################################################################
-//############################################################################################################################################################################################
-//#############################################################################################################################################################################################
-//############################################################################################################################################################################################
-
-async function getApprovalBinaryfile(subscription) {
-  try {
-    // Check if the session token exists
-    if (!subscription.hasOwnProperty("STOKEN")) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login sessiontoken missing. Please provide the Login sessiontoken",
-        "GET BINARY DATA FOR PDF",
-        ""
-      );
-    }
-    var secret = subscription.STOKEN.substring(0, 16);
-    var querydata;
-    // Validate session token length
-    if (subscription.STOKEN.length > 50 || subscription.STOKEN.length < 30) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login sessiontoken size invalid. Please provide the valid Sessiontoken",
-        "GET BINARY DATA FOR PDF",
-        secret
-      );
-    }
-
-    // Validate session token
-    const [result] = await db.spcall(
-      `CALL SP_STOKEN_CHECK(?,@result); SELECT @result;`,
-      [subscription.STOKEN]
-    );
-    const objectvalue = result[1][0];
-    const userid = objectvalue["@result"];
-
-    if (userid == null) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Login sessiontoken Invalid. Please provide the valid sessiontoken",
-        "GET BINARY DATA FOR PDF",
-        secret
-      );
-    }
-
-    // Check if querystring is provided
-    if (!subscription.hasOwnProperty("querystring")) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Querystring missing. Please provide the querystring",
-        "GET BINARY DATA FOR PDF",
-        secret
-      );
-    }
-
-    // Decrypt querystring
-    try {
-      querydata = await helper.decrypt(subscription.querystring, secret);
-    } catch (ex) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Querystring Invalid error. Please provide the valid querystring.",
-        "GET BINARY DATA FOR PDF",
-        secret
-      );
-    }
-
-    // Parse the decrypted querystring
-    try {
-      querydata = JSON.parse(querydata);
-    } catch (ex) {
-      return helper.getErrorResponse(
-        false,
-        "error",
-        "Querystring JSON error. Please provide valid JSON",
-        "GET BINARY DATA FOR PDF",
-        secret
-      );
-    }
-    var sql = [];
-    // Validate required fields
-    if (querydata.hasOwnProperty("recurredbillid")) {
-      sql = await db.query(
-        `select pdf_path from subscriptionbillgenerated_beforeapproval where subscription_generatedid = ?`,
-        [querydata.recurredbillid]
-      );
-    }
-    if (querydata.hasOwnProperty("invoicenumber")) {
-      sql = await db.query(
-        `select pdf_path from subscriptionbillgenerated where Invoice_no = ?`,
-        [querydata.invoicenumber]
-      );
-    }
-
-    var data;
-    if (sql.length > 0) {
-      // Ensure file exists
-      if (!fs.existsSync(sql[0].pdf_path)) {
-        return helper.getErrorResponse(
-          false,
-          "error",
-          "File does not exist",
-          "GET BINARY DATA FOR PDF",
-          secret
-        );
-      }
-      binarydata = await helper.convertFileToBinary(sql[0].pdf_path);
-      return helper.getSuccessResponse(
-        true,
-        "success",
-        "File Binary Fetched Successfully",
-        binarydata,
-        secret
-      );
-    } else {
-      return helper.getSuccessResponse(
-        true,
-        "success",
-        "File Binary Fetched Successfully",
-        sql,
-        secret
-      );
-    }
-  } catch (er) {
-    return helper.getErrorResponse(
-      false,
-      "error",
-      "Internal Error. Please contact Administration",
-      er.message,
-      secret
-    );
-  }
-}
 //###############################################################################################################################################################################################
 //###############################################################################################################################################################################################
 //###############################################################################################################################################################################################
@@ -5824,7 +5096,7 @@ async function IntQuotationApproval(req, res) {
                 .map((num) => num.trim())
                 .filter((num) => num !== "") // Removes empty values
             : [];
-          const link = `http://192.168.0.200:8081?eventid=${subscription.quoteid}&STOKEN=${sql[0].secret}&module=subscription`;
+          const link = `${apiserver1}?eventid=${subscription.quoteid}&STOKEN=${sql[0].secret}&module=subscription`;
           const feedbackMessage =
             "If you want to proceed with the quotation, please click the following link: " +
             link;
@@ -5841,8 +5113,8 @@ async function IntQuotationApproval(req, res) {
               sql[0].pdf_path,
               sql[0].feedback,
               sql[0].ccemail,
-              `http://192.168.0.200:8081?eventid=${subscription.quoteid}&STOKEN=${sql[0].secret}&module=subscription`,
-              `http://192.168.0.200:8081?eventid=${subscription.quoteid}&STOKEN=${sql[0].secret}&module=subscription`
+              `${apiserver1}?eventid=${subscription.quoteid}&STOKEN=${sql[0].secret}&module=subscription`,
+              `${apiserver1}?eventid=${subscription.quoteid}&STOKEN=${sql[0].secret}&module=subscription`
             );
           } else if (sql[0].message_type === 2) {
             // Send only WhatsApp
@@ -5877,8 +5149,8 @@ async function IntQuotationApproval(req, res) {
                 sql[0].pdf_path,
                 sql[0].feedback,
                 sql[0].ccemail,
-                `http://192.168.0.200:8081?eventid=${subscription.quoteid}&STOKEN=${sql[0].secret}&module=subscription`,
-                `http://192.168.0.200:8081?eventid=${subscription.quoteid}&STOKEN=${sql[0].secret}&module=subscription`
+                `${apiserver1}?eventid=${subscription.quoteid}&STOKEN=${sql[0].secret}&module=subscription`,
+                `${apiserver1}?eventid=${subscription.quoteid}&STOKEN=${sql[0].secret}&module=subscription`
               )
             );
 
@@ -6972,14 +6244,11 @@ async function UploadSubscription(subscription) {
 
 module.exports = {
   addRecurringInvoice,
-  sendInvoiceEmail,
   GetRecurredInvoice,
-  GetapprovalInvoice,
   GetProcessList,
   addFeedback,
   GetProcessCustomer,
   GetRecurredCustomer,
-  GetApprovalCustomer,
   getBinaryFile,
   DeleteProcess,
   ArchiveProcess,
@@ -7000,5 +6269,4 @@ module.exports = {
   UploadSubscription,
   getCustomBinaryfile,
   getRecurredBinaryfile,
-  getApprovalBinaryfile,
 };

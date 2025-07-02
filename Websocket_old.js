@@ -10,7 +10,7 @@ let isConnected = false;
 let interval = null; // Store interval to prevent duplicate jobs
 
 function connectWebSocket() {
-  socket = new WebSocket("ws://192.168.0.109:9091");
+  socket = new WebSocket("ws://192.168.0.111:9091");
 
   socket.on("open", () => {
     console.log("Connected to WebSocket server");
@@ -196,7 +196,7 @@ async function sendInvoice() {
 }
 
 // Cron job to start sending messages every minute after 03:14 AM
-cron.schedule("34 13 * * *", () => {
+cron.schedule("42 16 * * *", () => {
   console.log("Cron job started at 07:16 PM");
   sendInvoice();
   // if (interval) {
@@ -209,14 +209,10 @@ cron.schedule("34 13 * * *", () => {
 });
 connectWebSocket();
 
-cron.schedule("28 12 * * *", () => {
-  console.log("Cron for fetching job started at 18:45 PM");
-  syncIndividualBills();
-});
-
-cron.schedule("05 12 * * *", () => {
+cron.schedule("04 16 * * *", () => {
   console.log("Cron for fetching job started at 18:45 PM");
   syncConsolidatedBills();
+  syncIndividualBills();
 });
 async function syncIndividualBills() {
   try {
@@ -264,8 +260,8 @@ ROUND(
 ) AS plancharges,
 
 CASE 
-WHEN MAX(sct.billing_plan) = 'Prepaid' THEN DATE_FORMAT(DATE_FORMAT(CURDATE(), '%Y-%m-01'), '%Y-%m-%d')
-WHEN MAX(sct.billing_plan) = 'Postpaid' THEN DATE_FORMAT(LAST_DAY(CURDATE()), '%Y-%m-%d')
+WHEN MAX(sct.billing_plan) = 'Prepaid' THEN DATE_FORMAT(DATE_FORMAT(CURDATE(), '%Y-%m-01'), '%d-%m-%Y')
+WHEN MAX(sct.billing_plan) = 'Postpaid' THEN DATE_FORMAT(LAST_DAY(CURDATE()), '%d-%m-%Y')
 END AS bill_date,
 
     CASE 
@@ -297,6 +293,12 @@ CONCAT(
         '%d-%m-%Y'
     )
 ) AS bill_period,
+    CASE 
+        WHEN MAX(sct.billing_plan) = 'Prepaid' THEN 
+            CONCAT(DATE_FORMAT(DATE_FORMAT(CURDATE(), '%Y-%m-01'), '%d-%m-%Y'), ' To ', DATE_FORMAT(LAST_DAY(CURDATE()), '%d-%m-%Y'))
+        WHEN MAX(sct.billing_plan) = 'Postpaid' THEN 
+            CONCAT(DATE_FORMAT(DATE_FORMAT(CURDATE(), '%Y-%m-01'), '%d-%m-%Y'), ' To ', DATE_FORMAT(LAST_DAY(CURDATE()), '%d-%m-%Y'))
+    END AS bill_Period,
     sct.Relationship_id,
     sct.billing_gst AS customer_GST,
     sct.hsncode AS HSN_code,
@@ -490,8 +492,8 @@ async function syncConsolidatedBills() {
           END,
         2)) AS plancharges,
         CASE 
-        WHEN MAX(sct.billing_plan) = 'Prepaid' THEN DATE_FORMAT(DATE_FORMAT(CURDATE(), '%Y-%m-01'), '%Y-%m-%d')
-        WHEN MAX(sct.billing_plan) = 'Postpaid' THEN DATE_FORMAT(LAST_DAY(CURDATE()), '%Y-%m-%d')
+        WHEN MAX(sct.billing_plan) = 'Prepaid' THEN DATE_FORMAT(DATE_FORMAT(CURDATE(), '%Y-%m-01'), '%d-%m-%Y')
+        WHEN MAX(sct.billing_plan) = 'Postpaid' THEN DATE_FORMAT(LAST_DAY(CURDATE()), '%d-%m-%Y')
     END AS bill_date,
     CASE 
     WHEN MAX(sct.billing_plan) = 'Prepaid' THEN DATE_FORMAT(DATE_ADD(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 6 DAY), '%d-%m-%Y')
@@ -572,7 +574,7 @@ HAVING (
   (MAX(sct.billing_plan) = 'Prepaid' AND DAY(CURDATE()) = 1)
   OR
   (MAX(sct.billing_plan) = 'Postpaid' AND CURDATE() = LAST_DAY(CURDATE()))
-    );
+);
     `);
 
     // Loop and insert into target DB

@@ -3704,16 +3704,73 @@ async function UpdateBranch(admin) {
     } else {
       stype = 1;
     }
-    const sql1 =
-      await db.query1(`UPDATE branchmaster SET Branch_name = '${querydata.branchname}', Branch_code = '${querydata.branchcode}', address = '${querydata.address}',Billing_address = '${querydata.billingaddress}',
-      Billingaddress_name = '${querydata.billingaddressname}', gstno = '${querydata.gstno}', Site_type = ${stype}, Email_id = '${querydata.emailid}',Contact_no = ${querydata.contactno} WHERE 
-      Branch_id = `);
+    const sql = await db.query1(
+      `
+  UPDATE branchmaster
+  SET
+    Branch_name = ?,
+    Branch_code = ?,
+    address = ?,
+    Billing_address = ?,
+    Billingaddress_name = ?,
+    gstno = ?,
+    Site_type = ?,
+    Email_id = ?,
+    Contact_no = ?
+  WHERE Branch_id = ?
+`,
+      [
+        querydata.branchname,
+        querydata.branchcode,
+        querydata.address,
+        querydata.billingaddress,
+        querydata.billingaddressname,
+        querydata.gstno,
+        stype,
+        querydata.emailid,
+        querydata.contactno,
+        querydata.branchid,
+      ]
+    );
     // console.log(sql1);
     const startDate = await helper.formatDateToSQL(querydata.startdate);
     const endDate = await helper.formatDateToSQL(querydata.enddate);
     if (querydata.hasOwnProperty("subscriptionid")) {
-      await db.query1(
-        `UPDATE subscriptioncustomertrans SET billing_plan = '${querydata.billingplan}', Bill_mode = '${querydata.billmode}', from_date = ${startDate}, to_date = ${endDate}, Amount = ${querydata.amount}, billingperiod = ${querydata.billingperiod},Subscription_ID = ${querydata.subscriptionid},customer_address = '${querydata.address}',clientaddress_name = '${querydata.clientaddressname}',billing_address = '${querydata.billingaddress}',billingaddress_name = ${querydata.billingaddressname},billing_gst ='${querydata.gstno}' ,branchcode = '${querydata.branchcode}' WHERE Branch_id = ${querydata.branchid}`
+      const sql = await db.query1(
+        `
+  UPDATE subscriptioncustomertrans
+  SET
+    billing_plan          = ?,
+    Bill_mode             = ?,
+    from_date             = ?,   -- DATETIME as string or JS Date
+    to_date               = ?,
+    Amount                = ?,
+    billingperiod         = ?,
+    Subscription_ID       = ?,
+    customer_address      = ?,
+    clientaddress_name    = ?,
+    billing_address       = ?,
+    billingaddress_name   = ?,   -- wrap text fields consistently
+    billing_gst           = ?,
+    branchcode            = ?
+  WHERE Branch_id = ?
+`,
+        [
+          querydata.billingplan,
+          querydata.billmode,
+          startDate, // e.g. '2025-06-01 00:00:00' or Date object
+          endDate, // e.g. '2025-06-30 00:00:00'
+          querydata.amount,
+          querydata.billingperiod,
+          querydata.subscriptionid,
+          querydata.address,
+          querydata.clientaddressname,
+          querydata.billingaddress,
+          querydata.billingaddressname,
+          querydata.gstno,
+          querydata.branchcode,
+          querydata.branchid,
+        ]
       );
     }
     return helper.getSuccessResponse(

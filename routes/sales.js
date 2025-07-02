@@ -457,4 +457,13 @@ router.post("/sendclientpdf", async function (req, res, next) {
     next(er);
   }
 });
+
+router.post("/getenquirycustomer", async function (req, res, next) {
+  try {
+    res.json(await sales.getEnquiryCustomer(req.body));
+  } catch (er) {
+    console.log(`Error while fetching the customer : ${er}`);
+    next(er);
+  }
+});
 module.exports = router;

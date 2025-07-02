@@ -230,7 +230,10 @@ async function syncIndividualBills() {
     sm.Subscription_name AS Plan_name,
     sct.customer_type,
     SUM(sct.Amount) AS plancharges,
-    CURDATE() AS bill_date,
+    CASE 
+    WHEN MAX(sct.billing_plan) = 'Prepaid' THEN DATE_FORMAT(DATE_FORMAT(CURDATE(), '%Y-%m-01'), '%d-%m-%Y')
+    WHEN MAX(sct.billing_plan) = 'Postpaid' THEN DATE_FORMAT(LAST_DAY(CURDATE()), '%d-%m-%Y')
+END AS bill_date
     CASE 
     WHEN MAX(sct.billing_plan) = 'Prepaid' THEN DATE_FORMAT(DATE_ADD(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 6 DAY), '%d-%m-%Y')
     WHEN MAX(sct.billing_plan) = 'Postpaid' THEN DATE_FORMAT(DATE_ADD(LAST_DAY(CURDATE()), INTERVAL 7 DAY), '%d-%m-%Y')
@@ -406,7 +409,10 @@ async function syncConsolidatedBills() {
     sm.Subscription_name AS Plan_name,
     sct.customer_type,
     SUM(sct.Amount) AS plancharges,
-    CURDATE() AS bill_date,
+    CASE 
+    WHEN MAX(sct.billing_plan) = 'Prepaid' THEN DATE_FORMAT(DATE_FORMAT(CURDATE(), '%Y-%m-01'), '%d-%m-%Y')
+    WHEN MAX(sct.billing_plan) = 'Postpaid' THEN DATE_FORMAT(LAST_DAY(CURDATE()), '%d-%m-%Y')
+END AS bill_date,
     CASE 
     WHEN MAX(sct.billing_plan) = 'Prepaid' THEN DATE_FORMAT(DATE_ADD(DATE_FORMAT(CURDATE(), '%Y-%m-01'), INTERVAL 6 DAY), '%d-%m-%Y')
     WHEN MAX(sct.billing_plan) = 'Postpaid' THEN DATE_FORMAT(DATE_ADD(LAST_DAY(CURDATE()), INTERVAL 7 DAY), '%d-%m-%Y')

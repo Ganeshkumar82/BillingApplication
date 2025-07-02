@@ -315,7 +315,7 @@ async function getSubscriptionInvoice(billing) {
       //   query += ` AND DATEDIFF(CURDATE(), sbm.Due_date) >= ?`;
       //   sqlParams.push(querydata.duedays);
       // }
-      console.log(query);
+      // console.log(query);
       sql = await db.query(query, sqlParams);
     }
 
@@ -941,7 +941,7 @@ async function getVouchers(billing) {
       }
     }
 
-    console.log(sql);
+    // console.log(sql);
     var query = await db.query(sql, sqlParams);
     // if (query[0] && Array.isArray(query)) {
     //   query = query.map((row) => {
@@ -1150,6 +1150,21 @@ async function ClearVouchers(req, res) {
           path = req.file.path;
         }
       }
+      if (req.files) {
+        Object.values(req.files).forEach((fileArray) => {
+          fileArray.forEach((file) => {
+            if (file && file.originalname) {
+              const fileNameLower = file.originalname.toLowerCase();
+
+              if (fileNameLower.includes("receipt")) {
+                receipt_path = file.path;
+              } else {
+                path = file.path;
+              }
+            }
+          });
+        });
+      }
       const [sql50] = await db.spcall(
         `CALL InsertVoucherTransaction(?, ?, ?, ?, ?, ?, ?,?,?,@transaction_id);select @transaction_id;`,
         [
@@ -1210,7 +1225,7 @@ async function ClearVouchers(req, res) {
           partially = 1;
           if (querydata.invoicetype == "sales") {
             const sql1 = await db.query(
-              `Update salesprocesslist SET payment_status = 2, Paid_amount = Paid_amount + ? where invoice_number = ? and payment_status != 1`,
+              `Update salesprocesslist SET payment_status = 2, Paid_amount = Paid_amount + ? where cprocess_gene_id = ? and payment_status != 1`,
               [querydata.paidamount, querydata.invoicenumber]
             );
           } else if (querydata.invoicetype == "subscription") {
@@ -1449,7 +1464,7 @@ async function ClearVouchers(req, res) {
 
       const args = [
         querydata.clientaddressname || "Customer",
-        "kishorekkumar34@gmail.com",
+        "nidya.p@sporadasecure.com,ganeshkumar.m@sporadasecure.com",
         `Voucher Cleared: ${querydata.invoicenumber}`,
         querydata.invoicenumber,
         querydata.date,
@@ -1461,11 +1476,11 @@ async function ClearVouchers(req, res) {
         igstAmount,
       ];
 
-      // if (receipt_path) {
-      //   args.push(receipt_path);
-      // }
+      if (receipt_path) {
+        args.push(receipt_path);
+      }
 
-      // await mailer.sendVoucherClearedEmail(...args);
+      await mailer.sendVoucherClearedEmail(...args);
 
       return helper.getSuccessResponse(
         true,
@@ -1931,11 +1946,11 @@ async function ClearConsolidateVouchers(req, res, next) {
       "refresh",
       "Consolidated voucher Cleared Successfully"
     );
-    console.log("Query Data GST breakdown:");
+    // console.log("Query Data GST breakdown:");
     querydata2.forEach((q, i) => {
-      console.log(
-        `Row ${i + 1}: IGST: ${q.IGST}, CGST: ${q.CGST}, SGST: ${q.SGST}`
-      );
+      // console.log(
+      //   `Row ${i + 1}: IGST: ${q.IGST}, CGST: ${q.CGST}, SGST: ${q.SGST}`
+      // );
     });
 
     let totalIGST = 0,
@@ -1953,11 +1968,11 @@ async function ClearConsolidateVouchers(req, res, next) {
 
     const totalGST = totalIGST + totalCGST + totalSGST;
 
-    console.log("Total CGST Amount:", totalCGST);
-    console.log("Total SGST Amount:", totalSGST);
-    console.log("Total IGST Amount:", totalIGST);
-    console.log("Total GST Amount:", totalGST);
-    console.log("Total TDS Amount:", tdsAmount);
+    // console.log("Total CGST Amount:", totalCGST);
+    // console.log("Total SGST Amount:", totalSGST);
+    // console.log("Total IGST Amount:", totalIGST);
+    // console.log("Total GST Amount:", totalGST);
+    // console.log("Total TDS Amount:", tdsAmount);
 
     // GST type consistency check across vouchers
     let gstType = null;
@@ -2185,7 +2200,7 @@ async function accountLedger(billing) {
       sqlParams.push(formattedStartDate, formattedEndDate);
     }
 
-    console.log(sql);
+    // console.log(sql);
     const query = await db.query(sql, sqlParams);
     if (query) {
       let netAmount = 0;
@@ -2365,7 +2380,7 @@ async function consolidateLedger(billing) {
       sqlParams.push(querydata.startdate, querydata.enddate);
     }
 
-    console.log(sql);
+    // console.log(sql);
     const query = await db.query(sql, sqlParams);
     if (query) {
       let netAmount = 0;
@@ -2519,7 +2534,7 @@ async function TDSLedger(billing) {
       querydata.customerid != 0 &&
       querydata.customerid != undefined
     ) {
-      sql += ` and cvm.customer_id = ?)`;
+      sql += ` and cvm.customer_id = ?`;
       sqlParams.push(querydata.customerid);
     }
     if (
@@ -2557,7 +2572,7 @@ async function TDSLedger(billing) {
       sql += ` and DATE(tl.Row_updated_date) BETWEEN ? and ?`;
       sqlParams.push(formattedStartDate, formattedEndDate);
     }
-    console.log(sql);
+    // console.log(sql);
     const query = await db.query(sql, sqlParams);
 
     if (query.length > 0) {
@@ -2810,7 +2825,7 @@ async function GSTLedger(billing) {
       query2 += ` and DATE(gl.Row_updated_date) BETWEEN ? and ?`;
       sqlParams.push(formattedStartDate, formattedEndDate);
     }
-    console.log(sql);
+    // console.log(sql);
     const query = await db.query(sql, sqlParams);
     const sql1 = await db.query(query1, sqlParams);
     const sql2 = await db.query(query2, sqlParams);

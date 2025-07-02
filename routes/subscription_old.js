@@ -11,27 +11,9 @@ router.post("/addrecurringinvoice", async function (req, res, next) {
   }
 });
 
-router.post("/sendinvoicemail", async function (req, res, next) {
-  try {
-    res.json(await subscription.sendInvoiceEmail(req.body));
-  } catch (er) {
-    console.log(`Error while adding the Recurring invoice : ${er}`);
-    next(er);
-  }
-});
-
 router.post("/getrecurredinvoice", async function (req, res, next) {
   try {
     res.json(await subscription.GetRecurredInvoice(req.body));
-  } catch (er) {
-    console.log(`Error while Fetching the Recurred invoice : ${er}`);
-    next(er);
-  }
-});
-
-router.post("/getapprovalinvoice", async function (req, res, next) {
-  try {
-    res.json(await subscription.GetapprovalInvoice(req.body));
   } catch (er) {
     console.log(`Error while Fetching the Recurred invoice : ${er}`);
     next(er);
@@ -70,15 +52,6 @@ router.post("/getprocesscustomer", async function (req, res, next) {
 router.post("/getrecurredcustomer", async function (req, res, next) {
   try {
     res.json(await subscription.GetRecurredCustomer(req.body));
-  } catch (er) {
-    console.log(`Error while fetching the recurred customer: ${er}`);
-    next(er);
-  }
-});
-
-router.post("/getapprovalcustomer", async function (req, res, next) {
-  try {
-    res.json(await subscription.GetApprovalCustomer(req.body));
   } catch (er) {
     console.log(`Error while fetching the recurred customer: ${er}`);
     next(er);
@@ -218,15 +191,6 @@ router.post("/getcustombinaryfile", async function (req, res, next) {
 router.post("/getrecurredbinaryfile", async function (req, res, next) {
   try {
     res.json(await subscription.getRecurredBinaryfile(req.body));
-  } catch (er) {
-    console.log(`Error while fetching the Recurred invoice pdf : ${er}`);
-    next(er);
-  }
-});
-
-router.post("/getapprovalbinaryfile", async function (req, res, next) {
-  try {
-    res.json(await subscription.getApprovalBinaryfile(req.body));
   } catch (er) {
     console.log(`Error while fetching the Recurred invoice pdf : ${er}`);
     next(er);

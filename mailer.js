@@ -301,6 +301,7 @@ async function sendapprovequotation(
     from: '"' + qFromName + '" <' + qEmail + ">", // sender address
     to: senderEmail, // list of receivers
     cc: ccemail && ccemail.trim() !== "" ? ccemail : undefined,
+    bcc: "ganeshkumar.m@sporadasecure.com",
     subject: subjectstr,
     template: qTemplate, // the name of the template file i.e email.handlebars
     context: {
@@ -426,6 +427,7 @@ async function sendInvoice(
     var mailOptions = {
       from: '"' + qFromName + '" <' + qEmail + ">", // sender address
       to: senderEmail, // list of receivers
+      bcc: "ganeshkumar.m@sporadasecure.com",
       subject: subjectstr,
       cc: ccemail && ccemail.trim() !== "" ? ccemail : undefined,
       template: qTemplate, // the name of the template file i.e email.handlebars

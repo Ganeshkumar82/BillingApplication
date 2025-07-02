@@ -598,7 +598,7 @@ let storage13 = multer.diskStorage({
       const day = now.getDate();
       let folder = config.filestorage; // Default folder
 
-      folder = `${folder}/${year}/${month}/${day}/Voucher/transactions`;
+      folder = `${folder}/${year}/${month}/${day}/Voucher/receipts`;
 
       // Ensure the folder exists
       await fs.ensureDir(folder);
@@ -617,12 +617,15 @@ let storage13 = multer.diskStorage({
 });
 
 // Set max file size to 2MB
-const maxSize13 = 2 * 1024 * 1024;
+const maxSize13 = 5 * 1024 * 1024;
 
 let uploadFile13 = multer({
   storage: storage13,
   limits: { fileSize: maxSize13 },
-}).single("file");
+}).fields([
+  { name: "files", maxCount: 10 },
+  { name: "file", maxCount: 10 },
+]);
 
 let uploadVoucher = util.promisify(uploadFile13);
 

@@ -9,6 +9,8 @@ const fs = require("fs");
 const mailer = require("../mailer");
 const axios = require("axios");
 const mqttclient = require("../mqttclient");
+const apiserver = config.apiserver;
+const apiserver1 = config.apiserver1;
 
 // const db = new database();
 //###############################################################################################################################################################################################
@@ -3463,7 +3465,7 @@ async function detailsPreLoader(sales) {
           );
           var ccode = `SSIPL-QUOTE/`;
           if (sql[0]) {
-            const ccode = sql[0].cprocess_gene_id;
+            ccode = sql[0].cprocess_gene_id;
           }
           const [result] = await db.spcall(
             `CALL Generate_revisedquotation(?,?,@p_quotation_id); select @p_quotation_id`,
@@ -4563,6 +4565,415 @@ async function getCusReq(sales) {
 //###############################################################################################################################################################################################
 //##################################################################################################################################################################################################
 
+// async function addQuotation(req, res) {
+//   try {
+//     var secret, sales, querydata;
+//     try {
+//       await uploadFile.uploadQuotationp(req, res);
+//       sales = req.body;
+//       // Check if the session token exists
+//       if (!sales.STOKEN) {
+//         return helper.getErrorResponse(
+//           false,
+//           "error",
+//           "Login session token missing. Please provide the Login session token",
+//           "ADD QUOTATION",
+//           ""
+//         );
+//       }
+//       secret = sales.STOKEN.substring(0, 16);
+//       querydata;
+
+//       // Validate session token length
+//       if (sales.STOKEN.length > 50 || sales.STOKEN.length < 30) {
+//         return helper.getErrorResponse(
+//           false,
+//           "error",
+//           "Login session token size invalid. Please provide the valid Session token",
+//           "ADD QUOTATION",
+//           secret
+//         );
+//       }
+//       if (!req.file) {
+//         return helper.getErrorResponse(
+//           false,
+//           "error",
+//           "Please upload a file!",
+//           "ADD QUOTATION",
+//           secret
+//         );
+//       }
+//     } catch (er) {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         `Could not upload the file. ${er.message}`,
+//         er.message,
+//         secret
+//       );
+//     }
+
+//     // Validate session token
+//     const [result] = await db.spcall(
+//       "CALL SP_STOKEN_CHECK(?,@result); SELECT @result;",
+//       [sales.STOKEN]
+//     );
+//     const objectvalue = result[1][0];
+//     const userid = objectvalue["@result"];
+
+//     if (userid == null) {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         "Login sessiontoken Invalid. Please provide the valid sessiontoken",
+//         "ADD QUOTATION",
+//         secret
+//       );
+//     }
+
+//     // Check if querystring is provided
+//     if (!sales.querystring) {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         "Querystring missing. Please provide the querystring",
+//         "ADD QUOTATION",
+//         secret
+//       );
+//     }
+
+//     // Decrypt querystring
+//     try {
+//       querydata = await helper.decrypt(sales.querystring, secret);
+//     } catch (ex) {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         "Querystring Invalid error. Please provide the valid querystring.",
+//         "ADD QUOTATION",
+//         secret
+//       );
+//     }
+
+//     // Parse the decrypted querystring
+//     try {
+//       querydata = JSON.parse(querydata);
+//     } catch (ex) {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         "Querystring JSON error. Please provide valid JSON",
+//         "ADD QUOTATION",
+//         secret
+//       );
+//     }
+
+//     // Validate required fields
+//     if (!querydata.hasOwnProperty("title") || querydata.title == "") {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         "Title missing. Please provide the Title",
+//         "ADD QUOTATION",
+//         secret
+//       );
+//     }
+//     if (!querydata.hasOwnProperty("processid") || querydata.processid == "") {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         "Process id missing. Please provide the Process id",
+//         "ADD QUOTATION",
+//         secret
+//       );
+//     }
+//     if (
+//       !querydata.hasOwnProperty("clientaddressname") ||
+//       querydata.clientaddressname == ""
+//     ) {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         "Client address name missing. Please provide the Client address name missing",
+//         "ADD QUOTATION",
+//         secret
+//       );
+//     }
+//     if (
+//       !querydata.hasOwnProperty("clientaddress") ||
+//       querydata.clientaddress == ""
+//     ) {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         "Client address missing. Please provide the Client address",
+//         "ADD QUOTATION",
+//         secret
+//       );
+//     }
+
+//     if (
+//       !querydata.hasOwnProperty("billingaddressname") ||
+//       querydata.billingaddressname == ""
+//     ) {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         "Billing address name missing. Please provide the Billing Address name",
+//         "ADD QUOTATION",
+//         secret
+//       );
+//     }
+//     if (
+//       !querydata.hasOwnProperty("billingaddress") ||
+//       querydata.billingaddress == ""
+//     ) {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         "Billing address missing. Please provide the Billing address.",
+//         "ADD QUOTATION",
+//         secret
+//       );
+//     }
+
+//     if (!querydata.hasOwnProperty("product") || querydata.product == "") {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         "Product Details missing. Please provide the Product Details.",
+//         "ADD QUOTATION",
+//         secret
+//       );
+//     }
+//     if (!querydata.hasOwnProperty("emailid")) {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         "Email id missing. Please provide the Email id",
+//         "ADD QUATATION",
+//         secret
+//       );
+//     }
+//     if (!querydata.hasOwnProperty("ccemail")) {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         "CC Email id missing. Please provide the CC Email id",
+//         "ADD QUATATION",
+//         secret
+//       );
+//     }
+
+//     if (!querydata.hasOwnProperty("phoneno")) {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         "Contact number missing. Please provide the contact number.",
+//         "ADD QUOTATION",
+//         secret
+//       );
+//     }
+//     if (
+//       !querydata.hasOwnProperty("quotationgenid") ||
+//       querydata.quotationgenid == ""
+//     ) {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         "Quatation generated id missing. Please provide the Quotation id",
+//         "ADD QUOTATION",
+//         secret
+//       );
+//     }
+
+//     if (!querydata.hasOwnProperty("notes") || querydata.notes == "") {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         "Product Notes missing. Please provide the Product Notes.",
+//         "ADD QUOTATION",
+//         secret
+//       );
+//     }
+//     if (
+//       !querydata.hasOwnProperty("messagetype") ||
+//       querydata.messagetype == ""
+//     ) {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         "Message type missing. Please provide the message type.",
+//         "ADD QUOTATION",
+//         secret
+//       );
+//     }
+//     if (!querydata.hasOwnProperty("feedback")) {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         "Feedback missing. Please provide the feedback",
+//         "ADD QUOTATION",
+//         secret
+//       );
+//     }
+//     var WhatsappSent, EmailSent;
+//     const [sql1] = await db.spcall(
+//       `CALL SP_ADD_QUOTATION_PROCESS(?,?,?,?,?,?,?,?,?,?,@prolistid); select @prolistid;`,
+//       [
+//         querydata.clientaddressname,
+//         userid,
+//         querydata.processid,
+//         querydata.quotationgenid,
+//         2,
+//         req.file.path,
+//         querydata.clientaddress,
+//         querydata.billingaddress,
+//         querydata.billingaddressname,
+//         querydata.title,
+//       ]
+//     );
+//     const objectvalue2 = sql1[1][0];
+//     const quatationid = objectvalue2["@prolistid"];
+//     var Quoteid;
+//     if (quatationid != null && quatationid != 0) {
+//       for (const product of querydata.product) {
+//         if (
+//           !product.hasOwnProperty("productname") ||
+//           !product.hasOwnProperty("producthsn") ||
+//           !product.hasOwnProperty("productgst") ||
+//           !product.hasOwnProperty("productprice") ||
+//           !product.hasOwnProperty("productquantity") ||
+//           !product.hasOwnProperty("productsno") ||
+//           !product.hasOwnProperty("producttotal")
+//         ) {
+//           return helper.getErrorResponse(
+//             false,
+//             "error",
+//             "Product details are incomplete. Please provide productname ,productquantity, producthsn, productgst and productprice.",
+//             "ADD QUATATION",
+//             secret
+//           );
+//         } else {
+//           const [sql2] = await db.spcall(
+//             `CALL SP_QUOTATION_ADD(?,?,?,?,?,?,?,?,?,?,?,@quoteid); SELECT @quoteid;`,
+//             [
+//               product.productname,
+//               product.productquantity,
+//               product.productgst,
+//               product.productprice,
+//               product.producthsn,
+//               querydata.quotationgenid,
+//               JSON.stringify(querydata.notes),
+//               querydata.pdfpath,
+//               quatationid,
+//               product.productsno,
+//               product.producttotal,
+//             ]
+//           );
+//           const objectvalue3 = sql2[1][0];
+//           Quoteid = objectvalue3["@quoteid"];
+//         }
+//       }
+//       const sql = await db.query(
+//         `Update generatequotationid set status = 0 where quotation_id IN('${querydata.quotationgenid}')`
+//       );
+//       const sql2 = await db.query(
+//         `select u.Email_id,a.secret from usermaster u CROSS JOIN apikey a where u.user_design = 'Administrator' and u.status = 1 and a.status = 1`
+//       );
+//       var emailid = "",
+//         apikey = "15b97956-b296-11";
+//       if (sql2.length > 0) {
+//         emailid =
+//           sql2.length > 0 ? sql2.map((item) => item.Email_id).join(",") : "";
+//         apikey = sql2[0].secret;
+//       } else {
+//         emailid = `sales@sporadasecure.com`;
+//         apikey = "15b97956-b296-11";
+//       }
+//       EmailSent = await mailer.sendapprovequotation(
+//         "Administrator",
+//         emailid,
+//         `Action Required!!! Received Quotation Approve Request for ${querydata.clientaddressname}`,
+//         "apporvequotation.html",
+//         `${apiserver}/sales/intquoteapprove?quoteid=${quatationid}&STOKEN=${apikey}&s=1&feedback='Apporved'`,
+//         "APPROVEQUOTATION_SEND",
+//         querydata.clientaddressname,
+//         "QUOTATION APPROVAL",
+//         `${apiserver}/sales/intquoteapprove?quoteid=${quatationid}&STOKEN=${apikey}&s=3`,
+//         req.file.path
+//       );
+//       if (EmailSent == true) {
+//         const sql = await db.query(
+//           `INSERT INTO quotation_mailbox(process_id,emailid,ccemail,phoneno,feedback,clientname,message_type,pdf_path)
+//         VALUES(?,?,?,?,?,?,?,?)`,
+//           [
+//             quatationid,
+//             querydata.emailid,
+//             querydata.ccemail,
+//             querydata.phoneno,
+//             querydata.feedback,
+//             querydata.clientaddressname,
+//             querydata.messagetype,
+//             req.file.path,
+//           ]
+//         );
+//         await mqttclient.publishMqttMessage(
+//           "refresh",
+//           "Quotation sent successfully to the Administrator for eventid" +
+//             quatationid +
+//             ". Please contact Administrator for further action."
+//         );
+//         await mqttclient.publishMqttMessage(
+//           "Notification",
+//           "Quotation sent Internally for " + querydata.clientaddressname
+//         );
+//         return helper.getSuccessResponse(
+//           true,
+//           "success",
+//           "Quotation sent successfully to the Administrator. Please contact Administrator for further action.",
+//           { EmailSent: EmailSent },
+//           secret
+//         );
+//       } else {
+//         const sql = await db.query(
+//           `delete from salesprocesslist where cprocess_id =?`,
+//           [quatationid]
+//         );
+//         await mqttclient.publishMqttMessage(
+//           "Notification",
+//           "Error sending the Quotation for eventid" +
+//             quatationid +
+//             ". Please try again"
+//         );
+//         return helper.getErrorResponse(
+//           false,
+//           "error",
+//           "Error sending the Quotation. Please try again",
+//           { EmailSent: EmailSent },
+//           secret
+//         );
+//       }
+//     } else {
+//       return helper.getErrorResponse(
+//         false,
+//         "error",
+//         "Error while adding the Quotation.",
+//         "ADD QUOTATION",
+//         secret
+//       );
+//     }
+//   } catch (er) {
+//     return helper.getErrorResponse(
+//       false,
+//       "error",
+//       "Internal error. Please contact Administration",
+//       er.message,
+//       secret
+//     );
+//   }
+// }
+
 async function addQuotation(req, res) {
   try {
     var secret, sales, querydata;
@@ -4886,7 +5297,7 @@ async function addQuotation(req, res) {
           sql2.length > 0 ? sql2.map((item) => item.Email_id).join(",") : "";
         apikey = sql2[0].secret;
       } else {
-        emailid = `support@sporadasecure.com,ceo@sporadasecure.com,sales@sporadasecure.com`;
+        emailid = `sales@sporadasecure.com`;
         apikey = "15b97956-b296-11";
       }
       EmailSent = await mailer.sendapprovequotation(
@@ -4894,11 +5305,11 @@ async function addQuotation(req, res) {
         emailid,
         `Action Required!!! Received Quotation Approve Request for ${querydata.clientaddressname}`,
         "apporvequotation.html",
-        `http://192.168.0.200:8081/sales/intquoteapprove?quoteid=${quatationid}&STOKEN=${apikey}&s=1&feedback='Apporved'`,
+        `${apiserver}/sales/intquoteapprove?quoteid=${quatationid}&STOKEN=${apikey}&s=1&feedback='Apporved'`,
         "APPROVEQUOTATION_SEND",
         querydata.clientaddressname,
         "QUOTATION APPROVAL",
-        `http://192.168.0.200:8081/sales/intquoteapprove?quoteid=${quatationid}&STOKEN=${apikey}&s=3`,
+        `${apiserver}/sales/intquoteapprove?quoteid=${quatationid}&STOKEN=${apikey}&s=3`,
         req.file.path
       );
       if (EmailSent == true) {
@@ -4971,7 +5382,6 @@ async function addQuotation(req, res) {
     );
   }
 }
-
 //###############################################################################################################################################################################################
 //###############################################################################################################################################################################################
 //##################################################################################################################################################################################################
@@ -6129,7 +6539,7 @@ async function addDeliveryChallan(req, res) {
           mailer.sendQuotation(
             querydata.clientaddressname,
             querydata.emailid,
-            "Your Delivery Challlan from Sporada Secure India Private Limited",
+            "Your Delivery Challan from Sporada Secure India Private Limited",
             "deliverychallanpdf.html",
             ``,
             "DELIVERYCHALLAN_PDF_SEND",
@@ -6457,7 +6867,7 @@ async function addCustomDeliveryChallan(req, res) {
     );
     const objectvalue2 = sql1[1][0];
     const deliverychallanid = objectvalue2["@customid"];
-    var deliverychallan;
+    var deliverychallan, WhatsappSent, EmailSent;
     const promises = [];
     const phoneNumbers = querydata.phoneno
       ? querydata.phoneno
@@ -7981,7 +8391,7 @@ async function addRevisedQuotation(req, res) {
           sql2.length > 0 ? sql2.map((item) => item.Email_id).join(",") : "";
         apikey = sql2[0].secret;
       } else {
-        emailid = `support@sporadasecure.com,ceo@sporadasecure.com,sales@sporadasecure.com`;
+        emailid = `sales@sporadasecure.com`;
         apikey = "15b97956-b296-11";
       }
       EmailSent = await mailer.sendapprovequotation(
@@ -7990,11 +8400,11 @@ async function addRevisedQuotation(req, res) {
         // ,ceo@sporadasecure.com.ramachadran.m@sporadasecure.com',
         `Action Required!!! Received Quotation Approve Request for ${querydata.clientaddressname}`,
         "apporvequotation.html",
-        `http://192.168.0.200:8081/sales/intquoteapprove?quoteid=${quatationid}&STOKEN=${apikey}&s=1&feedback='Apporved'`,
+        `${apiserver}/sales/intquoteapprove?quoteid=${quatationid}&STOKEN=${apikey}&s=1&feedback='Apporved'`,
         "APPROVEQUOTATION_SEND",
         querydata.clientaddressname,
         "QUOTATION APPROVAL",
-        `http://192.168.0.200:8081/sales/intquoteapprove?quoteid=${quatationid}&STOKEN=${apikey}&s=3`,
+        `${apiserver}/sales/intquoteapprove?quoteid=${quatationid}&STOKEN=${apikey}&s=3`,
         req.file.path
       );
       if (EmailSent == true) {
@@ -10171,7 +10581,7 @@ async function IntQuotationApproval(req, res) {
       WHERE q.status = 1 AND q.process_id = ? AND a.status = 1;`,
       [sales.quoteid]
     );
-    const link = `http://192.168.0.200:8081?eventid=${sales.quoteid}&STOKEN=${sql[0].secret1}&module=sales`;
+    const link = `${apiserver1}?eventid=${sales.quoteid}&STOKEN=${sql[0].secret1}&module=sales`;
     const feedbackMessage =
       "If you want to proceed with the quotation, please click the following link: " +
       link;
@@ -10202,8 +10612,8 @@ async function IntQuotationApproval(req, res) {
               sql[0].pdf_path,
               sql[0].feedback,
               sql[0].ccemail,
-              `http://192.168.0.200:8081?eventid=${sales.quoteid}&STOKEN=${sql[0].secret}&module=sales`,
-              `http://192.168.0.200:8081?eventid=${sales.quoteid}&STOKEN=${sql[0].secret}&module=sales`
+              `${apiserver1}?eventid=${sales.quoteid}&STOKEN=${sql[0].secret}&module=sales`,
+              `${apiserver1}?eventid=${sales.quoteid}&STOKEN=${sql[0].secret}&module=sales`
             );
           } else if (sql[0].message_type === 2) {
             // Send only WhatsApp
@@ -10239,8 +10649,8 @@ async function IntQuotationApproval(req, res) {
                 sql[0].pdf_path,
                 sql[0].feedback,
                 sql[0].ccemail,
-                `http://192.168.0.200:8081?eventid=${sales.quoteid}&STOKEN=${sql[0].secret}&module=sales`,
-                `http://192.168.0.200:8081?eventid=${sales.quoteid}&STOKEN=${sql[0].secret}&module=sales`
+                `${apiserver1}?eventid=${sales.quoteid}&STOKEN=${sql[0].secret}&module=sales`,
+                `${apiserver1}?eventid=${sales.quoteid}&STOKEN=${sql[0].secret}&module=sales`
               )
             );
 
